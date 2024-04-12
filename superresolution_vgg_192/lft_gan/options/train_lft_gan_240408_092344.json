@@ -1,0 +1,138 @@
+{
+  "task": "lft_gan",
+  "model": "gan",
+  "gpu_ids": [
+    0
+  ],
+  "scale": 4,
+  "n_channels": 3,
+  "sigma": [
+    0,
+    50
+  ],
+  "sigma_test": 15,
+  "merge_bn": false,
+  "merge_bn_startpoint": 400000,
+  "path": {
+    "root": "superresolution_vgg_192",
+    "pretrained_netG": null,
+    "pretrained_netD": null,
+    "pretrained_netE": null,
+    "task": "superresolution_vgg_192/lft_gan",
+    "log": "superresolution_vgg_192/lft_gan",
+    "options": "superresolution_vgg_192/lft_gan/options",
+    "models": "superresolution_vgg_192/lft_gan/models",
+    "images": "superresolution_vgg_192/lft_gan/images",
+    "pretrained_optimizerG": null,
+    "pretrained_optimizerD": null
+  },
+  "datasets": {
+    "train": {
+      "name": "train_dataset",
+      "dataset_type": "sr-lf",
+      "dataroot_H": "/home/ozkan/works/diff-smoe/LFT/data_for_train/SR_5x5_4x/Stanford_Gantry",
+      "dataroot_L": null,
+      "H_size": 660,
+      "dataloader_shuffle": true,
+      "dataloader_num_workers": 8,
+      "dataloader_batch_size": 2,
+      "phw": 32,
+      "stride": 2,
+      "phase": "train",
+      "scale": 4,
+      "n_channels": 3
+    },
+    "test": {
+      "name": "test_dataset",
+      "dataset_type": "sr-lf",
+      "dataroot_H": "/home/ozkan/works/diff-smoe/LFT/data_for_test/SR_5x5_4x",
+      "dataroot_L": null,
+      "H_size": 660,
+      "dataloader_num_workers": 8,
+      "dataloader_batch_size": 1,
+      "phw": 32,
+      "stride": 2,
+      "phase": "test",
+      "scale": 4,
+      "n_channels": 3
+    }
+  },
+  "netG": {
+    "net_type": "lft_gan",
+    "angRes": 5,
+    "scale_factor": 4,
+    "channels": 64,
+    "init_type": "xavier_uniform",
+    "init_bn_type": "uniform",
+    "init_gain": 0.2,
+    "scale": 4
+  },
+  "netD": {
+    "net_type": "discriminator_vgg_128",
+    "in_nc": 1,
+    "base_nc": 64,
+    "act_mode": "BL",
+    "n_layers": 3,
+    "norm_type": "spectral",
+    "init_type": "xavier_normal",
+    "init_bn_type": "uniform",
+    "init_gain": 0.2
+  },
+  "train": {
+    "G_lossfn_type": "ssim",
+    "G_lossfn_weight": 0.01,
+    "F_lossfn_type": "l1",
+    "F_lossfn_weight": 1,
+    "F_feature_layer": 34,
+    "F_weights": 1.0,
+    "F_use_input_norm": true,
+    "F_use_range_norm": false,
+    "gan_type": "softplusgan",
+    "D_lossfn_weight": 0.005,
+    "E_decay": 0.999,
+    "D_init_iters": 0,
+    "G_optimizer_type": "adam",
+    "G_optimizer_lr": 0.001,
+    "G_optimizer_wd": 0,
+    "D_optimizer_type": "adam",
+    "D_optimizer_lr": 1e-05,
+    "D_optimizer_wd": 0,
+    "G_scheduler_type": "MultiStepLR",
+    "G_scheduler_milestones": [
+      200000,
+      800000,
+      1200000,
+      2000000
+    ],
+    "G_scheduler_gamma": 0.5,
+    "G_optimizer_reuse": false,
+    "D_scheduler_type": "MultiStepLR",
+    "D_scheduler_milestones": [
+      200000,
+      800000,
+      1200000,
+      2000000
+    ],
+    "D_scheduler_gamma": 0.5,
+    "D_optimizer_reuse": false,
+    "G_param_strict": true,
+    "D_param_strict": true,
+    "E_param_strict": true,
+    "checkpoint_test": 5000,
+    "checkpoint_save": 5000,
+    "checkpoint_print": 200,
+    "G_optimizer_betas": [
+      0.9,
+      0.999
+    ],
+    "G_scheduler_restart_weights": 1
+  },
+  "opt_path": "options/train_lft_gan.json",
+  "is_train": true,
+  "find_unused_parameters": true,
+  "use_static_graph": false,
+  "dist": false,
+  "num_gpu": 1,
+  "rank": 0,
+  "world_size": 1
+}
