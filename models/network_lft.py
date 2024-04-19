@@ -83,6 +83,7 @@ class get_model(nn.Module):
         return out
 
 
+
 class PositionEncoding(nn.Module):
     def __init__(self, temperature):
         super(PositionEncoding, self).__init__()

@@ -27,12 +27,11 @@ class DatasetSRLF(data.Dataset):
         # ------------------------------------
         # get paths of L/H
         # ------------------------------------
-        self.paths_H = util.get_image_paths(opt['dataroot_H'])
-        self.paths_L = util.get_image_paths(opt['dataroot_L'])
-
-        assert self.paths_H, 'Error: H path is empty.'
-        if self.paths_L and self.paths_H:
-            assert len(self.paths_L) == len(self.paths_H), 'L/H mismatch - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
+        self.paths_H = util.get_lf_image_paths(opt['dataroot_H'], opt['angRes'], opt['scale'], opt['data_name'])
+        
+        # assert self.paths_H, 'Error: H path is empty.'
+        # if self.paths_L and self.paths_H:
+        #     assert len(self.paths_L) == len(self.paths_H), 'L/H mismatch - {}, {}.'.format(len(self.paths_L), len(self.paths_H))
 
     def __getitem__(self, index):
 
@@ -44,30 +43,18 @@ class DatasetSRLF(data.Dataset):
         with h5py.File(H_path, 'r') as hf:
             img_H_SAI_y = np.array(hf.get('Hr_SAI_y'))  
             img_H_SAI_y = np.expand_dims(img_H_SAI_y, axis=-1)      
-            img_H = util.uint2single(img_H_SAI_y)
-
-
+           
         # ------------------------------------
         # modcrop
         # ------------------------------------
-        img_H = util.modcrop(img_H, self.sf)
+        img_H = util.modcrop(img_H_SAI_y, self.sf)
 
         # ------------------------------------
         # get L image
         # ------------------------------------
-        if self.paths_L:
-            # --------------------------------
-            # directly load L image
-            # --------------------------------
-            L_path = self.paths_L[index]
-            img_L = util.imread_uint(L_path, self.n_channels)
-            img_L = util.uint2single(img_L)
-        else:
-            # --------------------------------
-            # sythesize L image via matlab's bicubic
-            # --------------------------------
-            H, W = img_H.shape[:2]
-            img_L = util.imresize_np(img_H, 1 / self.sf, True)
+        
+        H, W = img_H.shape[:2]
+        img_L = util.imresize_np(img_H, 1 / self.sf, True)
 
         H, W, C = img_L.shape
         # --------------------------------
@@ -97,19 +84,7 @@ class DatasetSRLF(data.Dataset):
         # L/H pairs, HWC to CHW, numpy to tensor
         # ------------------------------------
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
-
-        # img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
-        #     2, self.phw, self.stride
-        # )
-        # img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
-        # img_L_p = img_L_p.view(
-        #     img_L_p.shape[1] * img_L_p.shape[2],
-        #     img_L_p.shape[0],
-        #     img_L_p.shape[3],
-        #     img_L_p.shape[4],
-        # )
-
-        
+    
         if L_path is None:
             L_path = H_path
 

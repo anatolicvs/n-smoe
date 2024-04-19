@@ -87,6 +87,30 @@ def _get_paths_from_images(path):
     return images
 
 
+def get_lf_image_paths(path_for_train,angRes,scale_factor,data_name):
+    dataset_dir = os.path.join(path_for_train, f'SR_{angRes}x{angRes}_{scale_factor}x')
+
+    if not os.path.isdir(dataset_dir):
+        raise ValueError(f'{dataset_dir} is not a valid directory')
+
+    if data_name == 'ALL':
+        data_list = os.listdir(dataset_dir)
+    else:
+        data_list = [data_name]
+
+    file_list = []
+    for data_name in data_list:
+        sub_dir = os.path.join(dataset_dir, data_name)
+        if not os.path.isdir(sub_dir):
+            continue  # Skip if not a directory
+        tmp_list = os.listdir(sub_dir)
+        for index, file_name in enumerate(tmp_list):
+            if is_image_file(file_name):
+                tmp_list[index] = os.path.join(sub_dir, file_name)
+                file_list.append(tmp_list[index])
+
+    return file_list
+
 '''
 # --------------------------------------------
 # split large images into small images 

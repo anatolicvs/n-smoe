@@ -1,5 +1,5 @@
 {
-    "task": "lft_gan" //  
+    "task": "lft_gan_unet" //  
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
   
@@ -12,7 +12,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "superresolution_vgg_192"  // "denoising" | "superresolution"
+      "root": "superresolution"  // "denoising" | "superresolution"
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -22,12 +22,14 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr-lf"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/LFT/data_for_train/SR_5x5_4x/Stanford_Gantry"// path of H training dataset
+        , "dataroot_H": "/mnt/d/LF/data_for_train"// path of H training dataset
+        , "data_name": "ALL"
+        , "angRes": 5
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 2     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
         ,  "phw": 32
         , "stride":2
         
@@ -35,8 +37,10 @@
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr-lf"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/LFT/data_for_test/SR_5x5_4x"   // path of H testing dataset
+        , "dataroot_H": "/mnt/d/LF/data_for_test"   // path of H testing dataset
+        , "angRes": 5
         , "dataroot_L": null              // path of L testing dataset
+        , "data_name": "ALL"
         , "H_size": 660                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
         , "dataloader_batch_size": 1 
@@ -50,13 +54,13 @@
       , "angRes": 5
       , "scale_factor": 4  
       , "channels": 64
-      , "init_type": "xavier_uniform"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "orthogonal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform"         // "uniform" | "constant"
       , "init_gain": 0.2
     }
   
     , "netD": {
-      "net_type": "discriminator_vgg_192" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
+      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
       , "in_nc": 1
       , "base_nc": 64
       , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
@@ -69,8 +73,8 @@
     }
 
     , "train": {
-    "G_lossfn_type": "ssim"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
-    , "G_lossfn_weight": 1e-3
+    "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim" | "ms-ssim"
+    , "G_lossfn_weight": 1e-2
 
     , "F_lossfn_type": "l1"  // "l1" | "l2"
     , "F_lossfn_weight": 1
@@ -84,6 +88,10 @@
 
     , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
 
+    , "G_scheduler_T_max": 2000000
+    , "D_scheduler_T_max": 2000000
+    , "G_scheduler_eta_min": 1e-7
+    , "D_scheduler_eta_min": 1e-7
     , "D_init_iters": 0
 
     , "G_optimizer_type": "adam"
@@ -91,7 +99,7 @@
     , "G_optimizer_wd": 0
 
     , "D_optimizer_type": "adam"
-    , "D_optimizer_lr": 1e-5
+    , "D_optimizer_lr": 1e-3
     , "D_optimizer_wd": 0
 
     , "G_scheduler_type": "MultiStepLR"
