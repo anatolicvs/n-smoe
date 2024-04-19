@@ -2,7 +2,7 @@
 
 MODEL_NAME=lf-gan
 WORKDIR=/work/pb035507
-OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_convsmoe_psnr.json
+OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
 JOB_NAME="${MODEL_NAME}"
 
 NODES=1
@@ -10,10 +10,10 @@ NTASKS=1
 CPUS_PER_TASK=16
 GPUS=1
 MEMORY="32G"
-TIME="4-00:00:00"
+TIME="08:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
-CONSTRAINT="tesla_a10080G"
+# CONSTRAINT="tesla_a10080G"
 OUTPUT_DIR="/home/pb035507/works/hpc-training/slurm/output"
 ERROR_DIR="/home/pb035507/works/hpc-training/slurm/error"
 
@@ -29,7 +29,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
 # Has to be used without an project!
 
-PARTITION="c18m" # gpu | scioi_gpu | scioi_a100nv | ex_scioi_gpu | ex_scioi_a100nv
+PARTITION="c23g"
 
 sbatch <<-EOT
 #!/bin/bash
@@ -46,10 +46,9 @@ sbatch <<-EOT
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-module purge
-module load apptainer
+echo; export; echo; nvidia-smi; echo
 
-apptainer exec --nv --bind /scratch $WORKDIR/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
+apptainer exec --nv --bind $WORKDIR $WORKDIR/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
 EOT
 
-echo "Job $JOB_NAME submitted"
+echo "Job $JOB_ID"
