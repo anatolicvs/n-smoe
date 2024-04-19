@@ -12,7 +12,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution"
+      "root": "/hpcwork/pb035507/superresolution"  // "denoising" | "superresolution"
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -22,7 +22,7 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr-lf"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/mnt/d/LF/data_for_train"// path of H training dataset
+        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset
         , "data_name": "ALL"
         , "angRes": 5
         , "dataroot_L": null              // path of L training dataset
@@ -37,7 +37,7 @@
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr-lf"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/mnt/d/LF/data_for_test"   // path of H testing dataset
+        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_test"   // path of H testing dataset
         , "angRes": 5
         , "dataroot_L": null              // path of L testing dataset
         , "data_name": "ALL"
@@ -95,7 +95,7 @@
     , "D_init_iters": 0
 
     , "G_optimizer_type": "adam"
-    , "G_optimizer_lr": 1e-3
+    , "G_optimizer_lr": 1e-4
     , "G_optimizer_wd": 0
 
     , "D_optimizer_type": "adam"
