@@ -12,7 +12,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "/work/pb035507/superresolution/"  // "denoising" | "superresolution"
+      "root": "superresolution"  // "denoising" | "superresolution"
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -22,25 +22,30 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr-lf"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset
+        , "dataroot_H": "/mnt/d/LF/data_for_train"// path of H training dataset
         , "data_name": "ALL"
         , "angRes": 5
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 64     // batch size 1 | 16 | 32 | 48 | 64 | 128      
+        , "dataloader_batch_size": 2     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        ,  "phw": 32
+        , "stride":2
+        
       }
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr-lf"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_test"   // path of H testing dataset
+        , "dataroot_H": "/mnt/d/LF/data_for_test"   // path of H testing dataset
         , "angRes": 5
         , "dataroot_L": null              // path of L testing dataset
         , "data_name": "ALL"
         , "H_size": 660                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
         , "dataloader_batch_size": 1 
+        , "phw":32
+        , "stride":2
       }
     }
   
@@ -49,7 +54,7 @@
       , "angRes": 5
       , "scale_factor": 4  
       , "channels": 64
-      , "init_type": "orthogonal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform"         // "uniform" | "constant"
       , "init_gain": 0.2
     }
@@ -62,7 +67,7 @@
       , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
       , "norm_type": 3  // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', instancespectral'
   
-      , "init_type": "orthogonal" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "kaiming_normal" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform" // "uniform" | "constant"
       , "init_gain": 0.2
     }
@@ -90,13 +95,13 @@
     , "D_init_iters": 0
 
     , "G_optimizer_type": "adam"
-    , "G_optimizer_lr": 1e-4
+    , "G_optimizer_lr": 1e-3
     , "G_optimizer_wd": 0
-
+    , "G_clip_value": 1.0
     , "D_optimizer_type": "adam"
     , "D_optimizer_lr": 1e-3
     , "D_optimizer_wd": 0
-
+    , "D_clip_value": 1.0
     , "G_scheduler_type": "MultiStepLR"
     , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
     , "G_scheduler_gamma": 0.5
