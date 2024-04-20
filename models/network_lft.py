@@ -5,9 +5,9 @@ from einops import rearrange
 import math
 
 
-class get_model(nn.Module):
+class LFT(nn.Module):
     def __init__(self, args):
-        super(get_model, self).__init__()
+        super(LFT, self).__init__()
         channels = args['channels']  
         self.channels = channels
         self.angRes = args['angRes']
@@ -19,7 +19,7 @@ class get_model(nn.Module):
         self.MHSA_params['num_heads'] = 8
         self.MHSA_params['dropout'] = 0.
 
-        ##################### Initial Convolution #####################
+       
         self.conv_init0 = nn.Sequential(
             nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
         )
@@ -32,10 +32,8 @@ class get_model(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
         )
 
-        ################ Alternate AngTrans & SpaTrans ################
         self.altblock = self.make_layer(layer_num=layer_num)
 
-        ####################### UP Sampling ###########################
         self.upsampling = nn.Sequential(
             nn.Conv2d(channels, channels*self.factor ** 2, kernel_size=1, padding=0, dilation=1, bias=False),
             nn.PixelShuffle(self.factor),
@@ -43,6 +41,7 @@ class get_model(nn.Module):
             nn.Conv2d(channels, 1, kernel_size=3, stride=1, padding=1, bias=False),
         )
 
+    
     def make_layer(self, layer_num):
         layers = []
         for i in range(layer_num):
@@ -61,27 +60,23 @@ class get_model(nn.Module):
             m.h = lr.size(-2)
             m.w = lr.size(-1)
 
-        # Initial Convolution
+      
         buffer = self.conv_init0(lr)
         buffer = self.conv_init(buffer) + buffer  # [B, C, A^2, h, w]
-
-        # Position Encoding
+     
         spa_position = self.pos_encoding(buffer, dim=[3, 4], token_dim=self.channels)
         ang_position = self.pos_encoding(buffer, dim=[2], token_dim=self.channels)
         for m in self.modules():
             m.spa_position = spa_position
             m.ang_position = ang_position
-
-        # Alternate AngTrans & SpaTrans
+        
         buffer = self.altblock(buffer) + buffer
-
-        # Up-Sampling
+        
         buffer = rearrange(buffer, 'b c (a1 a2) h w -> b c (a1 h) (a2 w)', a1=self.angRes, a2=self.angRes)
         buffer = self.upsampling(buffer)
         out = buffer + lr_upscale
 
         return out
-
 
 
 class PositionEncoding(nn.Module):
@@ -114,6 +109,67 @@ class PositionEncoding(nn.Module):
         position = rearrange(position, 'b 1 a h w dim -> b dim a h w')
 
         return position / len(dim)
+
+
+class MullerResizer(nn.Module):
+    """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
+
+    def __init__(self, target_size=(224, 224), base_resize_method='bilinear',
+                 antialias=False, kernel_size=5, stddev=1.0, num_layers=2,
+                 avg_pool=False, dtype=torch.float32, init_weights=None,
+                 name='muller_resizer'):
+        super(MullerResizer, self).__init__()
+        self.name = name
+        self.target_size = target_size
+        self.base_resize_method = base_resize_method
+        self.antialias = antialias  # Note: PyTorch does not support antialiasing in resizing.
+        self.kernel_size = kernel_size
+        self.stddev = stddev
+        self.num_layers = num_layers
+        self.avg_pool = avg_pool
+        self.dtype = dtype
+
+        self.weights = nn.ParameterList()
+        self.biases = nn.ParameterList()
+        for layer in range(num_layers):
+            weight = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor([init_weights[2*layer]], dtype=dtype))
+            bias = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor([init_weights[2*layer+1]], dtype=dtype))
+            self.weights.append(weight)
+            self.biases.append(bias)
+
+    def _base_resizer(self, inputs):
+        if self.avg_pool:
+            stride_h = inputs.shape[2] // self.target_size[0]
+            stride_w = inputs.shape[3] // self.target_size[1]
+            if stride_h > 1 and stride_w > 1:
+                inputs = F.avg_pool2d(inputs, kernel_size=(stride_h, stride_w), stride=(stride_h, stride_w))
+        return F.interpolate(inputs, size=self.target_size, mode=self.base_resize_method)
+
+    def _gaussian_blur(self, inputs):
+        sigma = self.stddev
+        radius = self.kernel_size // 2
+        kernel_size = 2 * radius + 1
+        x_coord = torch.arange(kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
+        x_grid = x_coord.repeat(kernel_size).view(kernel_size, kernel_size)
+        y_grid = x_grid.t()
+        xy_grid = torch.sqrt(x_grid**2 + y_grid**2)
+        kernel = torch.exp(-xy_grid**2 / (2*sigma**2))
+        kernel /= kernel.sum()
+
+        kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(inputs.shape[1], 1, 1, 1)
+        blurred = F.conv2d(inputs, kernel, padding=radius, groups=inputs.shape[1])
+        return blurred
+
+    def forward(self, inputs):
+        inputs = inputs.to(dtype=self.dtype)
+        net = self._base_resizer(inputs)
+        for weight, bias in zip(self.weights, self.biases):
+            blurred = self._gaussian_blur(inputs)
+            residual_image = blurred - inputs
+            resized_residual = self._base_resizer(residual_image)
+            net += torch.tanh(weight * resized_residual + bias)
+            inputs = blurred
+        return net
 
 
 class SpaTrans(nn.Module):
@@ -259,7 +315,15 @@ def interpolate(x, angRes, scale_factor, mode):
     w = W // angRes
     x_upscale = x.view(B, 1, angRes, h, angRes, w)
     x_upscale = x_upscale.permute(0, 2, 4, 1, 3, 5).contiguous().view(B * angRes ** 2, 1, h, w)
-    x_upscale = F.interpolate(x_upscale, scale_factor=scale_factor, mode=mode, align_corners=False)
+    # x_upscale = F.interpolate(x_upscale, scale_factor=scale_factor, mode=mode, align_corners=False)
+    target_h = h * scale_factor
+    target_w = w * scale_factor
+    target_size = (target_h, target_w)
+
+    resizer = MullerResizer(target_size=target_size, base_resize_method='bilinear',
+                                        kernel_size=5, stddev=1.0, num_layers=2, dtype=torch.float32, init_weights=[1.892, -0.014, -11.295, 0.003],avg_pool=False, antialias=False)
+    resizer = resizer.cuda()
+    x_upscale = resizer(x_upscale)
     x_upscale = x_upscale.view(B, angRes, angRes, 1, h * scale_factor, w * scale_factor)
     x_upscale = x_upscale.permute(0, 3, 1, 4, 2, 5).contiguous().view(B, 1, H * scale_factor, W * scale_factor)
     # [B, 1, A*h*S, A*w*S]

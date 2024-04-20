@@ -127,8 +127,8 @@ def define_G(opt):
                 )
 
     elif net_type == 'lft_gan':
-        from models.network_lft import get_model
-        netG = get_model(opt_net)
+        from models.network_lft import LFT
+        netG = LFT(opt_net)
 
     # ----------------------------------------
     # modified SRResNet v0.0
