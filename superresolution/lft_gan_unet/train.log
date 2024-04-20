@@ -2714,3 +2714,6 @@ Discriminator_UNet(
  | -0.000 | -0.024 |  0.025 |  0.006 | torch.Size([1024, 64, 1, 1]) || upsampling.0.weight
  |  0.001 | -0.024 |  0.024 |  0.008 | torch.Size([1, 64, 3, 3]) || upsampling.3.weight
 
+24-04-20 13:52:51.306 : <epoch:  0, iter:     200, lr:1.000e-03> G_loss: 5.474e+01 F_loss: 1.720e+00 D_loss: 3.413e-03 D_real: 2.104e-02 D_fake: 2.101e-02 
+24-04-20 13:59:25.504 : <epoch:  0, iter:     400, lr:1.000e-03> G_loss: 3.873e+01 F_loss: 1.611e+00 D_loss: 3.465e-03 D_real: 3.401e-04 D_fake: 3.040e-04 
+24-04-20 14:05:59.281 : <epoch:  0, iter:     600, lr:1.000e-03> G_loss: 2.669e+01 F_loss: 2.035e+00 D_loss: 3.468e-03 D_real: -7.931e-04 D_fake: -9.743e-04 
