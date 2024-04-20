@@ -1,1 +1,3 @@
 superresolution/*/
+**/train.log
+superresolution/lft_gan_unet/train.log
