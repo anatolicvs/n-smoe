@@ -15,20 +15,20 @@ class LFT(nn.Module):
         layer_num = 4
 
         self.pos_encoding = PositionEncoding(temperature=10000)
-        self.MHSA_params = {}
-        self.MHSA_params['num_heads'] = 8
-        self.MHSA_params['dropout'] = 0.
+        self.MHSA_params = {'num_heads': 8, 'dropout': 0.}
 
-       
         self.conv_init0 = nn.Sequential(
             nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
         )
         self.conv_init = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
@@ -41,6 +41,11 @@ class LFT(nn.Module):
             nn.Conv2d(channels, 1, kernel_size=3, stride=1, padding=1, bias=False),
         )
 
+        self.resizer = MullerResizer(
+            base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=8,
+            dtype=torch.float32
+        )
+
     
     def make_layer(self, layer_num):
         layers = []
@@ -48,9 +53,27 @@ class LFT(nn.Module):
             layers.append(AltFilter(self.angRes, self.channels, self.MHSA_params))
         return nn.Sequential(*layers)
 
+    def _interpolate(self, x, angRes, scale_factor):
+        [B, _, H, W] = x.size()
+        h = H // angRes
+        w = W // angRes
+        x_upscale = x.view(B, 1, angRes, h, angRes, w)
+        x_upscale = x_upscale.permute(0, 2, 4, 1, 3, 5).contiguous().view(B * angRes ** 2, 1, h, w)
+        
+        target_h = h * scale_factor
+        target_w = w * scale_factor
+        target_size = (target_h, target_w)
+
+        x_upscale = self.resizer(x_upscale,target_size)
+        x_upscale = x_upscale.view(B, angRes, angRes, 1, h * scale_factor, w * scale_factor)
+        x_upscale = x_upscale.permute(0, 3, 1, 4, 2, 5).contiguous().view(B, 1, H * scale_factor, W * scale_factor)
+        # [B, 1, A*h*S, A*w*S]
+        return x_upscale
+
+
     def forward(self, lr):
         # Bicubic
-        lr_upscale = interpolate(lr, self.angRes, scale_factor=self.factor, mode='bicubic')
+        lr_upscale = self._interpolate(lr, self.angRes, scale_factor=self.factor)
         # [B(atch), 1, A(ngRes)*h(eight)*S(cale), A(ngRes)*w(idth)*S(cale)]
 
         # reshape for LFT
@@ -113,14 +136,11 @@ class PositionEncoding(nn.Module):
 
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
-
-    def __init__(self, target_size=(224, 224), base_resize_method='bilinear',
-                 antialias=False, kernel_size=5, stddev=1.0, num_layers=2,
-                 avg_pool=False, dtype=torch.float32, init_weights=None,
-                 name='muller_resizer'):
+    def __init__(self, base_resize_method='bilinear', antialias=False,
+                 kernel_size=5, stddev=1.0, num_layers=2, avg_pool=False,
+                 dtype=torch.float32, init_weights=None, name='muller_resizer'):
         super(MullerResizer, self).__init__()
         self.name = name
-        self.target_size = target_size
         self.base_resize_method = base_resize_method
         self.antialias = antialias  # Note: PyTorch does not support antialiasing in resizing.
         self.kernel_size = kernel_size
@@ -137,37 +157,41 @@ class MullerResizer(nn.Module):
             self.weights.append(weight)
             self.biases.append(bias)
 
-    def _base_resizer(self, inputs):
+    def _base_resizer(self, inputs, target_size):
         if self.avg_pool:
-            stride_h = inputs.shape[2] // self.target_size[0]
-            stride_w = inputs.shape[3] // self.target_size[1]
+            stride_h = inputs.shape[2] // target_size[0]
+            stride_w = inputs.shape[3] // target_size[1]
             if stride_h > 1 and stride_w > 1:
                 inputs = F.avg_pool2d(inputs, kernel_size=(stride_h, stride_w), stride=(stride_h, stride_w))
-        return F.interpolate(inputs, size=self.target_size, mode=self.base_resize_method)
+        return F.interpolate(inputs, size=target_size, mode=self.base_resize_method)
 
     def _gaussian_blur(self, inputs):
-        sigma = self.stddev
+        sigma = max(self.stddev, 0.1)  # Ensure sigma is not too small
         radius = self.kernel_size // 2
         kernel_size = 2 * radius + 1
         x_coord = torch.arange(kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
-        x_grid = x_coord.repeat(kernel_size).view(kernel_size, kernel_size)
-        y_grid = x_grid.t()
+        y_grid = x_coord.repeat(kernel_size, 1)
+        x_grid = x_coord.view(-1, 1).repeat(1, kernel_size)
         xy_grid = torch.sqrt(x_grid**2 + y_grid**2)
-        kernel = torch.exp(-xy_grid**2 / (2*sigma**2))
-        kernel /= kernel.sum()
+        kernel = torch.exp(-xy_grid**2 / (2 * sigma**2))
+        kernel_sum = kernel.sum()
+        if kernel_sum.item() == 0:
+            kernel += 1e-10  
+        kernel /= kernel_sum
 
         kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(inputs.shape[1], 1, 1, 1)
         blurred = F.conv2d(inputs, kernel, padding=radius, groups=inputs.shape[1])
         return blurred
 
-    def forward(self, inputs):
+    def forward(self, inputs, target_size):
         inputs = inputs.to(dtype=self.dtype)
-        net = self._base_resizer(inputs)
+        net = self._base_resizer(inputs, target_size)
         for weight, bias in zip(self.weights, self.biases):
             blurred = self._gaussian_blur(inputs)
             residual_image = blurred - inputs
-            resized_residual = self._base_resizer(residual_image)
-            net += torch.tanh(weight * resized_residual + bias)
+            resized_residual = self._base_resizer(residual_image, target_size)
+            scaled_residual = weight * resized_residual + bias
+            net += torch.tanh(scaled_residual.clamp(min=-3, max=3))  # Clamping to prevent extreme values
             inputs = blurred
         return net
 
@@ -307,41 +331,3 @@ class AltFilter(nn.Module):
         buffer = self.spa_trans(buffer)
 
         return buffer
-
-
-def interpolate(x, angRes, scale_factor, mode):
-    [B, _, H, W] = x.size()
-    h = H // angRes
-    w = W // angRes
-    x_upscale = x.view(B, 1, angRes, h, angRes, w)
-    x_upscale = x_upscale.permute(0, 2, 4, 1, 3, 5).contiguous().view(B * angRes ** 2, 1, h, w)
-    # x_upscale = F.interpolate(x_upscale, scale_factor=scale_factor, mode=mode, align_corners=False)
-    target_h = h * scale_factor
-    target_w = w * scale_factor
-    target_size = (target_h, target_w)
-
-    resizer = MullerResizer(target_size=target_size, base_resize_method='bilinear',
-                                        kernel_size=5, stddev=1.0, num_layers=2, dtype=torch.float32, init_weights=[1.892, -0.014, -11.295, 0.003],avg_pool=False, antialias=False)
-    resizer = resizer.cuda()
-    x_upscale = resizer(x_upscale)
-    x_upscale = x_upscale.view(B, angRes, angRes, 1, h * scale_factor, w * scale_factor)
-    x_upscale = x_upscale.permute(0, 3, 1, 4, 2, 5).contiguous().view(B, 1, H * scale_factor, W * scale_factor)
-    # [B, 1, A*h*S, A*w*S]
-
-    return x_upscale
-
-
-class get_loss(nn.Module):
-    def __init__(self, args):
-        super(get_loss, self).__init__()
-        self.criterion_Loss = torch.nn.L1Loss()
-
-    def forward(self, SR, HR):
-        loss = self.criterion_Loss(SR, HR)
-
-        return loss
-
-
-def weights_init(m):
-
-    pass

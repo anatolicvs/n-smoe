@@ -1,7 +1,7 @@
 import functools
 import torch
 from torch.nn import init
-
+import torch.nn as nn
 
 """
 # --------------------------------------------
@@ -407,76 +407,158 @@ def define_F(opt, use_bn=False):
 # weights initialization
 # --------------------------------------------
 """
-
-
-def init_weights(net, init_type='xavier_uniform', init_bn_type='uniform', gain=1):
+def init_weights(net, init_type='xavier_uniform', init_bn_type='uniform', gain=1.0,
+                 std_dev=0.02, uniform_low=-0.2, uniform_high=0.2):
     """
-    # Kai Zhang, https://github.com/cszn/KAIR
-    #
-    # Args:
-    #   init_type:
-    #       default, none: pass init_weights
-    #       normal; normal; xavier_normal; xavier_uniform;
-    #       kaiming_normal; kaiming_uniform; orthogonal
-    #   init_bn_type:
-    #       uniform; constant
-    #   gain:
-    #       0.2
+    Initialize network weights with added flexibility for defining initialization parameters.
+
+    Args:
+        net (torch.nn.Module): Network to initialize.
+        init_type (str): Type of initialization for weights ('normal', 'uniform', 'xavier_normal', 'xavier_uniform',
+                         'kaiming_normal', 'kaiming_uniform', 'orthogonal').
+        init_bn_type (str): Type of initialization for BatchNorm layers ('uniform', 'constant').
+        gain (float): Gain factor for scale-dependent initializations.
+        std_dev (float): Standard deviation for normal distribution initializations.
+        uniform_low (float): Lower bound for uniform distribution initializations.
+        uniform_high (float): Upper bound for uniform distribution initializations.
+
+    Raises:
+        NotImplementedError: If the initialization type or batch normalization type is not supported.
     """
 
     def init_fn(m, init_type='xavier_uniform', init_bn_type='uniform', gain=1):
         classname = m.__class__.__name__
 
-        if classname.find('Conv') != -1 or classname.find('Linear') != -1:
+        if 'Conv' in classname or 'Linear' in classname:
+            if hasattr(m, 'weight'):
+               
+                if init_type == 'normal':
+                    init.normal_(m.weight.data, 0.0, std_dev)
+                    m.weight.data.clamp_(-1, 1).mul_(gain)
 
-            if init_type == 'normal':
-                init.normal_(m.weight.data, 0, 0.1)
-                m.weight.data.clamp_(-1, 1).mul_(gain)
+                elif init_type == 'uniform':
+                    init.uniform_(m.weight.data, uniform_low, uniform_high)
+                    m.weight.data.mul_(gain)
 
-            elif init_type == 'uniform':
-                init.uniform_(m.weight.data, -0.2, 0.2)
-                m.weight.data.mul_(gain)
+                elif init_type == 'xavier_normal':
+                    init.xavier_normal_(m.weight.data, gain=gain)
 
-            elif init_type == 'xavier_normal':
-                init.xavier_normal_(m.weight.data, gain=gain)
-                m.weight.data.clamp_(-1, 1)
+                elif init_type == 'xavier_uniform':
+                    init.xavier_uniform_(m.weight.data, gain=gain)
 
-            elif init_type == 'xavier_uniform':
-                init.xavier_uniform_(m.weight.data, gain=gain)
+                elif init_type == 'kaiming_normal':
+                    init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
 
-            elif init_type == 'kaiming_normal':
-                init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
-                m.weight.data.clamp_(-1, 1).mul_(gain)
+                elif init_type == 'kaiming_uniform':
+                    init.kaiming_uniform_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
 
-            elif init_type == 'kaiming_uniform':
-                init.kaiming_uniform_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
-                m.weight.data.mul_(gain)
+                elif init_type == 'orthogonal':
+                    init.orthogonal_(m.weight.data, gain=gain)
 
-            elif init_type == 'orthogonal':
-                init.orthogonal_(m.weight.data, gain=gain)
+                else:
+                    raise NotImplementedError(f'Initialization method [{init_type}] is not implemented')
 
-            else:
-                raise NotImplementedError('Initialization method [{:s}] is not implemented'.format(init_type))
+            if hasattr(m, 'bias') and m.bias is not None:
+                init.constant_(m.bias.data, 0.0)
 
-            if m.bias is not None:
-                m.bias.data.zero_()
-
-        elif classname.find('BatchNorm2d') != -1:
-
-            if init_bn_type == 'uniform':  # preferred
-                if m.affine:
-                    init.uniform_(m.weight.data, 0.1, 1.0)
+        elif 'BatchNorm' in classname:
+            if m.affine:
+                if init_bn_type == 'uniform':
+                    init.uniform_(m.weight.data, uniform_low, 1.0)
                     init.constant_(m.bias.data, 0.0)
-            elif init_bn_type == 'constant':
-                if m.affine:
+                elif init_bn_type == 'constant':
                     init.constant_(m.weight.data, 1.0)
                     init.constant_(m.bias.data, 0.0)
-            else:
-                raise NotImplementedError('Initialization method [{:s}] is not implemented'.format(init_bn_type))
+                else:
+                    raise NotImplementedError(f'Batch normalization initialization method [{init_bn_type}] is not implemented')
+                
+        elif classname in ['MullerResizer']:  # Add your specific class name
+            if hasattr(m, 'weights'):
+                for weight in m.weights:
+                    # Initialize with a small random value to avoid zero gradients
+                    nn.init.uniform_(weight, -0.05, 0.05)
+            if hasattr(m, 'biases'):
+                for bias in m.biases:
+                    nn.init.constant_(bias, 0)
 
     if init_type not in ['default', 'none']:
-        # print('Initialization method [{:s} + {:s}], gain is [{:.2f}]'.format(init_type, init_bn_type, gain))
+        print('Initialization method [{:s} + {:s}], gain is [{:.2f}]'.format(init_type, init_bn_type, gain))
         fn = functools.partial(init_fn, init_type=init_type, init_bn_type=init_bn_type, gain=gain)
         net.apply(fn)
     else:
         print('Pass this initialization! Initialization was done during network definition!')
+
+
+
+# def init_weights(net, init_type='xavier_uniform', init_bn_type='uniform', gain=1):
+#     """
+#     # Kai Zhang, https://github.com/cszn/KAIR
+#     #
+#     # Args:
+#     #   init_type:
+#     #       default, none: pass init_weights
+#     #       normal; normal; xavier_normal; xavier_uniform;
+#     #       kaiming_normal; kaiming_uniform; orthogonal
+#     #   init_bn_type:
+#     #       uniform; constant
+#     #   gain:
+#     #       0.2
+#     """
+
+#     def init_fn(m, init_type='xavier_uniform', init_bn_type='uniform', gain=1):
+#         classname = m.__class__.__name__
+
+#         if classname.find('Conv') != -1 or classname.find('Linear') != -1:
+
+#             if init_type == 'normal':
+#                 init.normal_(m.weight.data, 0, 0.1)
+#                 m.weight.data.clamp_(-1, 1).mul_(gain)
+
+#             elif init_type == 'uniform':
+#                 init.uniform_(m.weight.data, -0.2, 0.2)
+#                 m.weight.data.mul_(gain)
+
+#             elif init_type == 'xavier_normal':
+#                 init.xavier_normal_(m.weight.data, gain=gain)
+#                 m.weight.data.clamp_(-1, 1)
+
+#             elif init_type == 'xavier_uniform':
+#                 init.xavier_uniform_(m.weight.data, gain=gain)
+
+#             elif init_type == 'kaiming_normal':
+#                 init.kaiming_normal_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
+#                 m.weight.data.clamp_(-1, 1).mul_(gain)
+
+#             elif init_type == 'kaiming_uniform':
+#                 init.kaiming_uniform_(m.weight.data, a=0, mode='fan_in', nonlinearity='relu')
+#                 m.weight.data.mul_(gain)
+
+#             elif init_type == 'orthogonal':
+#                 init.orthogonal_(m.weight.data, gain=gain)
+
+#             else:
+#                 raise NotImplementedError('Initialization method [{:s}] is not implemented'.format(init_type))
+
+#             if m.bias is not None:
+#                 m.bias.data.zero_()
+
+#         elif classname.find('BatchNorm2d') != -1:
+
+#             if init_bn_type == 'uniform':  # preferred
+#                 if m.affine:
+#                     init.uniform_(m.weight.data, 0.1, 1.0)
+#                     init.constant_(m.bias.data, 0.0)
+#             elif init_bn_type == 'constant':
+#                 if m.affine:
+#                     init.constant_(m.weight.data, 1.0)
+#                     init.constant_(m.bias.data, 0.0)
+#             else:
+#                 raise NotImplementedError('Initialization method [{:s}] is not implemented'.format(init_bn_type))
+
+#     if init_type not in ['default', 'none']:
+#         # print('Initialization method [{:s} + {:s}], gain is [{:.2f}]'.format(init_type, init_bn_type, gain))
+#         fn = functools.partial(init_fn, init_type=init_type, init_bn_type=init_bn_type, gain=gain)
+#         net.apply(fn)
+#     else:
+#         print('Pass this initialization! Initialization was done during network definition!')
+
