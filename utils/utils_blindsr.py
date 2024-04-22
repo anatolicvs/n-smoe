@@ -13,19 +13,6 @@ from scipy.interpolate import interp2d
 from scipy.linalg import orth
 
 
-
-
-"""
-# --------------------------------------------
-# Super-Resolution
-# --------------------------------------------
-#
-# Kai Zhang (cskaizhang@gmail.com)
-# https://github.com/cszn
-# From 2019/03--2021/08
-# --------------------------------------------
-"""
-
 def modcrop_np(img, sf):
     '''
     Args:

@@ -130,6 +130,10 @@ def define_G(opt):
         from models.network_lft import LFT
         netG = LFT(opt_net)
 
+    elif net_type == 'lft_atnnscale':
+        from models.network_lft_atnnscale import LFT
+        netG = LFT(opt_net)
+
     # ----------------------------------------
     # modified SRResNet v0.0
     # ----------------------------------------
@@ -301,7 +305,7 @@ def define_G(opt):
     # ----------------------------------------
     if opt['is_train']:
 
-        if net_type == 'lft_gan': 
+        if net_type in ['lft_gan', 'lft_atnnscale']: 
             init_weights(netG,
                      init_type=opt_net['init_type'],
                      init_bn_type=opt_net['init_bn_type'],

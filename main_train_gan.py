@@ -19,7 +19,7 @@ from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
 
-def main(json_path='options/train_lft_gan.json'):
+def main(json_path='options/train_lft_attnscale_gan.json'):
 
     '''
     # ----------------------------------------

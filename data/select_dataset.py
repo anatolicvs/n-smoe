@@ -1,14 +1,3 @@
-
-
-'''
-# --------------------------------------------
-# select dataset
-# --------------------------------------------
-# Kai Zhang (github: https://github.com/cszn)
-# --------------------------------------------
-'''
-
-
 def define_Dataset(dataset_opt):
     dataset_type = dataset_opt['dataset_type'].lower()
     if dataset_type in ['l', 'low-quality', 'input-only']:
@@ -37,6 +26,9 @@ def define_Dataset(dataset_opt):
 
     elif dataset_type in ['sr-lf', 'super-resolution_lf']:
         from data.dataset_sr_lf import DatasetSRLF as D
+
+    elif dataset_type in ['sr_lf_blindsr']:
+        from data.dataset_sr_lf_blindsr import DatasetSRLF as D
 
     elif dataset_type in ['srmd']:
         from data.dataset_srmd import DatasetSRMD as D
