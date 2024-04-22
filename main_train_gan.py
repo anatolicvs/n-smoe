@@ -153,12 +153,7 @@ def main(json_path='options/train_lft_gan.json'):
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    '''
-    # ----------------------------------------
-    # Step--4 (main training)
-    # ----------------------------------------
-    '''
-
+   
     for epoch in range(1000000):  # keep running
         if opt['dist']:
             train_sampler.set_epoch(epoch)

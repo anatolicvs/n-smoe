@@ -4,7 +4,6 @@ import torch.nn.functional as F
 from einops import rearrange
 import math
 
-
 class LFT(nn.Module):
     def __init__(self, args):
         super(LFT, self).__init__()
@@ -101,7 +100,6 @@ class LFT(nn.Module):
 
         return out
 
-
 class PositionEncoding(nn.Module):
     def __init__(self, temperature):
         super(PositionEncoding, self).__init__()
@@ -132,7 +130,6 @@ class PositionEncoding(nn.Module):
         position = rearrange(position, 'b 1 a h w dim -> b dim a h w')
 
         return position / len(dim)
-
 
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
@@ -333,7 +330,6 @@ class SpaTrans(nn.Module):
 
         return buffer
 
-
 class AngTrans(nn.Module):
     def __init__(self, channels, angRes, MHSA_params):
         super(AngTrans, self).__init__()
@@ -384,7 +380,6 @@ class AngTrans(nn.Module):
         buffer = self.Token2SAI(ang_token)
 
         return buffer
-
 
 class AltFilter(nn.Module):
     def __init__(self, angRes, channels, MHSA_params):
