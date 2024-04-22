@@ -195,6 +195,62 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
+class Attention_talking_head(nn.Module):
+    # taken from https://github.com/rwightman/pytorch-image-models/blob/master/timm/models/vision_transformer.py
+    # with slight modifications to add Talking Heads Attention (https://arxiv.org/pdf/2003.02436v1.pdf)
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., attnscale=True):
+        super().__init__()
+        
+        self.dim = dim
+        self.num_heads = num_heads
+        
+        head_dim = dim // num_heads
+        
+        self.scale = qk_scale or head_dim ** -0.5
+
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        
+        self.proj = nn.Linear(dim, dim)
+        
+        self.proj_l = nn.Linear(num_heads, num_heads)
+        self.proj_w = nn.Linear(num_heads, num_heads)
+        
+        self.proj_drop = nn.Dropout(proj_drop)
+
+        self.attnscale = attnscale
+        if attnscale:
+            self.lamb = nn.Parameter(torch.zeros(num_heads), requires_grad=True)
+    
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0] * self.scale , qkv[1], qkv[2] 
+    
+        attn = (q @ k.transpose(-2, -1))
+
+        # pre-softmax communication
+        attn = self.proj_l(attn.permute(0,2,3,1)).permute(0,3,1,2)
+                
+        attn = attn.softmax(dim=-1)
+  
+        # post-softmax communication
+        attn = self.proj_w(attn.permute(0,2,3,1)).permute(0,3,1,2)
+
+        ### AttnScale
+        if self.attnscale:
+            attn_d = torch.ones(attn.shape[-2:], device=attn.device) / N    # [l, l]
+            attn_d = attn_d[None, None, ...]                                # [B, N, l, l]
+            attn_h = attn - attn_d                                          # [B, N, l, l]
+            attn_h = attn_h * (1.+self.lamb[None, :, None, None])           # [B, N, l, l]
+            attn = attn_d + attn_h                                          # [B, N, l, l]
+
+        attn = self.attn_drop(attn)
+
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
 
 class SpaTrans(nn.Module):
     def __init__(self, channels, angRes, MHSA_params):
@@ -206,12 +262,15 @@ class SpaTrans(nn.Module):
         self.MLP = nn.Linear(channels * self.kernel_field ** 2, self.spa_dim, bias=False)
 
         self.norm = nn.LayerNorm(self.spa_dim)
-        self.attention = nn.MultiheadAttention(self.spa_dim,
-                                               MHSA_params['num_heads'],
-                                               MHSA_params['dropout'],
-                                               bias=False)
-        nn.init.kaiming_uniform_(self.attention.in_proj_weight, a=math.sqrt(5))
-        self.attention.out_proj.bias = None
+
+        # self.attention = nn.MultiheadAttention(self.spa_dim,
+        #                                        MHSA_params['num_heads'],
+        #                                        MHSA_params['dropout'],
+        #                                        bias=False)
+        self.attention = Attention_talking_head(self.spa_dim, num_heads=MHSA_params['num_heads'], attn_drop=MHSA_params['dropout'], proj_drop=MHSA_params['dropout'], attnscale=True)
+
+        # nn.init.kaiming_uniform_(self.attention.in_proj_weight, a=math.sqrt(5))
+        # self.attention.out_proj.bias = None
 
         self.feed_forward = nn.Sequential(
             nn.LayerNorm(self.spa_dim),
@@ -261,11 +320,14 @@ class SpaTrans(nn.Module):
         spa_PE = self.SAI2Token(self.spa_position)
         spa_token_norm = self.norm(spa_token + spa_PE)
 
-        spa_token = self.attention(query=spa_token_norm,
-                                   key=spa_token_norm,
-                                   value=spa_token,
-                                   need_weights=False,
-                                   attn_mask=atten_mask)[0] + spa_token
+        # spa_token = self.attention(query=spa_token_norm,
+        #                            key=spa_token_norm,
+        #                            value=spa_token,
+        #                            need_weights=False,
+        #                            attn_mask=atten_mask)[0] + spa_token
+
+        spa_token = self.attention(spa_token_norm) + spa_token
+
         spa_token = self.feed_forward(spa_token) + spa_token
         buffer = self.Token2SAI(spa_token)
 
@@ -278,12 +340,15 @@ class AngTrans(nn.Module):
         self.angRes = angRes
         self.ang_dim = channels
         self.norm = nn.LayerNorm(self.ang_dim)
-        self.attention = nn.MultiheadAttention(self.ang_dim,
-                                               MHSA_params['num_heads'],
-                                               MHSA_params['dropout'],
-                                               bias=False)
-        nn.init.kaiming_uniform_(self.attention.in_proj_weight, a=math.sqrt(5))
-        self.attention.out_proj.bias = None
+
+        # self.attention = nn.MultiheadAttention(self.ang_dim,
+        #                                        MHSA_params['num_heads'],
+        #                                        MHSA_params['dropout'],
+        #                                        bias=False)
+        self.attention = Attention_talking_head(self.ang_dim, num_heads=MHSA_params['num_heads'], attn_drop=MHSA_params['dropout'], proj_drop=MHSA_params['dropout'], attnscale=True)
+
+        # nn.init.kaiming_uniform_(self.attention.in_proj_weight, a=math.sqrt(5))
+        # self.attention.out_proj.bias = None
 
         self.feed_forward = nn.Sequential(
             nn.LayerNorm(self.ang_dim),
@@ -308,10 +373,12 @@ class AngTrans(nn.Module):
         ang_PE = self.SAI2Token(self.ang_position)
         ang_token_norm = self.norm(ang_token + ang_PE)
 
-        ang_token = self.attention(query=ang_token_norm,
-                                   key=ang_token_norm,
-                                   value=ang_token,
-                                   need_weights=False)[0] + ang_token
+        # ang_token = self.attention(query=ang_token_norm,
+        #                            key=ang_token_norm,
+        #                            value=ang_token,
+        #                            need_weights=False)[0] + ang_token
+
+        ang_token = self.attention(ang_token_norm) + ang_token
 
         ang_token = self.feed_forward(ang_token) + ang_token
         buffer = self.Token2SAI(ang_token)
