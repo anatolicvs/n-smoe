@@ -431,7 +431,7 @@ class ResBlock(nn.Module):
         h = self.out_layers(h)
         return self.skip_connection(x) + h
 
-class EncoderUNet(nn.Module):
+class Encoder(nn.Module):
     def __init__(
         self,
         image_size,
@@ -738,7 +738,7 @@ class Autoencoder(nn.Module):
         self.latent_dim = latent_dim
         self.scale_factor = scale_factor
 
-        self.encoder = EncoderUNet(
+        self.encoder = Encoder(
             image_size=image_size,
             in_channels=in_channels,
             model_channels=model_channels,

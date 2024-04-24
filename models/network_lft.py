@@ -8,10 +8,13 @@ import math
 class LFT(nn.Module):
     def __init__(self, args):
         super(LFT, self).__init__()
-        channels = args['channels']  
+        # channels = args['channels'] 
+        channels = args.channels   
         self.channels = channels
-        self.angRes = args['angRes']
-        self.factor = args['scale_factor']
+        # self.angRes = args['angRes']
+        self.angRes = args.angRes
+        # self.factor = args['scale_factor']
+        self.factor = args.scale_factor
         layer_num = 4
 
         self.pos_encoding = PositionEncoding(temperature=10000)
