@@ -7,10 +7,10 @@ JOB_NAME="${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
-CPUS_PER_TASK=8
+CPUS_PER_TASK=16
 GPUS=1
-MEMORY="8G"
-TIME="16:00:00"
+MEMORY="4G"
+TIME="20:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 # CONSTRAINT="tesla_a10080G"
@@ -29,7 +29,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
 # Has to be used without an project!
 
-PARTITION="c18g"
+PARTITION="c23g"
 
 sbatch <<-EOT
 #!/bin/bash

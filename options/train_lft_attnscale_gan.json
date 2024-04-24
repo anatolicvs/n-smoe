@@ -1,10 +1,10 @@
 {
-    "task": "lft_atnnscale_gan_unet_muller_resizer" //  
+    "task": "lft_atnnscale_gan_unet_muller_resizer_v2_x4" 
     , "model": "gan" // "gan"
-    , "gpu_ids": [3]
+    , "gpu_ids": [0]
   
     , "scale": 4       // broadcast to "netG" if SISR
-    , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
   
@@ -20,7 +20,7 @@
   
     , "datasets": {
       "train": {
-        "name": "train_dataset"           // just name
+        "name": "train_dataset"       
         , "dataset_type": "sr_lf_blindsr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "dataroot_H": "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset
         , "data_name": "ALL"
@@ -29,7 +29,7 @@
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 1     // batch size 1 | 16 | 32 | 48 | 64 | 128        
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128        
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -54,8 +54,8 @@
       , "init_gain": 0.2
       , "num_heads": 2
       , "dropout": 0.01
-      , "resizer_num_layers": 4
-      , "altblock_layer_num": 4
+      , "resizer_num_layers": 1
+      , "altblock_layer_num": 2
     }
   
     , "netD": {
