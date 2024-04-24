@@ -45,9 +45,6 @@ class DatasetSRLF(data.Dataset):
     def __getitem__(self, index):
 
         L_path = None
-        # ------------------------------------
-        # get H image
-        # ------------------------------------
         H_path = self.paths_H[index]
         with h5py.File(H_path, 'r') as hf:
             img_H_SAI_y = np.array(hf.get('Hr_SAI_y'))  

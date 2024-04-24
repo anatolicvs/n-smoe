@@ -11,10 +11,11 @@ class LFT(nn.Module):
         self.channels = channels
         self.angRes = args['angRes']
         self.factor = args['scale_factor']
-        layer_num = 4
+        resizer_num_layers = args['num_layers'] if 'num_layers' in args else 4
+        altblock_layer_num = args['altblock_layer_num'] if 'altblock_layer_num' in args else 8
 
         self.pos_encoding = PositionEncoding(temperature=10000)
-        self.MHSA_params = {'num_heads': 8, 'dropout': 0.}
+        self.MHSA_params = {'num_heads': args['num_heads'], 'dropout': args['dropout']}
 
         self.conv_init0 = nn.Sequential(
             nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
@@ -31,7 +32,7 @@ class LFT(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
         )
 
-        self.altblock = self.make_layer(layer_num=layer_num)
+        self.altblock = self.make_layer(layer_num=altblock_layer_num)
 
         self.upsampling = nn.Sequential(
             nn.Conv2d(channels, channels*self.factor ** 2, kernel_size=1, padding=0, dilation=1, bias=False),
@@ -41,7 +42,7 @@ class LFT(nn.Module):
         )
 
         self.resizer = MullerResizer(
-            base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=8,
+            base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=resizer_num_layers,
             dtype=torch.float32
         )
 

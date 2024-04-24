@@ -334,6 +334,22 @@ def add_blur(img, sf=4):
 
     return img
 
+
+def _apply_kernel(img, k_shifted, sf):
+    k_shifted = k_shifted / k_shifted.sum()
+    
+    if img.ndim == 3 and img.shape[2] > 1:
+        k_shifted = np.expand_dims(k_shifted, axis=2)
+        k_shifted = np.repeat(k_shifted, img.shape[2], axis=2)
+    else:
+        k_shifted = np.expand_dims(k_shifted, axis=2)
+
+    img = ndimage.filters.convolve(img, k_shifted, mode='mirror')
+    if sf > 1:
+        img = img[::sf, ::sf, ...]
+
+    return img
+
 def _add_blur(img, sf=4):
     wd2 = 4.0 + sf
     wd = 2.0 + 0.2*sf
@@ -344,9 +360,14 @@ def _add_blur(img, sf=4):
     else:
         k = fspecial('gaussian', 2*random.randint(2,11)+3, wd*random.random())
 
-    k = np.expand_dims(k, axis=2)
-    img = ndimage.filters.convolve(img, k, mode='mirror')
-
+    if k.ndim == 2:
+        k = k[:, :, np.newaxis]
+    if img.ndim == 2:
+        img = img[:, :, np.newaxis]
+    try:
+        img = ndimage.filters.convolve(img, k, mode='mirror')
+    except RuntimeError as e:
+        raise ValueError(f"Error in convolution operation: {str(e)}")
     return img
 
 def add_resize(img, sf=4):
@@ -517,8 +538,15 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
                 k_shifted = shift_pixel(k, sf)
                 k_shifted = k_shifted/k_shifted.sum()  # blur with shifted kernel
                 # img = ndimage.filters.convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
-                img = ndimage.filters.convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
-                img = img[0::sf, 0::sf, ...]  # nearest downsampling
+                if k_shifted.ndim == 2:
+                    k_shifted = k_shifted[:, :, np.newaxis]
+                if img.ndim == 2:
+                    img = img[:, :, np.newaxis]
+                try:
+                    img = ndimage.filters.convolve(img, k_shifted, mode='mirror')
+                    img = img[0::sf, 0::sf, ...]
+                except RuntimeError as e:
+                    raise ValueError(f"Error in convolution operation: {str(e)}") 
             img = np.clip(img, 0.0, 1.0)
 
         elif i == 3:

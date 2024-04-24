@@ -29,7 +29,10 @@
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 48     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 1     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        ,  "phw": 32
+        , "stride":2
+        
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -52,6 +55,10 @@
       , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform"         // "uniform" | "constant"
       , "init_gain": 0.2
+      , "num_heads": 2
+      , "dropout": 0.01
+      , "resizer_num_layers": 4
+      , "altblock_layer_num": 4
     }
   
     , "netD": {
