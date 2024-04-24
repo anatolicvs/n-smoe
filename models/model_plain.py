@@ -148,7 +148,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         self.L = data['L'].to(self.device)
-        # self.L_p = data['L_p'].to(self.device)  SMoE
+        self.L_p = data['L_p'].to(self.device)  # SMoE
         if need_H:
             self.H = data['H'].to(self.device)
 
@@ -156,8 +156,10 @@ class ModelPlain(ModelBase):
     # feed L to netG
     # ----------------------------------------
     def netG_forward(self):
-        # self.E = self.netG(self.L_p, self.L.size()) SMoE
-        self.E = self.netG(self.L)
+        if self.opt_train['is_moe'] > 0:
+            self.E = self.netG(self.L_p, self.L.size()) #SMoE
+        else:
+            self.E = self.netG(self.L)
 
     # ----------------------------------------
     # update parameters and get loss

@@ -1,5 +1,5 @@
 {
-    "task": "convsmoe_psnr" 
+    "task": "convsmoe_muller_psnr" 
     , "model": "plain"
     , "gpu_ids": [0]
   
@@ -22,7 +22,7 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/KAIR/trainsets/trainH"// path of H training dataset
+        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/train_0"// path of H training dataset
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
@@ -35,7 +35,7 @@
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/KAIR/testsets/STARE"   // path of H testing dataset
+        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/test"   // path of H testing dataset
         , "dataroot_L": null              // path of L testing dataset
         , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
@@ -62,13 +62,13 @@
     , "init_gain": 0.2
     }
     , "train": {
-        "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+        "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "E_decay": 0.999                  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-3            // learning rate
+        , "G_optimizer_lr": 1e-4            // learning rate
         , "G_optimizer_wd": 0               // weight decay, default 0
         , "G_optimizer_clipgrad": null      // unused
         , "G_optimizer_reuse": false
