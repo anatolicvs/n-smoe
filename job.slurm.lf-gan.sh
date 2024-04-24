@@ -1,15 +1,15 @@
 #!/bin/bash
 
-MODEL_NAME=lf-gan
+MODEL_NAME=lft_attnscale_gan_unet_muller_resizer_angRes_5_x4
 WORKDIR=/work/pb035507
-OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
+OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_attnscale_gan.json
 JOB_NAME="${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
 CPUS_PER_TASK=8
 GPUS=1
-MEMORY="4G"
+MEMORY="8G"
 TIME="16:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
@@ -29,7 +29,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
 # Has to be used without an project!
 
-PARTITION="c23g"
+PARTITION="c18g"
 
 sbatch <<-EOT
 #!/bin/bash
