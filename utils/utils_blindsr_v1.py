@@ -537,7 +537,7 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
                 k = fspecial('gaussian', 25, random.uniform(0.1, 0.6*sf))
                 k_shifted = shift_pixel(k, sf)
                 k_shifted = k_shifted/k_shifted.sum()  # blur with shifted kernel
-                # img = ndimage.filters.convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
+                
                 if k_shifted.ndim == 2:
                     k_shifted = k_shifted[:, :, np.newaxis]
                 if img.ndim == 2:
