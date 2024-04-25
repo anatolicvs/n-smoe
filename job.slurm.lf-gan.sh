@@ -1,6 +1,6 @@
 #!/bin/bash
 
-MODEL_NAME=lft_attnscale_gan_unet_muller_resizer_angRes_5_x4
+MODEL_NAME=lft_gan_unet_muller_resizer_angRes_5_x4
 WORKDIR=/work/pb035507
 OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_attnscale_gan.json
 JOB_NAME="${MODEL_NAME}"

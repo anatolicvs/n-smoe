@@ -12,7 +12,7 @@ class LFT(nn.Module):
         self.channels = channels
         self.angRes = args['angRes']
         self.factor = args['scale_factor']
-        resizer_num_layers = args['num_layers'] if 'num_layers' in args else 4
+        resizer_num_layers = args['resizer_num_layers'] if 'resizer_num_layers' in args else 4
         altblock_layer_num = args['altblock_layer_num'] if 'altblock_layer_num' in args else 8
 
         self.pos_encoding = PositionEncoding(temperature=10000)
@@ -23,13 +23,13 @@ class LFT(nn.Module):
         )
         self.conv_init = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            nn.BatchNorm3d(channels),
+            # nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            nn.BatchNorm3d(channels),
+            # nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            nn.BatchNorm3d(channels),
+            # nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
