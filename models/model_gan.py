@@ -168,23 +168,23 @@ class ModelGAN(ModelBase):
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
-        # self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-        #                                                 self.opt_train['G_scheduler_milestones'],
-        #                                                 self.opt_train['G_scheduler_gamma']
-        #                                                 ))
-        # self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
-        #                                                 self.opt_train['D_scheduler_milestones'],
-        #                                                 self.opt_train['D_scheduler_gamma']
-        #                                                 ))
+        self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
+                                                        self.opt_train['G_scheduler_milestones'],
+                                                        self.opt_train['G_scheduler_gamma']
+                                                        ))
+        self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
+                                                        self.opt_train['D_scheduler_milestones'],
+                                                        self.opt_train['D_scheduler_gamma']
+                                                        ))
         
-        self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
-                                                      T_max=self.opt_train['G_scheduler_T_max'],
-                                                      eta_min=self.opt_train['G_scheduler_eta_min']))
+        # self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
+        #                                               T_max=self.opt_train['G_scheduler_T_max'],
+        #                                               eta_min=self.opt_train['G_scheduler_eta_min']))
 
 
-        self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
-                                                            T_max=self.opt_train['D_scheduler_T_max'],
-                                                            eta_min=self.opt_train['D_scheduler_eta_min']))
+        # self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
+        #                                                     T_max=self.opt_train['D_scheduler_T_max'],
+        #                                                     eta_min=self.opt_train['D_scheduler_eta_min']))
 
     """
     # ----------------------------------------
@@ -198,7 +198,10 @@ class ModelGAN(ModelBase):
     # ----------------------------------------
     def feed_data(self, data, need_H=True):
         self.L = data['L'].to(self.device)
-        # self.L_p = data['L_p'].to(self.device) SMoE
+
+        if self.opt['train']["is_moe"]:
+            self.L_p = data['L_p'].to(self.device)
+
         if need_H:
             self.H = data['H'].to(self.device)
 
@@ -206,9 +209,10 @@ class ModelGAN(ModelBase):
     # feed L to netG and get E
     # ----------------------------------------
     def netG_forward(self):
-        # self.E = self.netG(self.L_p, self.L.size())
-        self.E = self.netG(self.L)
-
+        if self.opt['train']["is_moe"]:
+             self.E = self.netG(self.L_p, self.L.size())
+        else:
+            self.E = self.netG(self.L)
     # ----------------------------------------
     # update parameters and get loss
     # ----------------------------------------
@@ -243,7 +247,7 @@ class ModelGAN(ModelBase):
             loss_G_total += D_loss                    # 3) GAN loss
 
             loss_G_total.backward()
-            torch.nn.utils.clip_grad_norm_(self.netG.parameters(), self.opt_train['G_clip_value'])
+            # torch.nn.utils.clip_grad_norm_(self.netG.parameters(), self.opt_train['G_clip_value'])
             self.G_optimizer.step()
 
         # ------------------------------------
@@ -280,7 +284,7 @@ class ModelGAN(ModelBase):
             l_d_fake = 0.5 * self.D_lossfn(pred_d_fake - torch.mean(pred_d_real.detach(), 0, True), False)
             l_d_fake.backward()
 
-        torch.nn.utils.clip_grad_norm_(self.netD.parameters(), self.opt_train['D_clip_value'])
+        # torch.nn.utils.clip_grad_norm_(self.netD.parameters(), self.opt_train['D_clip_value'])
         self.D_optimizer.step()
 
         # ------------------------------------

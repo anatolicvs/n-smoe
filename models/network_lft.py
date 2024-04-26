@@ -5,6 +5,17 @@ from einops import rearrange
 import math
 
 
+class DepthwiseSeparableConv(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size, padding, dilation):
+        super(DepthwiseSeparableConv, self).__init__()
+        self.depthwise = nn.Conv3d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, dilation=dilation, groups=in_channels, bias=False)
+        self.pointwise = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=False)
+
+    def forward(self, x):
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+        return x
+
 class LFT(nn.Module):
     def __init__(self, args):
         super(LFT, self).__init__()
@@ -14,13 +25,17 @@ class LFT(nn.Module):
         self.factor = args['scale_factor']
         resizer_num_layers = args['resizer_num_layers'] if 'resizer_num_layers' in args else 4
         altblock_layer_num = args['altblock_layer_num'] if 'altblock_layer_num' in args else 8
+        avg_pool = args['avg_pool'] if 'avg_pool' in args else True
 
         self.pos_encoding = PositionEncoding(temperature=10000)
         self.MHSA_params = {'num_heads': args['num_heads'], 'dropout': args['dropout']}
 
-        self.conv_init0 = nn.Sequential(
-            nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-        )
+        # self.conv_init0 = nn.Sequential(
+        #     nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
+        # )
+
+        self.conv_init0 = DepthwiseSeparableConv(1, self.channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1)
+
         self.conv_init = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
             nn.BatchNorm3d(channels),
@@ -44,7 +59,7 @@ class LFT(nn.Module):
 
         self.resizer = MullerResizer(
             base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=resizer_num_layers,
-            dtype=torch.float32
+            dtype=torch.float32, avg_pool=avg_pool
         )
 
     
@@ -133,7 +148,6 @@ class PositionEncoding(nn.Module):
 
         return position / len(dim)
 
-
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
     def __init__(self, base_resize_method='bilinear', antialias=False,
@@ -142,7 +156,7 @@ class MullerResizer(nn.Module):
         super(MullerResizer, self).__init__()
         self.name = name
         self.base_resize_method = base_resize_method
-        self.antialias = antialias  # Note: PyTorch does not support antialiasing in resizing.
+        self.antialias = antialias  
         self.kernel_size = kernel_size
         self.stddev = stddev
         self.num_layers = num_layers
@@ -195,7 +209,6 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
-
 class SpaTrans(nn.Module):
     def __init__(self, channels, angRes, MHSA_params):
         super(SpaTrans, self).__init__()
@@ -203,7 +216,9 @@ class SpaTrans(nn.Module):
         self.kernel_field = 3
         self.kernel_search = 5
         self.spa_dim = channels * 2
-        self.MLP = nn.Linear(channels * self.kernel_field ** 2, self.spa_dim, bias=False)
+        # self.MLP = nn.Linear(channels * self.kernel_field ** 2, self.spa_dim, bias=False)
+        self.MLP = MLP(channels * self.kernel_field ** 2, hidden_features=self.spa_dim, out_features=self.spa_dim)
+
 
         self.norm = nn.LayerNorm(self.spa_dim)
         self.attention = nn.MultiheadAttention(self.spa_dim,
@@ -255,6 +270,7 @@ class SpaTrans(nn.Module):
         return buffer
 
     def forward(self, buffer):
+        original = buffer
         atten_mask = self.gen_mask(self.h, self.w, self.kernel_search).to(buffer.device)
 
         spa_token = self.SAI2Token(buffer)
@@ -269,8 +285,26 @@ class SpaTrans(nn.Module):
         spa_token = self.feed_forward(spa_token) + spa_token
         buffer = self.Token2SAI(spa_token)
 
+        buffer += original  # residual connection
         return buffer
 
+class MLP(nn.Module):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = act_layer()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
 
 class AngTrans(nn.Module):
     def __init__(self, channels, angRes, MHSA_params):
@@ -304,6 +338,7 @@ class AngTrans(nn.Module):
         return buffer
 
     def forward(self, buffer):
+        original = buffer
         ang_token = self.SAI2Token(buffer)
         ang_PE = self.SAI2Token(self.ang_position)
         ang_token_norm = self.norm(ang_token + ang_PE)
@@ -316,6 +351,7 @@ class AngTrans(nn.Module):
         ang_token = self.feed_forward(ang_token) + ang_token
         buffer = self.Token2SAI(ang_token)
 
+        buffer += original  
         return buffer
 
 

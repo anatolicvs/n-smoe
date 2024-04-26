@@ -3,6 +3,7 @@ import numpy as np
 import torch.utils.data as data
 import utils.utils_image as util
 import os
+import torch.nn.functional as F
 from utils import utils_blindsr as blindsr
 
 
@@ -22,7 +23,8 @@ class DatasetBlindSR(data.Dataset):
         self.degradation_type = opt['degradation_type'] if opt['degradation_type'] else 'bsrgan'
         self.lq_patchsize = self.opt['lq_patchsize'] if self.opt['lq_patchsize'] else 64
         self.patch_size = self.opt['H_size'] if self.opt['H_size'] else self.lq_patchsize*self.sf
-
+        self.phw = opt['phw']
+        self.stride = opt['stride']
         self.paths_H = util.get_image_paths(opt['dataroot_H'])
         print(len(self.paths_H))
 
@@ -83,10 +85,21 @@ class DatasetBlindSR(data.Dataset):
         # ------------------------------------
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
 
+        img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
+            2, self.phw, self.stride
+        )
+        img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
+        img_L_p = img_L_p.view(
+            img_L_p.shape[1] * img_L_p.shape[2],
+            img_L_p.shape[0],
+            img_L_p.shape[3],
+            img_L_p.shape[4],
+        )
+
         if L_path is None:
             L_path = H_path
 
-        return {'L': img_L, 'H': img_H, 'L_path': L_path, 'H_path': H_path}
+        return {'L': img_L,'L_p': img_L_p, 'H': img_H, 'L_path': L_path, 'H_path': H_path}
 
     def __len__(self):
         return len(self.paths_H)

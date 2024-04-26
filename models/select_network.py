@@ -105,9 +105,11 @@ def define_G(opt):
                     model_channels=opt_net["model_channels"],
                     num_res_blocks=opt_net["num_res_blocks"],
                     attention_resolutions=opt_net["attention_resolutions"],
-                    # channel_mult=opt_net["channel_mult"],
-                    scale_factor=opt_net["scale_factor"],
+                    channel_mult=opt_net["channel_mult"],
                     num_heads=opt_net["num_heads"],
+                    scale_factor=opt_net["scale_factor"],
+                    use_checkpoint=opt_net["use_checkpoint"],
+                    pool=opt_net["pool"],
                 )
 
     elif net_type == 'conv_smoe':
@@ -126,6 +128,29 @@ def define_G(opt):
                     scale_factor=opt_net["scale_factor"],
                 )
 
+    elif net_type == 'umoe_muller':
+        from models.network_umoe import Autoencoder as net
+        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        netG = net(
+                    in_channels=opt_net["in_channels"],
+                    latent_dim=z,
+                    sharpening_factor=opt_net['sharpening_factor'],
+                    num_mixtures=opt_net["num_mixtures"],
+                    scale_factor=opt_net["scale"],
+                    stride=opt_net["stride"],
+                    phw=opt_net["phw"],
+                    dropout=opt_net["dropout"],
+                    model_channels=opt_net["model_channels"],
+                    num_res_blocks=opt_net["num_res_blocks"],
+                    attention_resolutions=opt_net["attention_resolutions"],
+                    channel_mult=opt_net["channel_mult"],
+                    num_head_channels = opt_net["num_head_channels"],
+                    num_heads=opt_net["num_heads"],
+                    use_checkpoint=opt_net["use_checkpoint"],
+                    pool=opt_net["pool"],
+                    num_layers=opt_net["num_layers"],
+                )
+        
     elif net_type == 'lft_gan':
         from models.network_lft import LFT
         netG = LFT(opt_net)
