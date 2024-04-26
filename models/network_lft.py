@@ -23,13 +23,13 @@ class LFT(nn.Module):
         )
         self.conv_init = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            # nn.BatchNorm3d(channels),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            # nn.BatchNorm3d(channels),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-            # nn.BatchNorm3d(channels),
+            nn.BatchNorm3d(channels),
             nn.LeakyReLU(0.2, inplace=True),
         )
 
