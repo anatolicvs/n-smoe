@@ -4,17 +4,16 @@ import torch.nn.functional as F
 from einops import rearrange
 import math
 
+# class DepthwiseSeparableConv(nn.Module):
+#     def __init__(self, in_channels, out_channels, kernel_size, padding, dilation):
+#         super(DepthwiseSeparableConv, self).__init__()
+#         self.depthwise = nn.Conv3d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, dilation=dilation, groups=in_channels, bias=False)
+#         self.pointwise = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=False)
 
-class DepthwiseSeparableConv(nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, padding, dilation):
-        super(DepthwiseSeparableConv, self).__init__()
-        self.depthwise = nn.Conv3d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, dilation=dilation, groups=in_channels, bias=False)
-        self.pointwise = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=False)
-
-    def forward(self, x):
-        x = self.depthwise(x)
-        x = self.pointwise(x)
-        return x
+#     def forward(self, x):
+#         x = self.depthwise(x)
+#         x = self.pointwise(x)
+#         return x
 
 class LFT(nn.Module):
     def __init__(self, args):
@@ -30,11 +29,11 @@ class LFT(nn.Module):
         self.pos_encoding = PositionEncoding(temperature=10000)
         self.MHSA_params = {'num_heads': args['num_heads'], 'dropout': args['dropout']}
 
-        # self.conv_init0 = nn.Sequential(
-        #     nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
-        # )
+        self.conv_init0 = nn.Sequential(
+            nn.Conv3d(1, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
+        )
 
-        self.conv_init0 = DepthwiseSeparableConv(1, self.channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1)
+        # self.conv_init0 = DepthwiseSeparableConv(1, self.channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1)
 
         self.conv_init = nn.Sequential(
             nn.Conv3d(channels, channels, kernel_size=(1, 3, 3), padding=(0, 1, 1), dilation=1, bias=False),
@@ -270,7 +269,7 @@ class SpaTrans(nn.Module):
         return buffer
 
     def forward(self, buffer):
-        original = buffer
+        # original = buffer
         atten_mask = self.gen_mask(self.h, self.w, self.kernel_search).to(buffer.device)
 
         spa_token = self.SAI2Token(buffer)
@@ -285,17 +284,17 @@ class SpaTrans(nn.Module):
         spa_token = self.feed_forward(spa_token) + spa_token
         buffer = self.Token2SAI(spa_token)
 
-        buffer += original  # residual connection
+        # buffer += original  # residual connection
         return buffer
 
 class MLP(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.ReLU, drop=0.):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
-        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.fc1 = nn.Linear(in_features, hidden_features, bias=False)
         self.act = act_layer()
-        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.fc2 = nn.Linear(hidden_features, out_features, bias=False)
         self.drop = nn.Dropout(drop)
 
     def forward(self, x):
@@ -338,7 +337,7 @@ class AngTrans(nn.Module):
         return buffer
 
     def forward(self, buffer):
-        original = buffer
+        # original = buffer
         ang_token = self.SAI2Token(buffer)
         ang_PE = self.SAI2Token(self.ang_position)
         ang_token_norm = self.norm(ang_token + ang_PE)
@@ -351,9 +350,8 @@ class AngTrans(nn.Module):
         ang_token = self.feed_forward(ang_token) + ang_token
         buffer = self.Token2SAI(ang_token)
 
-        buffer += original  
+        # buffer += original  
         return buffer
-
 
 class AltFilter(nn.Module):
     def __init__(self, angRes, channels, MHSA_params):

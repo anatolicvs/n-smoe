@@ -463,6 +463,7 @@ class Encoder(nn.Module):
         scale_factor=2,
         pool="spatial_v2",
         num_layers=8,
+        avg_pool=True,
     ):
         super().__init__()
 
@@ -602,7 +603,7 @@ class Encoder(nn.Module):
 
         self.resizer = MullerResizer(
             base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=num_layers,
-            dtype=torch.float32
+            dtype=torch.float32, avg_pool=avg_pool
         )
 
     def convert_to_fp16(self):
@@ -788,48 +789,6 @@ class MoE(nn.Module):
 #         return y_hat
 
 
-# class MoE(nn.Module):
-#     def __init__(self, in_channels=3, num_mixtures=4, sharpening_factor=1):
-#         super().__init__()
-#         self.ch = in_channels
-#         self.num_mixtures = num_mixtures
-#         self.α = sharpening_factor
-        
-#     def grid(self, height, width):
-        
-#         xx = torch.linspace(0, 1, width, device='cuda')
-#         yy = torch.linspace(0, 1, height, device='cuda')
-#         grid_x, grid_y = torch.meshgrid(xx, yy, indexing='xy')
-#         grid = torch.stack((grid_x, grid_y), dim=-1)
-#         return grid.view(-1, 2) 
-
-#     def forward(self, height, width, params):
-#         batch_size = params.shape[0]
-#         param_per_mixture = 2 + 2*2 + 1  
-#         outputs = []
-#         grid = self.grid(height, width)
-#         for c in range(self.ch):  
-            
-#             channel_params = params[:, c, :].view(batch_size, self.num_mixtures, param_per_mixture)
-#             means = channel_params[:, :, :2]
-#             raw_covariances = channel_params[:, :, 2:6].reshape(batch_size, self.num_mixtures, 2, 2)
-#             weights = F.softmax(channel_params[:, :, 6:], dim=1)
-
-#             L = torch.tril(raw_covariances)
-#             L = L * self.α
-#             covariances = L @ L.transpose(-2, -1)
-
-#             diff = grid.unsqueeze(0).unsqueeze(1) - means.unsqueeze(2)
-#             mahalanobis_dist = torch.einsum('bnij,bnjk,bnik->bni', diff, covariances.inverse(), diff)
-#             exponent = torch.exp(-0.5 * mahalanobis_dist)
-
-#             weighted_sum = torch.sum(weights * exponent, dim=1)
-#             output = weighted_sum.view(batch_size, 1, height, width)
-#             outputs.append(output)
-
-#         final_output = torch.cat(outputs, dim=1)
-#         return final_output.clamp(0, 1)
-
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
     def __init__(self, base_resize_method='bilinear', antialias=False,
@@ -897,7 +856,6 @@ class Autoencoder(nn.Module):
         in_channels:int=3,
         latent_dim:int=28,
         num_mixtures:int=4,
-        sharpening_factor:int=1,
         stride:int=16,
         phw:int=64,
         dropout:int=0.1,
@@ -911,7 +869,9 @@ class Autoencoder(nn.Module):
         use_checkpoint:bool=True,
         pool:str="spatial_v2",
         scale_factor:int=1,
-        num_layers:int=8
+        num_layers:int=8,
+        conv_resample:bool=True,
+        use_fp16:bool=False,
     ):
         super().__init__()
 
@@ -934,7 +894,9 @@ class Autoencoder(nn.Module):
             pool=pool,
             use_checkpoint=use_checkpoint,
             scale_factor=scale_factor,
-            num_layers=num_layers
+            num_layers=num_layers,
+            conv_resample=conv_resample,
+            use_fp16=use_fp16
         )
 
         self.decoder = MoE(
