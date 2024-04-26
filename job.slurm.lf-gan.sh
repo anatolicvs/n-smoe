@@ -1,19 +1,18 @@
 #!/bin/bash
 
-MODEL_NAME=lft_gan_unet_muller_resizer_angRes_5_x4
+MODEL_NAME=lft_gan_unet_muller_resizer_v2_angx5_scalex4_lsgan
 WORKDIR=/work/pb035507
-OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_attnscale_gan.json
+OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
 JOB_NAME="${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
-CPUS_PER_TASK=16
+CPUS_PER_TASK=8
 GPUS=1
 MEMORY="4G"
 TIME="20:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
-# CONSTRAINT="tesla_a10080G"
 OUTPUT_DIR="/home/pb035507/works/hpc-training/slurm/output"
 ERROR_DIR="/home/pb035507/works/hpc-training/slurm/error"
 

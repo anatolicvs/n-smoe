@@ -1,5 +1,5 @@
 {
-    "task": "lft_gan_unet_muller_resizer_v1" //  
+    "task": "lft_gan_unet_muller_resizer_v2_angx5_scalex4_lsgan" //  
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
   
@@ -12,7 +12,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution"  , hpc:/work/pb035507/superresolution/
+      "root": "/work/pb035507/superresolution/"  // "denoising" | "superresolution"  , hpc:/work/pb035507/superresolution/
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -22,19 +22,19 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr-lf"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/mnt/d/LF/data_for_train"// path of H training dataset local:/mnt/d/LF/data_for_train, hpc:/work/pb035507/dataset/LF/data_for_train
+        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset local:/mnt/d/LF/data_for_train, hpc:/work/pb035507/dataset/LF/data_for_train
         , "data_name": "ALL"
         , "angRes": 5
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr-lf"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/mnt/d/LF/data_for_test"   // path of H testing dataset local:/mnt/d/LF/data_for_test, hpc:/work/pb035507/dataset/LF/data_for_test
+        , "dataroot_H": "/work/pb035507/dataset/LF/data_for_test"   // path of H testing dataset local:/mnt/d/LF/data_for_test, hpc:/work/pb035507/dataset/LF/data_for_test
         , "angRes": 5
         , "dataroot_L": null              // path of L testing dataset
         , "data_name": "ALL"
@@ -55,7 +55,7 @@
       , "num_heads": 8
       , "dropout": 0
       , "resizer_num_layers": 8
-      , "altblock_layer_num": 2
+      , "altblock_layer_num": 8
     }
   
     , "netD": {
@@ -82,7 +82,7 @@
     , "F_use_input_norm": true
     , "F_use_range_norm": false
 
-    , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+    , "gan_type": "lsgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
     , "D_lossfn_weight": 5e-3
 
     , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
