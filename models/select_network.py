@@ -126,6 +126,8 @@ def define_G(opt):
                     # depths=opt_net['depths'],
                     # dims=opt_net['dims'],
                     scale_factor=opt_net["scale_factor"],
+                    num_layers=opt_net["num_layers"],
+                    avg_pool=opt_net["avg_pool"],
                 )
 
     elif net_type == 'umoe_muller':
@@ -151,7 +153,11 @@ def define_G(opt):
             pool=opt_net["pool"],
             num_layers=opt_net["num_layers"]
     )
-        
+
+    elif net_type == 'lft_gan_v':
+        from models.network_lft_v import LFT
+        netG = LFT(opt_net)
+
     elif net_type == 'lft_gan':
         from models.network_lft import LFT
         netG = LFT(opt_net)
@@ -331,7 +337,7 @@ def define_G(opt):
     # ----------------------------------------
     if opt['is_train']:
 
-        if net_type in ['lft_gan', 'lft_atnnscale']: 
+        if net_type in ['lft_gan', 'lft_atnnscale', 'lft_gan_v']: 
             init_weights(netG,
                      init_type=opt_net['init_type'],
                      init_bn_type=opt_net['init_bn_type'],

@@ -27,7 +27,7 @@ class DatasetSRLF(data.Dataset):
         # ------------------------------------
         # get paths of L/H
         # ------------------------------------
-        self.paths_H = util.get_lf_image_paths(opt['dataroot_H'], opt['angRes'], opt['scale'], opt['data_name'])
+        self.paths_H = util.get_lf_image_paths(opt['dataroot_H'], opt['ang_res'], opt['scale'], opt['data_name'])
         
         # assert self.paths_H, 'Error: H path is empty.'
         # if self.paths_L and self.paths_H:
