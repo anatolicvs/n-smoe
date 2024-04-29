@@ -1,15 +1,17 @@
 #!/bin/bash
 
-MODEL_NAME=lft_gan_unet_muller_resizer_v2_angx5_scalex4_lsgan
+MODEL_NAME=lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4
 WORKDIR=/work/pb035507
-OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
+# OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
+# OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_umoe_muller__sr_gan_x4.json
+OPTION_PATH=/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/options/train_lft_gan_240426_201426.json
 JOB_NAME="${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
-CPUS_PER_TASK=8
+CPUS_PER_TASK=4
 GPUS=1
-MEMORY="4G"
+MEMORY="3G"
 TIME="20:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"

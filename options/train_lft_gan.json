@@ -1,5 +1,5 @@
 {
-    "task": "lft_gan_unet_muller_resizer_v2_angx5_scalex4_lsgan" //  
+    "task": "lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4" //  
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
   
@@ -29,7 +29,7 @@
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -54,8 +54,8 @@
       , "init_gain": 0.2
       , "num_heads": 8
       , "dropout": 0
-      , "resizer_num_layers": 8
-      , "altblock_layer_num": 8
+      , "resizer_num_layers": 4
+      , "altblock_layer_num": 2
     }
   
     , "netD": {
@@ -82,7 +82,7 @@
     , "F_use_input_norm": true
     , "F_use_range_norm": false
 
-    , "gan_type": "lsgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+    , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
     , "D_lossfn_weight": 5e-3
 
     , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
@@ -94,11 +94,11 @@
     , "D_init_iters": 0
 
     , "G_optimizer_type": "adam"
-    , "G_optimizer_lr": 1e-4
+    , "G_optimizer_lr": 1e-3
     , "G_optimizer_wd": 0
     , "G_clip_value": 1.0
     , "D_optimizer_type": "adam"
-    , "D_optimizer_lr": 1e-4
+    , "D_optimizer_lr": 1e-3
     , "D_optimizer_wd": 0
     , "D_clip_value": 1.0
     , "G_scheduler_type": "MultiStepLR"

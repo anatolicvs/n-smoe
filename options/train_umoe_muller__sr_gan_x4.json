@@ -1,5 +1,5 @@
 {
-    "task": "umoe_muller__sr_gan_x4" //  
+    "task": "umoe_muller__sr_gan_x4_v1" //  
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
   
@@ -12,7 +12,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution"
+      "root": "/work/pb035507/superresolution/"  // "denoising" | "superresolution"
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -25,12 +25,12 @@
         , "scale": 4
         , "dataset_type": "blindsr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 32
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/train_0"// path of H training dataset
+        , "dataroot_H": "/work/pb035507/dataset/Medical/STARE/train_0"// path of H training dataset
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 1     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
         , "phw":32
         , "stride": 4
       }
@@ -40,13 +40,13 @@
         , "scale": 4
         , "dataset_type": "blindsr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 32
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/test"   // path of H testing dataset
+        , "dataroot_H": "/work/pb035507/dataset/Medical/STARE/test"   // path of H testing dataset
         , "dataroot_L": null              // path of L testing dataset
         , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
         , "dataloader_batch_size": 1 
         , "phw":32
-        , "stride": 4
+        , "stride": 1
       }
     }
   
@@ -58,9 +58,9 @@
       , "kernel": 25
       , "num_mixtures": 25
       , "phw": 32  
-      , "stride": 4
+      , "stride": 1
       , "layers": 4
-      , "dropout": 0 
+      , "dropout": 0.001 
       , "model_channels": 128
       , "num_res_blocks": 16
       , "attention_resolutions": [8, 16]
@@ -94,10 +94,10 @@
 
     , "train": {
        "is_moe": true
-       , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+       , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
        , "G_lossfn_weight": 1e-2
    
-       , "F_lossfn_type": "l1"  // "l1" | "l2"
+       , "F_lossfn_type": "l2"  // "l1" | "l2"
        , "F_lossfn_weight": 1
        , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
        , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
@@ -112,11 +112,11 @@
        , "D_init_iters": 0
    
        , "G_optimizer_type": "adam"
-       , "G_optimizer_lr": 1e-5
+       , "G_optimizer_lr": 1e-4
        , "G_optimizer_wd": 0
    
        , "D_optimizer_type": "adam"
-       , "D_optimizer_lr": 1e-5
+       , "D_optimizer_lr": 1e-4
        , "D_optimizer_wd": 0
    
        , "G_scheduler_type": "MultiStepLR"
