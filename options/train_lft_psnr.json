@@ -2,7 +2,7 @@
     "task": "lft_psnr" //  
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
-  
+    ,"ang_res":5
     , "scale": 4       // broadcast to "netG" if SISR
     , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet

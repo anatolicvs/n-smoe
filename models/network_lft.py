@@ -1,27 +1,22 @@
+import math
+
+import einops
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-import math
+from timm.models.layers import to_2tuple, trunc_normal_
 
-# class DepthwiseSeparableConv(nn.Module):
-#     def __init__(self, in_channels, out_channels, kernel_size, padding, dilation):
-#         super(DepthwiseSeparableConv, self).__init__()
-#         self.depthwise = nn.Conv3d(in_channels, in_channels, kernel_size=kernel_size, padding=padding, dilation=dilation, groups=in_channels, bias=False)
-#         self.pointwise = nn.Conv3d(in_channels, out_channels, kernel_size=1, bias=False)
 
-#     def forward(self, x):
-#         x = self.depthwise(x)
-#         x = self.pointwise(x)
-#         return x
 
 class LFT(nn.Module):
     def __init__(self, args):
         super(LFT, self).__init__()
         channels = args['channels']  
         self.channels = channels
-        self.angRes = args['angRes']
-        self.factor = args['scale_factor']
+        self.angRes = args['ang_res']
+        self.factor = args['scale']
         resizer_num_layers = args['resizer_num_layers'] if 'resizer_num_layers' in args else 4
         altblock_layer_num = args['altblock_layer_num'] if 'altblock_layer_num' in args else 8
         avg_pool = args['avg_pool'] if 'avg_pool' in args else True
