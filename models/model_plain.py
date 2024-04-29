@@ -158,7 +158,7 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def netG_forward(self):
         if self.opt['train']["is_moe"]:
-            self.E = self.netG(self.L_p, self.L.size()) # SMoE
+            self.E = self.netG(self.L_p, self.L.size())
         else:
             self.E = self.netG(self.L)
 
@@ -212,7 +212,10 @@ class ModelPlain(ModelBase):
     def testx8(self):
         self.netG.eval()
         with torch.no_grad():
-            self.E = test_mode(self.netG, self.L, mode=3, sf=self.opt['scale'], modulo=1)
+            if self.opt['train']["is_moe"]:
+                self.E = test_mode(self.netG, self.L_p, self.L.size(), mode=3, sf=self.opt['scale'], modulo=1)  
+            else:
+                self.E = test_mode(self.netG, self.L, mode=3, sf=self.opt['scale'], modulo=1)
         self.netG.train()
 
     # ----------------------------------------

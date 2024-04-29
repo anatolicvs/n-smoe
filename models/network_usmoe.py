@@ -641,7 +641,21 @@ class Encoder(nn.Module):
         else:
             h = h.type(x.dtype)
             return self.out(h)
+
+def sample_image_grid(
+    shape: tuple[int, ...],
+    device: torch.device = torch.device("cpu"),
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Get normalized (range 0 to 1) coordinates and integer indices for an image."""
+    indices = [torch.arange(length, device=device) for length in shape]
+    stacked_indices = torch.stack(torch.meshgrid(*indices, indexing="ij"), dim=-1)
     
+    coordinates = [(idx + 0.5) / length for idx, length in zip(indices, shape)]
+    coordinates = reversed(coordinates)
+    coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
+    
+    return coordinates.reshape(-1, 2), stacked_indices
+
 class MoE(nn.Module):
     def __init__(
         self,
@@ -657,43 +671,28 @@ class MoE(nn.Module):
         self.kernel = kernel
         self.num_mixtures = num_mixtures
         self.clip_value = clip_value
-
         self.α = sharpening_factor
 
-    def grid(self, height, width):
-        xx = torch.linspace(0.0, 1.0, width)
-        yy = torch.linspace(0.0, 1.0, height)
-        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
-        grid = torch.stack((grid_x, grid_y), 2).float()
-        return grid.reshape(height * width, 2)
-
-    @staticmethod
-    def _soft_clipping(x, beta=10):
-        return 1 / (1 + torch.exp(-beta * (x - 0.5)))
-
     def forward(self, height, width, params):
+        
+        grid, _ = sample_image_grid((height, width), device=params.device)
         
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
         μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
-        Σ = params[
-            :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
-        ].reshape(-1, self.kernel, 2, 2)
+        Σ = params[:, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2].reshape(-1, self.kernel, 2, 2)
         w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
 
         Σ = torch.tril(Σ)
         Σ = torch.mul(Σ, self.α)
 
-        grid = self.grid(height, width).to(params.device)
         μ = μ.unsqueeze(dim=2)
         grid_expand_dim = torch.unsqueeze(torch.unsqueeze(grid, dim=0), dim=0)
         x = torch.tile(grid_expand_dim, (μ.shape[0], μ.shape[1], 1, 1))
         x_sub_μ = torch.unsqueeze(x.float() - μ.float(), dim=-1)
 
         e = torch.exp(
-            torch.negative(
-                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
-            )
+            -0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
         )
 
         g = torch.sum(e, dim=1, keepdim=True)
@@ -702,7 +701,6 @@ class MoE(nn.Module):
 
         y_hat = torch.sum(e_norm * torch.unsqueeze(w, dim=-1), dim=1)
         y_hat = torch.clamp(y_hat, min=0, max=1)
-
         
         y_hat = y_hat.view(-1, self.ch, height, width)
 
