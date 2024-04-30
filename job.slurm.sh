@@ -2,14 +2,14 @@
 
 # MODEL_NAME=lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4
 # MODEL_NAME=conv_nsmoe_muller_x4_v1_gan_grayscale
-MODEL_NAME=conv_nsmoe_muller_x4_v1_psnr_grayscale
+MODEL_NAME=lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4
 WORKDIR=/work/pb035507
 # OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
 # OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_umoe_muller__sr_gan_x4.json
 # OPTION_PATH=/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/options/train_lft_gan_240426_201426.json
 
 # OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_convsmoe_gan.json
-OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_convsmoe_psnr.json
+OPTION_PATH=/home/pb035507/n-smoe/options/train_lft_gan.json
 
 JOB_NAME="${MODEL_NAME}"
 
@@ -21,8 +21,9 @@ MEMORY="4G"
 TIME="2:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
-OUTPUT_DIR="/home/pb035507/works/hpc-training/slurm/output"
-ERROR_DIR="/home/pb035507/works/hpc-training/slurm/error"
+
+OUTPUT_DIR="/home/pb035507/slurm/output"
+ERROR_DIR="/home/pb035507/slurm/error"
 
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
 
@@ -55,7 +56,7 @@ sbatch <<-EOT
 
 echo; export; echo; nvidia-smi; echo
 
-apptainer exec --nv --bind $WORKDIR $WORKDIR/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
+apptainer exec --nv --bind $WORKDIR $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
 EOT
 
 echo "Job $JOB_ID"
