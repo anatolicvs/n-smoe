@@ -101,7 +101,7 @@ class ModelBase():
             network (nn.Module)
         """
         network = network.to(self.device)
-        # network = torch.compile(network, dynamic=False, fullgraph=True)
+        # network = torch.compile(network, dynamic=True, fullgraph=True)
         if self.opt['dist']:
             find_unused_parameters = self.opt.get('find_unused_parameters', True)
             use_static_graph = self.opt.get('use_static_graph', False)

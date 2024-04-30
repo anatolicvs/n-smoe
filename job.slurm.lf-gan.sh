@@ -34,6 +34,7 @@ PARTITION="c23g"
 
 sbatch <<-EOT
 #!/bin/bash
+#SBATCH -A pb035507
 #SBATCH --time=$TIME
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
