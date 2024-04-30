@@ -1,23 +1,22 @@
-import os.path
-import math
 import argparse
-import time
-import random
-import numpy as np
-from collections import OrderedDict
 import logging
+import math
+import os.path
+import random
+
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-import torch
-
-from utils import utils_logger
-from utils import utils_image as util
-from utils import utils_option as option
-from utils.utils_dist import get_dist_info, init_dist
 
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
+from utils import utils_image as util
+from utils import utils_logger
+from utils import utils_option as option
+from utils.utils_dist import get_dist_info, init_dist
 
+torch.set_float32_matmul_precision('high')
 
 def main(json_path='options/train_lft_gan.json'):
 

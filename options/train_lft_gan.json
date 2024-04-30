@@ -28,7 +28,7 @@
         , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
