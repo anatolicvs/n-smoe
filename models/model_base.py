@@ -101,6 +101,7 @@ class ModelBase():
             network (nn.Module)
         """
         network = network.to(self.device)
+        # network = torch.compile(network, dynamic=True, fullgraph=True)
         if self.opt['dist']:
             find_unused_parameters = self.opt.get('find_unused_parameters', True)
             use_static_graph = self.opt.get('use_static_graph', False)
@@ -194,6 +195,8 @@ class ModelBase():
         netG_params = dict(netG.named_parameters())
         netE_params = dict(self.netE.named_parameters())
         for k in netG_params.keys():
+            print(k)
+            break
             netE_params[k].data.mul_(decay).add_(netG_params[k].data, alpha=1-decay)
 
     """
