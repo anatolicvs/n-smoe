@@ -1,10 +1,9 @@
 {
-    "task": "convsmoe_gan" //  
+    "task": "conv_nsmoe_muller_x4_v1_gan_grayscale" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
-  
     , "scale": 4       // broadcast to "netG" if SISR
-    , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
   
@@ -12,7 +11,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
   
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution"
+      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution"
       , "pretrained_netG": null  // path of pretrained model
       , "pretrained_netD": null  // path of pretrained model
       , "pretrained_netE": null  // path of pretrained model
@@ -22,44 +21,44 @@
       "train": {
         "name": "train_dataset"           // just name
         , "dataset_type": "sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/train_0"// path of H training dataset
+        , "dataroot_H": "/work/pb035507/dataset/Medical/STARE/train_0"// path of H training dataset
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
-        , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 2     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_num_workers": 16
+        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
         ,  "phw": 32
-        , "stride":2
+        , "stride":1
         
       }
       , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "dataroot_H": "/home/ozkan/works/diff-smoe/dataset/STARE/test"   // path of H testing dataset
+        , "dataroot_H": "/work/pb035507/dataset/Medical/STARE/test"   // path of H testing dataset
         , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 8
+        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_num_workers": 16
         , "dataloader_batch_size": 1 
         , "phw":32
-        , "stride":2
+        , "stride":1
       }
     }
   
     , "netG": {
       "net_type": "conv_smoe"
-      , "in_channels": 3        // input channel number
-      , "kernel": 9          
-      , "num_mixtures": 9  
+      , "in_channels": 1        // input channel number
+      , "kernel": 25          
+      , "num_mixtures": 25  
       , "depths": [3, 3, 27, 3]
       , "dims": [128, 256, 512, 1024]      
       , "phw": 32       
-      , "stride": 2          
-      , "dropout" : 0.01  
+      , "stride": 1          
+      , "dropout" : 0.1
       , "scale_factor": 4  
       , "sharpening_factor": 1.0
-      , "num_layers":4
+      , "num_layers":8
       , "avg_pool":true
-      , "init_type": "normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "xavier_uniform"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
     , "init_bn_type": "uniform"         // "uniform" | "constant"
     , "init_gain": 0.2
     }
@@ -72,7 +71,7 @@
       , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
       , "norm_type": "batchspectral"  // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', instancespectral'
   
-      , "init_type": "normal" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "xavier_uniform" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform" // "uniform" | "constant"
       , "init_gain": 0.2
     }
@@ -82,7 +81,7 @@
       , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "l2sum"
       , "G_lossfn_weight": 1e-2
   
-      , "F_lossfn_type": "l1"  // "l1" | "l2"
+      , "F_lossfn_type": "l2"  // "l1" | "l2"
       , "F_lossfn_weight": 1
       , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
       , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
@@ -108,7 +107,8 @@
       , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
       , "G_scheduler_gamma": 0.5
       , "G_optimizer_reuse": false
-  
+      , "G_scheduler_eta_min": 1e-5
+      , "D_scheduler_eta_min":1e-5
       , "D_scheduler_type": "MultiStepLR"
       , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
       , "D_scheduler_gamma": 0.5

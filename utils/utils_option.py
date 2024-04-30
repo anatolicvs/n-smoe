@@ -47,7 +47,7 @@ def parse(opt_path, is_train=True):
         dataset['phase'] = phase
         dataset['scale'] = opt['scale']  # broadcast
         dataset['n_channels'] = opt['n_channels']  # broadcast
-        dataset['ang_res'] = opt['ang_res']  # broadcast
+        dataset['ang_res'] = opt['ang_res'] if 'ang_res' in opt else 5
         if 'dataroot_H' in dataset and dataset['dataroot_H'] is not None:
             dataset['dataroot_H'] = os.path.expanduser(dataset['dataroot_H'])
         if 'dataroot_L' in dataset and dataset['dataroot_L'] is not None:
@@ -78,7 +78,8 @@ def parse(opt_path, is_train=True):
     opt['netG']['n_channels'] = opt['n_channels'] if 'n_channels' in opt else 3
     opt['netG']['ang_res'] = opt['ang_res'] if 'ang_res' in opt else 5
 
-    opt['netD']['in_nc'] = opt['n_channels'] if 'n_channels' in opt else 3
+    if 'netD' in opt:
+        opt['netD']['in_nc'] = opt['n_channels'] if 'n_channels' in opt else 3
 
     # ----------------------------------------
     # GPU devices

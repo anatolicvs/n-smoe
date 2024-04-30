@@ -8,7 +8,7 @@ from models.select_network import define_G, define_D
 from models.model_base import ModelBase
 from models.loss import GANLoss, PerceptualLoss
 from models.loss_ssim import SSIMLoss
-from torch.optim.lr_scheduler import CosineAnnealingLR
+
 
 class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -168,15 +168,20 @@ class ModelGAN(ModelBase):
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
-        self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
-                                                        self.opt_train['G_scheduler_milestones'],
-                                                        self.opt_train['G_scheduler_gamma']
-                                                        ))
-        self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
-                                                        self.opt_train['D_scheduler_milestones'],
-                                                        self.opt_train['D_scheduler_gamma']
-                                                        ))
+        # self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
+        #                                                 self.opt_train['G_scheduler_milestones'],
+        #                                                 self.opt_train['G_scheduler_gamma']
+        #                                                 ))
+        # self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
+        #                                                 self.opt_train['D_scheduler_milestones'],
+        #                                                 self.opt_train['D_scheduler_gamma']
+        #                                                 ))
         
+        self.schedulers.append(lr_scheduler.CosineAnnealingWarmRestarts(self.G_optimizer, T_0=5, T_mult=1, eta_min=self.opt_train['G_scheduler_eta_min']))
+
+        self.schedulers.append(lr_scheduler.CosineAnnealingWarmRestarts(self.D_optimizer, T_0=5, T_mult=1, eta_min=self.opt_train['D_scheduler_eta_min']))
+
+
         # self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
         #                                               T_max=self.opt_train['G_scheduler_T_max'],
         #                                               eta_min=self.opt_train['G_scheduler_eta_min']))

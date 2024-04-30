@@ -116,7 +116,7 @@ def define_G(opt):
         from models.network_convsmoe import Autoencoder as net
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
-                    in_channels=opt_net["in_channels"],
+                    in_channels=opt_net["n_channels"],
                     latent_dim=z,
                     kernel=opt_net["kernel"],
                     num_mixtures=opt_net["num_mixtures"],

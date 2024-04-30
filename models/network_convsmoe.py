@@ -269,6 +269,57 @@ class Decoder(nn.Module):
         y_hat = y_hat.view(-1, self.ch, height, width)
 
         return y_hat
+    
+
+class MoE(nn.Module):
+    def __init__(self, in_channels=3, num_mixtures=4, kernel=4):
+        super(MoE, self).__init__()
+        self.ch = in_channels
+        self.kernel = kernel
+        self.num_mixtures = num_mixtures
+
+    def grid(self, height, width):
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), 2).float()
+        return grid.reshape(height * width, 2)
+
+    @staticmethod
+    def _soft_clipping(x, beta=10):
+        return 1 / (1 + torch.exp(-beta * (x - 0.5)))
+
+    def forward(self, height, width, params):
+        μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
+        μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
+        μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
+
+        raw_Σ = params[:, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2]
+        raw_Σ = raw_Σ.reshape(-1, self.kernel, 2, 2)
+
+        Σ_lower_tri = torch.tril(raw_Σ)
+        Σ = Σ_lower_tri @ Σ_lower_tri.transpose(-2, -1)
+
+        raw_w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
+        w = F.softmax(raw_w, dim=1)
+
+        grid = self.grid(height, width).to(params.device)
+        μ = μ.unsqueeze(dim=2)
+        grid_expand = grid.unsqueeze(0).unsqueeze(0)
+        x = grid_expand.expand(μ.shape[0], μ.shape[1], -1, -1)
+        x_sub_μ = (x.float() - μ.float()).unsqueeze(-1)
+
+        e = torch.exp(-0.5 * torch.einsum("abcli,ablm,abcnj->abc", x_sub_μ, Σ, x_sub_μ))
+
+        g = torch.sum(e, dim=1, keepdim=True)
+        g_max = torch.clamp(g, min=1e-8)
+        e_norm = e / g_max
+
+        y_hat = torch.sum(e_norm * w.unsqueeze(-1), dim=1)
+        y_hat = torch.clamp(y_hat, min=0, max=1)
+
+        y_hat = y_hat.view(-1, self.ch, height, width)
+        return y_hat
 
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
@@ -365,6 +416,12 @@ class Autoencoder(nn.Module):
             sharpening_factor=sharpening_factor
         )
 
+        # self.decoder = MoE(
+        #     in_channels=in_channels,
+        #     num_mixtures=num_mixtures,
+        #     kernel=kernel
+        # )
+        
     @staticmethod
     def _reconstruct(decoded_patches, row, col, in_channels, stride, patch_size, scale_factor, height, width, batch_size=1, device='cuda:0'):
         i_indices = torch.arange(0, row * stride, stride, device=device) * scale_factor
