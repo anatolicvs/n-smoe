@@ -22,7 +22,7 @@ def get_logger(log_dir, args):
 def create_dir(args):
     experiment_dir = Path(args.path_log)
     experiment_dir.mkdir(exist_ok=True)
-    task_path = 'SR_' + str(args.angRes) + 'x' + str(args.angRes) + '_' + str(args.scale_factor) + 'x'
+    task_path = 'SR_' + str(args.ang_res) + 'x' + str(args.ang_res) + '_' + str(args.scale_factor) + 'x'
 
     experiment_dir = experiment_dir.joinpath(task_path)
     experiment_dir.mkdir(exist_ok=True)
@@ -50,13 +50,13 @@ class Logger(object):
 
 def cal_metrics(args, label, out):
     if len(label.size()) == 2:
-        label = rearrange(label, '(a1 h) (a2 w) -> 1 1 a1 h a2 w', a1=args.angRes, a2=args.angRes)
-        out = rearrange(out, '(a1 h) (a2 w) -> 1 1 a1 h a2 w', a1=args.angRes, a2=args.angRes)
+        label = rearrange(label, '(a1 h) (a2 w) -> 1 1 a1 h a2 w', a1=args.ang_res, a2=args.ang_res)
+        out = rearrange(out, '(a1 h) (a2 w) -> 1 1 a1 h a2 w', a1=args.ang_res, a2=args.ang_res)
         
     if len(label.size()) == 4:
         [B, C, H, W] = label.size()
-        label = label.view((B, C, args.angRes, H//args.angRes, args.angRes, H//args.angRes))
-        out = out.view((B, C, args.angRes, H // args.angRes, args.angRes, W // args.angRes))
+        label = label.view((B, C, args.ang_res, H//args.ang_res, args.ang_res, H//args.ang_res))
+        out = out.view((B, C, args.ang_res, H // args.ang_res, args.ang_res, W // args.ang_res))
 
     if len(label.size()) == 5:
         label = label.permute((0, 1, 3, 2, 4)).unsqueeze(0)
@@ -82,10 +82,10 @@ def cal_metrics(args, label, out):
 
     return PSNR_mean, SSIM_mean
 
-def LFdivide(data, angRes, patch_size, stride):
+def LFdivide(data, ang_res, patch_size, stride):
     uh, vw = data.shape
-    h0 = uh // angRes
-    w0 = vw // angRes
+    h0 = uh // ang_res
+    w0 = vw // ang_res
     bdr = (patch_size - stride) // 2
     h = h0 + 2 * bdr
     w = w0 + 2 * bdr
@@ -100,16 +100,16 @@ def LFdivide(data, angRes, patch_size, stride):
     hE = stride * (numU-1) + patch_size
     wE = stride * (numV-1) + patch_size
 
-    dataE = torch.zeros(hE*angRes, wE*angRes)
-    for u in range(angRes):
-        for v in range(angRes):
+    dataE = torch.zeros(hE*ang_res, wE*ang_res)
+    for u in range(ang_res):
+        for v in range(ang_res):
             Im = data[u*h0:(u+1)*h0, v*w0:(v+1)*w0]
             dataE[u*hE:u*hE+h, v*wE:v*wE+w] = ImageExtend(Im, bdr)
-    subLF = torch.zeros(numU, numV, patch_size*angRes, patch_size*angRes)
+    subLF = torch.zeros(numU, numV, patch_size*ang_res, patch_size*ang_res)
     for kh in range(numU):
         for kw in range(numV):
-            for u in range(angRes):
-                for v in range(angRes):
+            for u in range(ang_res):
+                for v in range(ang_res):
                     uu = u*hE + kh*stride
                     vv = v*wE + kw*stride
                     subLF[kh, kw, u*patch_size:(u+1)*patch_size, v*patch_size:(v+1)*patch_size] = \
@@ -130,15 +130,15 @@ def ImageExtend(Im, bdr):
 
     return Im_out
 
-def LFintegrate(subLF, angRes, pz, stride, h0, w0):
+def LFintegrate(subLF, ang_res, pz, stride, h0, w0):
     numU, numV, pH, pW = subLF.shape
     # H, W = numU*pH, numV*pW
-    ph, pw = pH // angRes, pW // angRes
+    ph, pw = pH // ang_res, pW // ang_res
     bdr = (pz - stride) // 2
     temp = torch.zeros(stride*numU, stride*numV)
-    outLF = torch.zeros(angRes, angRes, h0, w0)
-    for u in range(angRes):
-        for v in range(angRes):
+    outLF = torch.zeros(ang_res, ang_res, h0, w0)
+    for u in range(ang_res):
+        for v in range(ang_res):
             for ku in range(numU):
                 for kv in range(numV):
                     temp[ku*stride:(ku+1)*stride, kv*stride:(kv+1)*stride] = \

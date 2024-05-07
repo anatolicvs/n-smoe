@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 from torch.utils.data import Sampler
 
-from .mri_data import CombinedSliceDataset, SliceDataset
+from .mri_data import SliceDataset
 
 
 class VolumeSampler(Sampler):
@@ -26,7 +26,7 @@ class VolumeSampler(Sampler):
 
     def __init__(
         self,
-        dataset: Union[CombinedSliceDataset, SliceDataset],
+        dataset: Union[SliceDataset],
         num_replicas: Optional[int] = None,
         rank: Optional[int] = None,
         shuffle: bool = True,

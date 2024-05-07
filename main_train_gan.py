@@ -1,24 +1,25 @@
-import argparse
-import logging
-import math
 import os.path
+import math
+import argparse
+import time
 import random
-
 import numpy as np
-import torch
+from collections import OrderedDict
+import logging
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
+import torch
 
-from data.select_dataset import define_Dataset
-from models.select_model import define_Model
-from utils import utils_image as util
 from utils import utils_logger
+from utils import utils_image as util
 from utils import utils_option as option
 from utils.utils_dist import get_dist_info, init_dist
 
-torch.set_float32_matmul_precision('high')
+from data.select_dataset import define_Dataset
+from models.select_model import define_Model
 
-def main(json_path='options/train_lft_gan.json'):
+
+def main(json_path='options/train_msrresnet_gan.json'):
 
     '''
     # ----------------------------------------
@@ -135,7 +136,7 @@ def main(json_path='options/train_lft_gan.json'):
             test_set = define_Dataset(dataset_opt)
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=1,
-                                     drop_last=True, pin_memory=True)
+                                     drop_last=False, pin_memory=True)
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
 
@@ -165,26 +166,26 @@ def main(json_path='options/train_lft_gan.json'):
         for i, train_data in enumerate(train_loader):
 
             current_step += 1
-
+          
             model.feed_data(train_data)
 
             model.optimize_parameters(current_step)
-
+            
             model.update_learning_rate(current_step)
-
+          
             if current_step % opt['train']['checkpoint_print'] == 0 and opt['rank'] == 0:
                 logs = model.current_log()  # such as loss
-                message = '<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> '.format(epoch, current_step, model.current_learning_rate()[0])
+                message = '<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> '.format(epoch, current_step, model.current_learning_rate())
                 for k, v in logs.items():  # merge log information into message
                     message += '{:s}: {:.3e} '.format(k, v)
                 logger.info(message)
 
-
+        
             if current_step % opt['train']['checkpoint_save'] == 0 and opt['rank'] == 0:
                 logger.info('Saving the model.')
                 model.save(current_step)
 
-           
+          
             if current_step % opt['train']['checkpoint_test'] == 0 and opt['rank'] == 0:
 
                 avg_psnr = 0.0
@@ -205,9 +206,15 @@ def main(json_path='options/train_lft_gan.json'):
                     E_img = util.tensor2uint(visuals['E'])
                     H_img = util.tensor2uint(visuals['H'])
 
+                    # -----------------------
+                    # save estimated image E
+                    # -----------------------
                     save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
                     util.imsave(E_img, save_img_path)
 
+                    # -----------------------
+                    # calculate PSNR
+                    # -----------------------
                     current_psnr = util.calculate_psnr(E_img, H_img, border=border)
 
                     logger.info('{:->4d}--> {:>10s} | {:<4.2f}dB'.format(idx, image_name_ext, current_psnr))
@@ -216,6 +223,7 @@ def main(json_path='options/train_lft_gan.json'):
 
                 avg_psnr = avg_psnr / idx
 
+              
                 logger.info('<epoch:{:3d}, iter:{:8,d}, Average PSNR : {:<.2f}dB\n'.format(epoch, current_step, avg_psnr))
 
 if __name__ == '__main__':

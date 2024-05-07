@@ -1,20 +1,19 @@
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--angRes", type=int, default=5, help="angular resolution")
+parser.add_argument("--ang_res", type=int, default=5, help="angular resolution")
 parser.add_argument("--scale_factor", type=int, default=4, help="4, 2")
 parser.add_argument('--model_name', type=str, default='network_lft', help="model name")
 parser.add_argument("--channels", type=int, default=64, help="channels")
 parser.add_argument("--use_pre_pth", type=bool, default=False, help="use pre model ckpt")
-
+parser.add_argument('--opt', type=str, default="/mnt/d/LF/zoo/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/train_lft_gan_240430_194704.json", help='Path to option JSON file.')
 # parser.add_argument("--path_pre_pth", type=str, default='./pth/LFT_5x5_4x_epoch_50_model.pth',
 #                     help="path for pre model ckpt")
-
 
 # parser.add_argument("--path_pre_pth", type=str, default='/home/ozkan/works/n-smoe/superresolution/lft_gan/models/5000_G.pth',
 #                     help="path for pre model ckpt")
 
-parser.add_argument("--path_pre_pth", type=str, default='/mnt/d/zoo/LFT/20000_G.pth',
+parser.add_argument("--path_pre_pth", type=str, default='/mnt/d/LF/zoo/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/60000_G.pth',
                     help="path for pre model ckpt")
 
 parser.add_argument('--data_name', type=str, default='EPFL',
