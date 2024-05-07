@@ -1,4 +1,6 @@
 superresolution/*/
 **/__pycache__/
+__pycache__/
+*.pyc
 matlab/denoising_color_results/
 matlab/denoising_gray_results/

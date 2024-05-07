@@ -14,18 +14,6 @@ from scipy.linalg import orth
 import numpy as np
 
 
-
-"""
-# --------------------------------------------
-# Super-Resolution
-# --------------------------------------------
-#
-# Kai Zhang (cskaizhang@gmail.com)
-# https://github.com/cszn
-# From 2019/03--2021/08
-# --------------------------------------------
-"""
-
 def modcrop_np(img, sf):
     '''
     Args:
