@@ -13,9 +13,9 @@
 
   , "path": {
     "root": "/work/pb035507/superresolution/"  // "denoising" | "superresolution"  , hpc:/work/pb035507/superresolution/
-    , "pretrained_netG": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/60000_G.pth"  // path of pretrained model
-    , "pretrained_netD": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/60000_D.pth"  // path of pretrained model
-    , "pretrained_netE": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/60000_E.pth"  // path of pretrained model
+    , "pretrained_netG": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_G.pth"  // path of pretrained model
+    , "pretrained_netD": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_D.pth"  // path of pretrained model
+    , "pretrained_netE": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_E.pth"  // path of pretrained model
     }
 
   , "datasets": {
@@ -27,8 +27,8 @@
       , "dataroot_L": null              // path of L training dataset
       , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
       , "dataloader_shuffle": true
-      , "dataloader_num_workers": 16
-      , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+      , "dataloader_num_workers": 8
+      , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
       "name": "test_dataset"            // just name
@@ -66,10 +66,10 @@
   }
 
   , "train": {
-    "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim" | "ms-ssim"
+    "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim" | "ms-ssim"
   , "G_lossfn_weight": 1e-2
 
-  , "F_lossfn_type": "l2"  // "l1" | "l2"
+  , "F_lossfn_type": "l1"  // "l1" | "l2"
   , "F_lossfn_weight": 1
   , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
   , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
@@ -88,11 +88,11 @@
   , "D_init_iters": 0
 
   , "G_optimizer_type": "adam"
-  , "G_optimizer_lr": 1e-4
+  , "G_optimizer_lr": 2e-4
   , "G_optimizer_wd": 0
   , "G_clip_value": 1.0
   , "D_optimizer_type": "adam"
-  , "D_optimizer_lr": 1e-4
+  , "D_optimizer_lr": 2e-4
   , "D_optimizer_wd": 0
   , "D_clip_value": 1.0
   , "G_scheduler_type": "MultiStepLR"

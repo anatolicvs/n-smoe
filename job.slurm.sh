@@ -1,24 +1,50 @@
 #!/bin/bash
 
-# MODEL_NAME=lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4
-# MODEL_NAME=conv_nsmoe_muller_x4_v1_gan_grayscale
-MODEL_NAME=lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4
+# Usage:
+#   ./script.sh -m "your_model_name" -o "your_option_path"
+#
+# Description:
+#   This script submits a batch job using sbatch with configurable MODEL_NAME and OPTION_PATH
+#   parameters. Default values are provided for both if they are not specified.
+#
+# Options:
+#   -m  MODEL_NAME     The name of the model to be used (default: lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4)
+#   -o  OPTION_PATH    The path to the training options JSON file (default: /home/pb035507/n-smoe/options/train_lft_gan.json)
+
+MODEL_NAME="lft_gan_discriminator_unet_muller_resizer_v11_angx5_scalex4"
+OPTION_PATH="/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v11_angx5_scalex4/options/train_lft_gan_240501_122659.json"
+
+while getopts ":m:o:" opt; do
+  case $opt in
+    m)
+      MODEL_NAME=$OPTARG
+      ;;
+    o)
+      OPTION_PATH=$OPTARG
+      ;;
+    \?)
+      echo "Invalid option: -$OPTARG" >&2
+      exit 1
+      ;;
+    :)
+      echo "Option -$OPTARG requires an argument." >&2
+      exit 1
+      ;;
+  esac
+done
+
+TODAYS_DATE=$(date +%d%m%Y%H%M)
+
+JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
+
 WORKDIR=/work/pb035507
-# OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_lft_gan.json
-# OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_umoe_muller__sr_gan_x4.json
-# OPTION_PATH=/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/options/train_lft_gan_240426_201426.json
-
-# OPTION_PATH=/home/pb035507/works/hpc-training/n-smoe/options/train_convsmoe_gan.json
-OPTION_PATH=/home/pb035507/n-smoe/options/train_lft_gan.json
-
-JOB_NAME="${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
 CPUS_PER_TASK=16
 GPUS=1
 MEMORY="4G"
-TIME="2:00:00"
+TIME="24:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -41,6 +67,7 @@ PARTITION="c23g"
 
 sbatch <<-EOT
 #!/bin/bash
+#SBATCH -A p0021791
 #SBATCH --time=$TIME
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
@@ -54,7 +81,7 @@ sbatch <<-EOT
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-echo; export; echo; nvidia-smi; echo
+echo; nvidia-smi; echo
 
 apptainer exec --nv --bind $WORKDIR $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
 EOT
