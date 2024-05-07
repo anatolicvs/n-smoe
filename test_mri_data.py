@@ -2,8 +2,7 @@ import pathlib
 from data.subsample import RandomMaskFunc
 from data.transforms import to_tensor, apply_mask
 from data.mri_data import SliceDataset
-
-
+import matplotlib.pyplot as plt
 
 
 mask_func = RandomMaskFunc(
@@ -16,7 +15,7 @@ def data_transform(kspace, mask, target, data_attributes, filename, slice_num):
     # Here we simply mask the k-space and return the result
     kspace = to_tensor(kspace)
     target = to_tensor(target)
-    # masked_kspace = apply_mask(kspace, mask_func)
+    # masked_kspace,_,_ = apply_mask(kspace, mask_func)
     return kspace,target
 
 dataset = SliceDataset(
@@ -26,8 +25,7 @@ dataset = SliceDataset(
 )
 
 for kspace,target in dataset:
-    # Do reconstruction
+
+    kspace_np = kspace.cpu().numpy()
+    
     pass
-
-
-

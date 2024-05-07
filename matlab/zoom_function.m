@@ -9,7 +9,6 @@ s_color = [0 255 0];
 l_color = [255 0 0];
 
 
-
 [~, ~, hw]  =  size( I );
 
 if hw == 1

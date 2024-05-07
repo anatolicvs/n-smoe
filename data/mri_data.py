@@ -30,6 +30,7 @@ import pandas as pd
 import requests
 import torch
 import yaml
+import matplotlib.pyplot as plt
 
 
 def et_query(
@@ -383,17 +384,43 @@ class SliceDataset(torch.utils.data.Dataset):
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
 
-            mask = np.asarray(hf["mask"]) if "mask" in hf else None
-
             target = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+
+            k_image = np.abs(np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(kspace))))
+            
+            if target is not None:
+                target_shape = target.shape
+                start_row = (k_image.shape[0] - target_shape[0]) // 2
+                start_col = (k_image.shape[1] - target_shape[1]) // 2
+
+                k_image = k_image[start_row:start_row + target_shape[0], start_col:start_col + target_shape[1]]
+
+            fig, axs = plt.subplots(5, 5, figsize=(15, 15))
+            fig.suptitle('K-Space Images and Target', fontsize=16)
+
+           
+            axs[0, 0].imshow(target, cmap='gray')
+            axs[0, 0].set_title('Target Image')
+            axs[0, 0].axis('off')
+
+            for i in range(20):
+                ax = axs[(i + 1) // 5, (i + 1) % 5]
+                ax.imshow(np.abs(k_image[i]), cmap='gray')
+                ax.set_title(f'K-Space {i+1}')
+                ax.axis('off')
+
+            plt.tight_layout(rect=[0, 0, 1, 0.95])
+            plt.show()
+
+            mask = np.asarray(hf["mask"]) if "mask" in hf else None
 
             attrs = dict(hf.attrs)
             attrs.update(metadata)
 
         if self.transform is None:
-            sample = (kspace, mask, target, attrs, fname.name, dataslice)
+            sample = (k_image, mask, target, attrs, fname.name, dataslice)
         else:
-            sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
+            sample = self.transform(k_image, mask, target, attrs, fname.name, dataslice)
 
         return sample
 

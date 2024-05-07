@@ -153,6 +153,21 @@ def define_G(opt):
             pool=opt_net["pool"],
             num_layers=opt_net["num_layers"]
     )
+        
+    elif net_type == 'f_u_moe':
+        from models.network_f_u_moe import Autoencoder as net
+        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        netG = net(
+            in_channels=opt_net["in_channels"],
+            latent_dim=z,
+            num_mixtures=opt_net["num_mixtures"],
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net['sharpening_factor'],
+            scale_factor=opt_net["scale_factor"],
+            stride=opt_net["stride"],
+            phw=opt_net["phw"],
+            num_layers=opt_net["num_layers"],
+            avg_pool=opt_net["avg_pool"])
 
     elif net_type == 'lft_gan_v':
         from models.network_lft_v import LFT
@@ -336,17 +351,10 @@ def define_G(opt):
     # initialize weights
     # ----------------------------------------
     if opt['is_train']:
-
-        if net_type in ['lft_gan', 'lft_atnnscale', 'lft_gan_v']: 
-            init_weights(netG,
-                     init_type=opt_net['init_type'],
-                     init_bn_type=opt_net['init_bn_type'],
-                     gain=opt_net['init_gain'])
-        else:
-            init_weights(netG.encoder,
-                     init_type=opt_net['init_type'],
-                     init_bn_type=opt_net['init_bn_type'],
-                     gain=opt_net['init_gain'])
+        init_weights(netG,
+                    init_type=opt_net['init_type'],
+                    init_bn_type=opt_net['init_bn_type'],
+                    gain=opt_net['init_gain'])
 
 
     return netG
