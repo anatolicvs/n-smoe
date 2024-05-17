@@ -11,16 +11,22 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+import torch.nn.functional as F
 
-'''
-# --------------------------------------------
-# Kai Zhang (github: https://github.com/cszn)
-# 03/Mar/2019
-# --------------------------------------------
-# https://github.com/twhui/SRGAN-pyTorch
-# https://github.com/xinntao/BasicSR
-# --------------------------------------------
-'''
+def pad_collate_fn(batch):
+    first_elem = batch[0]
+    if isinstance(first_elem, dict):
+        
+        keys = first_elem.keys()
+        max_lengths = {key: max(item[key].size(0) for item in batch) for key in keys}
+        
+        padded_batch = {key: torch.stack([F.pad(item[key], (0, max_lengths[key] - item[key].size(0))) for item in batch])
+                        for key in keys}
+    else:
+        max_length = max(item.size(0) for item in batch)
+        padded_batch = torch.stack([F.pad(item, (0, max_length - item.size(0))) for item in batch])
+    
+    return padded_batch
 
 
 IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tif', '.h5']
@@ -950,7 +956,10 @@ def imresize_np(img, scale, antialiasing=True):
     # Now the scale should be the same for H and W
     # input: img: Numpy, HWC or HW [0,1]
     # output: HWC or HW [0,1] w/o round
-    img = torch.from_numpy(img)
+
+    img = np.array(img)  
+    img_copy = img.copy() 
+    img = torch.from_numpy(img_copy)
     need_squeeze = True if img.dim() == 2 else False
     if need_squeeze:
         img.unsqueeze_(2)

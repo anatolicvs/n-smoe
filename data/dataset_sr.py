@@ -3,6 +3,8 @@ import numpy as np
 import torch.utils.data as data
 import utils.utils_image as util
 import torch.nn.functional as F
+from utils import utils_blindsr as blindsr
+from scipy.io import loadmat
 
 class DatasetSR(data.Dataset):
     '''
@@ -23,6 +25,7 @@ class DatasetSR(data.Dataset):
         self.L_size = self.patch_size // self.sf
         self.phw = opt['phw']
         self.stride = opt['stride']
+        self.k = loadmat(opt['kernel_path'])
         # ------------------------------------
         # get paths of L/H
         # ------------------------------------
@@ -63,7 +66,8 @@ class DatasetSR(data.Dataset):
             # sythesize L image via matlab's bicubic
             # --------------------------------
             H, W = img_H.shape[:2]
-            img_L = util.imresize_np(img_H, 1 / self.sf, True)
+            # img_L = util.imresize_np(img_H, 1 / self.sf, True)
+            img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
 
         H, W, C = img_L.shape
         # --------------------------------

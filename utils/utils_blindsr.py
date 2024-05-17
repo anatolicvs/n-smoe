@@ -321,16 +321,38 @@ def add_sharpening(img, weight=0.5, radius=50, threshold=10):
 
 def add_blur(img, sf=4):
     wd2 = 4.0 + sf
-    wd = 2.0 + 0.2*sf
+    wd = 2.0 + 0.2 * sf
     if random.random() < 0.5:
-        l1 = wd2*random.random()
-        l2 = wd2*random.random()
-        k = anisotropic_Gaussian(ksize=2*random.randint(2,11)+3, theta=random.random()*np.pi, l1=l1, l2=l2)
+        l1 = wd2 * random.random()
+        l2 = wd2 * random.random()
+        k = anisotropic_Gaussian(ksize=2 * random.randint(2, 11) + 3, theta=random.random() * np.pi, l1=l1, l2=l2)
     else:
-        k = fspecial('gaussian', 2*random.randint(2,11)+3, wd*random.random())
-    img = ndimage.filters.convolve(img, np.expand_dims(k, axis=2), mode='mirror')
+        k = fspecial('gaussian', 2 * random.randint(2, 11) + 3, wd * random.random())
+
+    if img.ndim == 2:  # Grayscale image
+        img = ndimage.convolve(img, k, mode='mirror')
+    elif img.ndim == 3:  # Color image
+        img = np.stack([ndimage.convolve(img[:, :, c], k, mode='mirror') for c in range(img.shape[2])], axis=2)
+    else:
+        raise ValueError('Unsupported image dimensions.')
 
     return img
+
+# def add_blur(img, sf=4):
+#     wd2 = 4.0 + sf
+#     wd = 2.0 + 0.2 * sf
+    
+#     if random.random() < 0.5:
+#         l1 = wd2 * random.random()
+#         l2 = wd2 * random.random()
+#         k = anisotropic_Gaussian(ksize=2 * random.randint(2, 11) + 3, theta=random.random() * np.pi, l1=l1, l2=l2)
+#     else:
+#         k = fspecial('gaussian', 2 * random.randint(2, 11) + 3, wd * random.random())
+    
+#     k_expanded = np.expand_dims(k, axis=(2))
+#     img_blurred = np.stack([ndimage.filters.convolve(img[:, :, i], k_expanded[:, :, 0], mode='mirror') for i in range(img.shape[2])], axis=2)
+
+#     return img_blurred
 
 
 def add_resize(img, sf=4):
@@ -346,75 +368,220 @@ def add_resize(img, sf=4):
 
     return img
 
-
 def add_Gaussian_noise(img, noise_level1=2, noise_level2=25):
+    if len(img.shape) == 2:
+        img = img[:, :, np.newaxis]
+    elif len(img.shape) == 3 and img.shape[2] not in [1, 3]:
+        raise ValueError(f"Input image must be a grayscale (H, W) or (H, W, 1), or RGB (H, W, 3) image, input shape: {img.shape}")
+
     noise_level = random.randint(noise_level1, noise_level2)
     rnum = np.random.rand()
-    if rnum > 0.6:   # add color Gaussian noise
-        img += np.random.normal(0, noise_level/255.0, img.shape).astype(np.float32)
-    elif rnum < 0.4: # add grayscale Gaussian noise
-        img += np.random.normal(0, noise_level/255.0, (*img.shape[:2], 1)).astype(np.float32)
-    else:            # add  noise
-        L = noise_level2/255.
+    
+    if rnum > 0.6:
+        noise = np.random.normal(0, noise_level / 255.0, img.shape).astype(np.float32)
+        img += noise
+    elif rnum < 0.4:
+        if img.shape[2] == 1:
+            noise = np.random.normal(0, noise_level / 255.0, img.shape).astype(np.float32)
+        else:
+            noise = np.random.normal(0, noise_level / 255.0, (*img.shape[:2], 1)).astype(np.float32)
+            noise = np.repeat(noise, 3, axis=2)
+        img += noise
+    else:
+        L = noise_level2 / 255.0
         D = np.diag(np.random.rand(3))
-        U = orth(np.random.rand(3,3))
+        U = orth(np.random.rand(3, 3))
         conv = np.dot(np.dot(np.transpose(U), D), U)
-        img += np.random.multivariate_normal([0,0,0], np.abs(L**2*conv), img.shape[:2]).astype(np.float32)
+        if img.shape[2] == 1:
+            noise = np.random.normal(0, L, img.shape[:2]).astype(np.float32)
+            img += noise[:, :, np.newaxis]
+        else:
+            noise = np.random.multivariate_normal([0, 0, 0], np.abs(L ** 2 * conv), img.shape[:2]).astype(np.float32)
+            img += noise
+    
     img = np.clip(img, 0.0, 1.0)
+    
+    if img.shape[2] == 1:
+        img = img[:, :, 0]  # Convert back to (H, W) if the input was (H, W)
+
     return img
 
-
 def add_speckle_noise(img, noise_level1=2, noise_level2=25):
+    if len(img.shape) == 2:
+        img = img[:, :, np.newaxis]
+    elif len(img.shape) == 3 and img.shape[2] not in [1, 3]:
+        raise ValueError(f"Input image must be a grayscale (H, W) or (H, W, 1), or RGB (H, W, 3) image, input shape: {img.shape}")
+
     noise_level = random.randint(noise_level1, noise_level2)
     img = np.clip(img, 0.0, 1.0)
     rnum = random.random()
+    
     if rnum > 0.6:
-        img += img*np.random.normal(0, noise_level/255.0, img.shape).astype(np.float32)
+        img += img * np.random.normal(0, noise_level / 255.0, img.shape).astype(np.float32)
     elif rnum < 0.4:
-        img += img*np.random.normal(0, noise_level/255.0, (*img.shape[:2], 1)).astype(np.float32)
+        if img.shape[2] == 1:
+            noise = np.random.normal(0, noise_level / 255.0, img.shape).astype(np.float32)
+        else:
+            noise = np.random.normal(0, noise_level / 255.0, (*img.shape[:2], 1)).astype(np.float32)
+            noise = np.repeat(noise, 3, axis=2)
+        img += img * noise
     else:
-        L = noise_level2/255.
+        L = noise_level2 / 255.0
         D = np.diag(np.random.rand(3))
-        U = orth(np.random.rand(3,3))
+        U = orth(np.random.rand(3, 3))
         conv = np.dot(np.dot(np.transpose(U), D), U)
-        img += img*np.random.multivariate_normal([0,0,0], np.abs(L**2*conv), img.shape[:2]).astype(np.float32)
+        if img.shape[2] == 1:
+            noise = np.random.normal(0, L, img.shape[:2]).astype(np.float32)
+            img += img * noise[:, :, np.newaxis]
+        else:
+            noise = np.random.multivariate_normal([0, 0, 0], np.abs(L ** 2 * conv), img.shape[:2]).astype(np.float32)
+            img += img * noise
+    
     img = np.clip(img, 0.0, 1.0)
+    
+    if img.shape[2] == 1:
+        img = img[:, :, 0]
+    
     return img
 
-
 def add_Poisson_noise(img):
-    img = np.clip((img * 255.0).round(), 0, 255) / 255.
-    vals = 10**(2*random.random()+2.0)  # [2, 4]
+    if len(img.shape) == 2:
+        img = img[:, :, np.newaxis]
+    elif len(img.shape) == 3 and img.shape[2] not in [1, 3]:
+        raise ValueError(f"Input image must be a grayscale (H, W) or (H, W, 1), or RGB (H, W, 3) image, input shape: {img.shape}")
+
+    img = np.clip((img * 255.0).round(), 0, 255) / 255.0
+    vals = 10**(2*random.random() + 2.0)  # [2, 4]
+    
     if random.random() < 0.5:
         img = np.random.poisson(img * vals).astype(np.float32) / vals
     else:
-        img_gray = np.dot(img[...,:3], [0.299, 0.587, 0.114])
-        img_gray = np.clip((img_gray * 255.0).round(), 0, 255) / 255.
+        if img.shape[2] == 1:
+            img_gray = img[:, :, 0]
+        else:
+            img_gray = np.dot(img[...,:3], [0.299, 0.587, 0.114])
+        img_gray = np.clip((img_gray * 255.0).round(), 0, 255) / 255.0
         noise_gray = np.random.poisson(img_gray * vals).astype(np.float32) / vals - img_gray
         img += noise_gray[:, :, np.newaxis]
+    
     img = np.clip(img, 0.0, 1.0)
+    
+    if img.shape[2] == 1:
+        img = img[:, :, 0]
+    
     return img
-
 
 def add_JPEG_noise(img):
+    if len(img.shape) == 2:
+        img_type = 'grayscale'
+    elif len(img.shape) == 3 and img.shape[2] == 1:
+        img_type = 'grayscale'
+        img = img[:, :, 0]
+    elif len(img.shape) == 3 and img.shape[2] == 3:
+        img_type = 'rgb'
+    else:
+        raise ValueError(f"Input image must be either a grayscale (H, W) or (H, W, 1), or an RGB (H, W, 3) image, input shape: {img.shape}")
+    
     quality_factor = random.randint(30, 95)
-    img = cv2.cvtColor(util.single2uint(img), cv2.COLOR_RGB2BGR)
+    
+    if img_type == 'rgb':
+        img = cv2.cvtColor(util.single2uint(img), cv2.COLOR_RGB2BGR)
+    else:
+        img = util.single2uint(img)
+    
     result, encimg = cv2.imencode('.jpg', img, [int(cv2.IMWRITE_JPEG_QUALITY), quality_factor])
     img = cv2.imdecode(encimg, 1)
-    img = cv2.cvtColor(util.uint2single(img), cv2.COLOR_BGR2RGB)
+    
+    if img_type == 'rgb':
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = util.uint2single(img)
+    else:
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = util.uint2single(img)
+        img = img[:, :, np.newaxis]
+    
     return img
 
-
 def random_crop(lq, hq, sf=4, lq_patchsize=64):
+    
+    if lq.ndim == 2:
+        lq = np.expand_dims(lq, axis=-1)
+    
     h, w = lq.shape[:2]
-    rnd_h = random.randint(0, h-lq_patchsize)
-    rnd_w = random.randint(0, w-lq_patchsize)
+    rnd_h = random.randint(0, h - lq_patchsize)
+    rnd_w = random.randint(0, w - lq_patchsize)
     lq = lq[rnd_h:rnd_h + lq_patchsize, rnd_w:rnd_w + lq_patchsize, :]
 
     rnd_h_H, rnd_w_H = int(rnd_h * sf), int(rnd_w * sf)
-    hq = hq[rnd_h_H:rnd_h_H + lq_patchsize*sf, rnd_w_H:rnd_w_H + lq_patchsize*sf, :]
+    hq = hq[rnd_h_H:rnd_h_H + lq_patchsize * sf, rnd_w_H:rnd_w_H + lq_patchsize * sf, :]
     return lq, hq
 
+def resize_and_clip(img, sf, a, b):
+    if len(img.shape) == 2:
+        img_type = 'grayscale'
+    elif len(img.shape) == 3 and img.shape[2] == 1:
+        img_type = 'grayscale'
+        img = img[:, :, 0]
+    elif len(img.shape) == 3 and img.shape[2] == 3:
+        img_type = 'rgb'
+    else:
+        raise ValueError(f"Input image must be either a grayscale (H, W) or (H, W, 1), or an RGB (H, W, 3) image, input shape: {img.shape}")
+    
+    new_width = int(1 / sf * a)
+    new_height = int(1 / sf * b)
+    
+    img_resized = cv2.resize(img, (new_width, new_height), interpolation=random.choice([cv2.INTER_NEAREST, cv2.INTER_LINEAR, cv2.INTER_CUBIC]))
+    
+    if img_type == 'grayscale':
+        img_resized = img_resized[:, :, np.newaxis]
+    
+    img_clipped = np.clip(img_resized, 0.0, 1.0)
+    
+    return img_clipped
+
+def upsample_and_clip(img, sf):
+    if len(img.shape) != 3 or img.shape[2] not in [1, 3]:
+        raise ValueError(f"Input image must be a grayscale (H, W, 1) or RGB (H, W, 3) image, in` shape: {img.shape}")
+    
+    img_uint = util.single2uint(img)
+    new_width = int(sf * img.shape[1])
+    new_height = int(sf * img.shape[0])
+    img_resized = cv2.resize(img_uint, (new_width, new_height), interpolation=cv2.INTER_NEAREST)
+    
+    img_resized = util.uint2single(img_resized)
+    img_clipped = np.clip(img_resized, 0.0, 1.0)
+    
+    if img.shape[2] == 1:
+        img_clipped = img_clipped[:, :, np.newaxis]  
+    
+    return img_clipped
+
+def apply_gaussian_blur_and_downsample(img, sf):
+    if len(img.shape) == 2:
+        img = img[:, :, np.newaxis]
+    elif len(img.shape) == 3 and img.shape[2] not in [1, 3]:
+        raise ValueError(f"Input image must be a grayscale (H, W) or (H, W, 1), or RGB (H, W, 3) image, input shape: {img.shape}")
+
+    k = fspecial_gaussian(25, random.uniform(0.1, 0.6 * sf))
+    k_shifted = shift_pixel(k, sf)
+    k_shifted = k_shifted / k_shifted.sum()
+
+    if img.shape[2] == 1:  
+        img_convolved = ndimage.filters.convolve(img[:, :, 0], k_shifted, mode='mirror')
+        img_convolved = img_convolved[0::sf, 0::sf]
+        img_convolved = img_convolved[:, :, np.newaxis]  
+    else:  
+        img_convolved = np.zeros_like(img)
+        for c in range(img.shape[2]):
+            img_convolved[:, :, c] = ndimage.filters.convolve(img[:, :, c], k_shifted, mode='mirror')
+        img_convolved = img_convolved[0::sf, 0::sf, :]
+    
+    img_clipped = np.clip(img_convolved, 0.0, 1.0)
+    
+    if img.shape[2] == 1:
+        img_clipped = img_clipped[:, :, 0]  # Convert back to (H, W) if the input was (H, W)
+
+    return img_clipped
 
 def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     """
@@ -434,7 +601,7 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     sf_ori = sf
 
     h1, w1 = img.shape[:2]
-    img = img.copy()[:w1 - w1 % sf, :h1 - h1 % sf, ...]  # mod crop
+    img = img.copy()[:h1 - h1 % sf, :w1 - w1 % sf, ...]  # mod crop
     h, w = img.shape[:2]
 
     if h < lq_patchsize*sf or w < lq_patchsize*sf:
@@ -468,19 +635,13 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
             # downsample2
             if random.random() < 0.75:
                 sf1 = random.uniform(1,2*sf)
-                img = cv2.resize(img, (int(1/sf1*img.shape[1]), int(1/sf1*img.shape[0])), interpolation=random.choice([1,2,3]))
+                img = resize_and_clip(img, sf1, a, b)
             else:
-                k = fspecial('gaussian', 25, random.uniform(0.1, 0.6*sf))
-                k_shifted = shift_pixel(k, sf)
-                k_shifted = k_shifted/k_shifted.sum()  # blur with shifted kernel
-                img = ndimage.filters.convolve(img, np.expand_dims(k_shifted, axis=2), mode='mirror')
-                img = img[0::sf, 0::sf, ...]  # nearest downsampling
+              img = apply_gaussian_blur_and_downsample(img, sf)
             img = np.clip(img, 0.0, 1.0)
-
         elif i == 3:
             # downsample3
-            img = cv2.resize(img, (int(1/sf*a), int(1/sf*b)), interpolation=random.choice([1,2,3]))
-            img = np.clip(img, 0.0, 1.0)
+            img = resize_and_clip(img, sf, a, b)
 
         elif i == 4:
             # add Gaussian noise
@@ -504,9 +665,6 @@ def degradation_bsrgan(img, sf=4, lq_patchsize=72, isp_model=None):
     img, hq = random_crop(img, hq, sf_ori, lq_patchsize)
 
     return img, hq
-
-
-
 
 def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=False, lq_patchsize=64, isp_model=None):
     """
@@ -593,7 +751,6 @@ def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=False, lq_pat
     img, hq = random_crop(img, hq, sf, lq_patchsize)
 
     return img, hq
-
 
 
 if __name__ == '__main__':

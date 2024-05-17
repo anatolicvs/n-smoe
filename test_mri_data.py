@@ -1,7 +1,7 @@
 import pathlib
 from data.subsample import RandomMaskFunc
 from data.transforms import to_tensor, apply_mask
-from data.mri_data import SliceDataset
+from data.dataset_mri import SliceDataset
 import matplotlib.pyplot as plt
 
 

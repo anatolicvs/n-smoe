@@ -42,6 +42,8 @@ def define_Dataset(dataset_opt):
     elif dataset_type in ['bsrnet', 'bsrgan', 'blindsr']:
         from data.dataset_blindsr import DatasetBlindSR as D
 
+    elif dataset_type in ['mri_sr']:
+        from data.dataset_mri import SliceDatasetSR as D
     # -------------------------------------------------
     # JPEG compression artifact reduction (deblocking)
     # -------------------------------------------------

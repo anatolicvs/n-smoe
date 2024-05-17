@@ -8,7 +8,10 @@ from models.select_network import define_G, define_D
 from models.model_base import ModelBase
 from models.loss import GANLoss, PerceptualLoss
 from models.loss_ssim import SSIMLoss
-
+import matplotlib.pyplot as plt
+from matplotlib.gridspec import GridSpec
+import numpy as np
+from scipy.ndimage import zoom
 
 class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -209,6 +212,107 @@ class ModelGAN(ModelBase):
 
         if need_H:
             self.H = data['H'].to(self.device)
+
+
+    # def visualize_data(self):
+       
+    #     L_np = self.L.cpu().numpy()[0][0] #.squeeze()
+    #     H_np = self.H.cpu().numpy()[0][0] #.squeeze()
+
+        
+    #     if L_np.ndim == 3 and L_np.shape[0] == 1:
+    #         L_np = L_np[0]
+    #     if H_np.ndim == 3 and H_np.shape[0] == 1:
+    #         H_np = H_np[0]
+
+    #     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+    #     axes[0].imshow(L_np, cmap='gray')
+    #     axes[0].set_title('Low Resolution')
+    #     axes[0].axis('on')
+
+    #     axes[1].imshow(H_np, cmap='gray')
+    #     axes[1].set_title('High Resolution')
+    #     axes[1].axis('on')
+
+    #     plt.show()
+    
+    def visualize_data(self):
+        L_images = self.L.cpu().numpy()
+        H_images = self.H.cpu().numpy()
+        
+        num_pairs = L_images.shape[0]
+
+        fig = plt.figure(figsize=(24, num_pairs * 6))
+        gs = GridSpec(num_pairs * 4, 6, figure=fig)  # Adjusted to 4*num_pairs rows
+
+        for i in range(num_pairs):
+            L_np = L_images[i][0]
+            H_np = H_images[i][0]
+
+            # Bicubic interpolation for the second low-resolution image
+            L_np_bicubic = zoom(L_np, 2, order=3)  # Assuming 2x upsampling
+
+            L_freq = np.fft.fftshift(np.fft.fft2(L_np))
+            H_freq = np.fft.fftshift(np.fft.fft2(H_np))
+            L_freq_bicubic = np.fft.fftshift(np.fft.fft2(L_np_bicubic))
+            
+            L_freq_magnitude = np.log(np.abs(L_freq) + 1)
+            H_freq_magnitude = np.log(np.abs(H_freq) + 1)
+            L_freq_magnitude_bicubic = np.log(np.abs(L_freq_bicubic) + 1)
+            
+            L_signal = np.sum(L_freq_magnitude, axis=0)
+            H_signal = np.sum(H_freq_magnitude, axis=0)
+            L_signal_bicubic = np.sum(L_freq_magnitude_bicubic, axis=0)
+
+            # Plot the images and spectra for the first column
+            col = i % 2 * 3
+            row = (i // 2) * 4
+            
+            ax0 = fig.add_subplot(gs[row:row + 2, col])
+            ax0.imshow(L_np, cmap='gray')
+            ax0.set_title(f'Low Resolution {i + 1}', fontsize=11, family='Times New Roman')
+            ax0.axis('off')
+
+            ax1 = fig.add_subplot(gs[row:row + 2, col + 1])
+            ax1.imshow(L_np_bicubic, cmap='gray')
+            ax1.set_title(f'Low Resolution Bicubic {i + 1}', fontsize=11, family='Times New Roman')
+            ax1.axis('off')
+
+            ax2 = fig.add_subplot(gs[row:row + 2, col + 2])
+            ax2.imshow(H_np, cmap='gray')
+            ax2.set_title(f'High Resolution {i + 1}', fontsize=11, family='Times New Roman')
+            ax2.axis('off')
+
+            # Plot the frequency spectra below the corresponding images
+            ax3 = fig.add_subplot(gs[row + 2, col])
+            ax3.plot(L_signal)
+            ax3.set_title(f'Low Resolution Spectrum {i + 1}', fontsize=11, family='Times New Roman')
+            ax3.set_xlim([0, len(L_signal)])
+            ax3.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
+            ax3.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
+            ax3.tick_params(axis='both', which='major', labelsize=11)
+            ax3.grid(True)
+
+            ax4 = fig.add_subplot(gs[row + 2, col + 1])
+            ax4.plot(L_signal_bicubic)
+            ax4.set_title(f'Low Resolution Bicubic Spectrum {i + 1}', fontsize=11, family='Times New Roman')
+            ax4.set_xlim([0, len(L_signal_bicubic)])
+            ax4.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
+            ax4.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
+            ax4.tick_params(axis='both', which='major', labelsize=11)
+            ax4.grid(True)
+
+            ax5 = fig.add_subplot(gs[row + 2, col + 2])
+            ax5.plot(H_signal)
+            ax5.set_title(f'High Resolution Spectrum {i + 1}', fontsize=11, family='Times New Roman')
+            ax5.set_xlim([0, len(H_signal)])
+            ax5.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
+            ax5.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
+            ax5.tick_params(axis='both', which='major', labelsize=11)
+            ax5.grid(True)
+
+        plt.tight_layout()
+        plt.show()
 
     # ----------------------------------------
     # feed L to netG and get E
