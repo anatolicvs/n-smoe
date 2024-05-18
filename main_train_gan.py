@@ -160,7 +160,7 @@ def main(json_path='options/train_f_u_moe.json'):
           
             model.feed_data(train_data)
 
-            model.visualize_data()
+            # model.visualize_data()
 
             model.optimize_parameters(current_step)
             

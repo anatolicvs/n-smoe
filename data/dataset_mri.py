@@ -221,7 +221,7 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
 
 class SliceDatasetSR(torch.utils.data.Dataset):
     def __init__(self, opt):
-        root = opt["dataroot_H"]
+        roots = opt["dataroot_H"]
         challenge = opt['challenge'] if 'challenge' in opt else 'multicoil'
         transform: Optional[Callable] = None
         use_dataset_cache = opt["use_dataset_cache"] if "use_dataset_cache" in opt else False
@@ -236,7 +236,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         stride = opt["stride"] if "stride" in opt else 4
         self.h_size = opt['H_size'] if 'H_size' in opt else 96
         self.lq_patchsize = opt['lq_patchsize'] if opt['lq_patchsize'] else 64
-        self.degradation_type = opt['degradation_type'] if opt['degradation_type'] else 'bsrgan' 
+        self.degradation_type = opt['degradation_type'] if opt['degradation_type'] else 'bsrgan'
         self.sf = opt['scale'] if opt['scale'] else 4
         self.sf = sf
         self.phase = phase
@@ -277,12 +277,17 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         else:
             dataset_cache = {}
 
+        files = util.get_image_paths(roots)
+
         # check if our dataset is in the cache
         # if there, use that metadata, if not, then regenerate the metadata
-        if dataset_cache.get(root) is None or not use_dataset_cache:
-            files = list(Path(root).iterdir())
+        if dataset_cache.get(tuple(files)) is None or not use_dataset_cache:
             for fname in sorted(files):
-                metadata, num_slices = self._retrieve_metadata(fname)
+                try:
+                    metadata, num_slices = self._retrieve_metadata(fname)
+                except (OSError, KeyError, ValueError) as e:
+                    logging.warning(f"Skipping file {fname} due to error: {e}")
+                    continue
 
                 new_raw_samples = []
                 for slice_ind in range(num_slices):
@@ -292,14 +297,14 @@ class SliceDatasetSR(torch.utils.data.Dataset):
 
                 self.raw_samples += new_raw_samples
 
-            if dataset_cache.get(root) is None and use_dataset_cache:
-                dataset_cache[root] = self.raw_samples
+            if dataset_cache.get(tuple(files)) is None and use_dataset_cache:
+                dataset_cache[tuple(files)] = self.raw_samples
                 logging.info(f"Saving dataset cache to {self.dataset_cache_file}.")
                 with open(self.dataset_cache_file, "wb") as cache_f:
                     pickle.dump(dataset_cache, cache_f)
         else:
             logging.info(f"Using dataset cache from {self.dataset_cache_file}.")
-            self.raw_samples = dataset_cache[root]
+            self.raw_samples = dataset_cache[tuple(files)]
 
         # subsample if desired
         if sample_rate < 1.0:  # sample by slice
@@ -307,21 +312,21 @@ class SliceDatasetSR(torch.utils.data.Dataset):
             num_raw_samples = round(len(self.raw_samples) * sample_rate)
             self.raw_samples = self.raw_samples[:num_raw_samples]
         elif volume_sample_rate < 1.0:  # sample by volume
-            vol_names = sorted(list(set([f[0].stem for f in self.raw_samples])))
+            vol_names = sorted(list(set([Path(f[0]).stem for f in self.raw_samples])))
             random.shuffle(vol_names)
             num_volumes = round(len(vol_names) * volume_sample_rate)
             sampled_vols = vol_names[:num_volumes]
             self.raw_samples = [
                 raw_sample
                 for raw_sample in self.raw_samples
-                if raw_sample[0].stem in sampled_vols
+                if Path(raw_sample[0]).stem in sampled_vols
             ]
 
         if num_cols:
             self.raw_samples = [
                 ex
                 for ex in self.raw_samples
-                if ex[2]["encoding_size"][1] in num_cols  # type: ignore
+                if ex[2]["encoding_size"][1] in num_cols
             ]
 
     def _retrieve_metadata(self, fname):
@@ -380,16 +385,10 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         fname, dataslice, metadata = self.raw_samples[i]
 
         with h5py.File(fname, "r") as hf:
-            # kspace = hf["kspace"][dataslice]
             img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
 
-        # k_image = np.abs(np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(kspace))))
-        # k_image = k_image[:3]
-
         img_H = util.modcrop(img_H, self.sf)
-
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
-
         img_H = img_H[:, :, np.newaxis]
      
         if self.phase == 'train':
