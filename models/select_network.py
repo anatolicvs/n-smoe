@@ -134,10 +134,10 @@ def define_G(opt):
         from models.network_umoe import Autoencoder as net
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
-            in_channels=opt_net["in_channels"],
+            in_channels=opt_net["n_channels"],
             latent_dim=z,
             num_mixtures=opt_net["num_mixtures"],
-            scale_factor=opt_net["scale_factor"],
+            scale_factor=opt_net["scale"],
             stride=opt_net["stride"],
             phw=opt_net["phw"],
             dropout=opt_net["dropout"],
@@ -158,12 +158,12 @@ def define_G(opt):
         from models.network_f_u_moe import Autoencoder as net
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
-            in_channels=opt_net["in_channels"],
+            in_channels=opt_net["n_channels"],
             latent_dim=z,
             num_mixtures=opt_net["num_mixtures"],
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net['sharpening_factor'],
-            scale_factor=opt_net["scale_factor"],
+            scale_factor=opt_net["scale"],
             stride=opt_net["stride"],
             phw=opt_net["phw"],
             num_layers=opt_net["num_layers"],

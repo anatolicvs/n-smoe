@@ -43,7 +43,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=16
 GPUS=1
-MEMORY="4G"
+MEMORY="48G"
 TIME="24:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
@@ -83,7 +83,8 @@ sbatch <<-EOT
 
 echo; nvidia-smi; echo
 
-apptainer exec --nv --bind $WORKDIR $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
+
+apptainer exec --nv --bind $WORK,$HPCWORK $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
 EOT
 
 echo "Job $JOB_ID"
