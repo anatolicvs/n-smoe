@@ -11,7 +11,7 @@ import torch
 import torch.distributed as dist
 from torch.utils.data import Sampler
 
-from .mri_data import SliceDataset
+from .dataset_mri import SliceDataset
 
 
 class VolumeSampler(Sampler):

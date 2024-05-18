@@ -19,7 +19,7 @@ from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
 
-def main(json_path='options/train_msrresnet_gan.json'):
+def main(json_path='options/train_f_u_moe.json'):
 
     '''
     # ----------------------------------------
@@ -99,16 +99,7 @@ def main(json_path='options/train_msrresnet_gan.json'):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
 
-    '''
-    # ----------------------------------------
-    # Step--2 (creat dataloader)
-    # ----------------------------------------
-    '''
-
-    # ----------------------------------------
-    # 1) create_dataset
-    # 2) creat_dataloader for train and test
-    # ----------------------------------------
+    
     for phase, dataset_opt in opt['datasets'].items():
         if phase == 'train':
             train_set = define_Dataset(dataset_opt)
@@ -158,7 +149,7 @@ def main(json_path='options/train_msrresnet_gan.json'):
     # Step--4 (main training)
     # ----------------------------------------
     '''
-
+                
     for epoch in range(1000000):  # keep running
         if opt['dist']:
             train_sampler.set_epoch(epoch)
@@ -168,6 +159,8 @@ def main(json_path='options/train_msrresnet_gan.json'):
             current_step += 1
           
             model.feed_data(train_data)
+
+            # model.visualize_data()
 
             model.optimize_parameters(current_step)
             

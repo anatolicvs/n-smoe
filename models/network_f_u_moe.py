@@ -86,7 +86,7 @@ class MullerResizer(nn.Module):
         return F.interpolate(inputs, size=target_size, mode=self.base_resize_method, align_corners=False)
 
     def _gaussian_blur(self, inputs):
-        sigma = max(self.stddev, 0.1)  # Ensure sigma is not too small
+        sigma = max(self.stddev, 0.5)  # Ensure sigma is not too small
         radius = self.kernel_size // 2
         kernel_size = 2 * radius + 1
         x_coord = torch.arange(kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
@@ -111,7 +111,8 @@ class MullerResizer(nn.Module):
             residual_image = blurred - inputs
             resized_residual = self._base_resizer(residual_image, target_size)
             scaled_residual = weight * resized_residual + bias
-            net += torch.tanh(scaled_residual.clamp(min=-3, max=3))  # Clamping to prevent extreme values
+            # net += torch.tanh(scaled_residual.clamp(min=-3, max=3))  # Old. Clamping to prevent extreme values
+            net += F.relu(scaled_residual.clamp(min=0, max=1))
             inputs = blurred
         return net
 
@@ -143,7 +144,7 @@ class Encoder(nn.Module):
 
         self.flatten = nn.Flatten()
 
-        self.ff = nn.Sequential(
+        self.fc1 = nn.Sequential(
                 nn.Linear((latent_dim*(size*scale_factor)**2), in_channels * latent_dim),
                 nn.BatchNorm1d(in_channels * latent_dim),
                 nn.ReLU())
@@ -179,7 +180,7 @@ class Encoder(nn.Module):
         x_last = self.last_conv(x4_up)
 
         xf = self.flatten(x_last)
-        x = self.ff(xf)
+        x = self.fc1(xf)
         # x = x.view(-1, self.depth, self.latent_dim)
         return x
 
@@ -214,7 +215,7 @@ class MoE(nn.Module):
         coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
         
         return coordinates.reshape(-1, 2), stacked_indices
-
+    
     def forward(self, height, width, params):
         
         grid, _ = self.sample_image_grid((height, width), device=params.device)
@@ -261,6 +262,7 @@ class Autoencoder(nn.Module):
         phw:int=64,
         num_layers:int=2,
         avg_pool:bool=False,
+        pre_trained:str=None
     ):
         super().__init__()
 
@@ -270,6 +272,13 @@ class Autoencoder(nn.Module):
         self.scale_factor = scale_factor
         
         self.encoder= Encoder(in_channels=in_channels,latent_dim=latent_dim, size=phw, num_layers=num_layers, avg_pool=avg_pool, scale_factor=scale_factor)
+
+        if pre_trained:
+            model = torch.load(pre_trained)
+            state_dict = {
+                k.replace("encoder.", ""): v for k, v in model["state_dict"].items()
+            }
+            self.encoder.load_state_dict(state_dict, strict=False)
 
         self.decoder = MoE(
             in_channels=in_channels,
@@ -306,7 +315,8 @@ class Autoencoder(nn.Module):
                 out[b, :, start_i:end_i, start_j:end_j] += patch
                 count[b, :, start_i:end_i, start_j:end_j] += 1
 
-        out /= count.clamp(min=1) 
+        count = count.clamp(min=1)
+        out /= count
         return out
     
     def forward(self, x, shape):

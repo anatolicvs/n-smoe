@@ -94,7 +94,7 @@ def define_G(opt):
         from models.network_usmoe import Autoencoder as net 
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
-                    in_channels=opt_net["in_channels"],
+                    in_channels=opt_net["n_channels"],
                     latent_dim=z,
                     kernel=opt_net["kernel"],
                     num_mixtures=opt_net["num_mixtures"],
@@ -107,7 +107,7 @@ def define_G(opt):
                     attention_resolutions=opt_net["attention_resolutions"],
                     channel_mult=opt_net["channel_mult"],
                     num_heads=opt_net["num_heads"],
-                    scale_factor=opt_net["scale_factor"],
+                    scale_factor=opt_net["scale"],
                     use_checkpoint=opt_net["use_checkpoint"],
                     pool=opt_net["pool"],
                 )
@@ -125,7 +125,7 @@ def define_G(opt):
                     sharpening_factor=opt_net['sharpening_factor'],
                     # depths=opt_net['depths'],
                     # dims=opt_net['dims'],
-                    scale_factor=opt_net["scale_factor"],
+                    scale_factor=opt_net["scale"],
                     num_layers=opt_net["num_layers"],
                     avg_pool=opt_net["avg_pool"],
                 )
@@ -167,7 +167,9 @@ def define_G(opt):
             stride=opt_net["stride"],
             phw=opt_net["phw"],
             num_layers=opt_net["num_layers"],
-            avg_pool=opt_net["avg_pool"])
+            avg_pool=opt_net["avg_pool"],
+            pre_trained=opt_net["pre_trained"]
+            )
 
     elif net_type == 'lft_gan_v':
         from models.network_lft_v import LFT

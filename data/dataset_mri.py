@@ -31,6 +31,10 @@ import requests
 import torch
 import yaml
 import matplotlib.pyplot as plt
+import utils.utils_image as util
+import torch.nn.functional as F
+from utils import utils_blindsr as blindsr
+from scipy.io import loadmat
 
 
 def et_query(
@@ -215,6 +219,203 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
                 i = i - len(dataset)
 
 
+class SliceDatasetSR(torch.utils.data.Dataset):
+    def __init__(self, opt):
+        roots = opt["dataroot_H"]
+        challenge = opt['challenge'] if 'challenge' in opt else 'multicoil'
+        transform: Optional[Callable] = None
+        use_dataset_cache = opt["use_dataset_cache"] if "use_dataset_cache" in opt else False
+        sample_rate = opt["sample_rate"] if "sample_rate" in opt else None
+        volume_sample_rate = opt["volume_sample_rate"] if "volume_sample_rate" in opt else None
+        dataset_cache_file = opt["dataset_cache_file"] if "dataset_cache_file" in opt else "dataset_cache.pkl"
+        num_cols = opt["num_cols"] if "num_cols" in opt else None
+        raw_sample_filter = opt["raw_sample_filter"] if "raw_sample_filter" in opt else None
+        sf = opt["scale"] if "scale" in opt else 2
+        phase = opt["phase"] if "phase" in opt else 'train'
+        phw = opt["phw"] if "phw" in opt else 32
+        stride = opt["stride"] if "stride" in opt else 4
+        self.h_size = opt['H_size'] if 'H_size' in opt else 96
+        self.lq_patchsize = opt['lq_patchsize'] if opt['lq_patchsize'] else 64
+        self.degradation_type = opt['degradation_type'] if opt['degradation_type'] else 'bsrgan'
+        self.sf = opt['scale'] if opt['scale'] else 4
+        self.sf = sf
+        self.phase = phase
+        self.phw = phw
+        self.stride = stride
+        self.k = loadmat(opt['kernel_path'])
+
+        if challenge not in ("singlecoil", "multicoil"):
+            raise ValueError('challenge should be either "singlecoil" or "multicoil"')
+
+        if sample_rate is not None and volume_sample_rate is not None:
+            raise ValueError(
+                "either set sample_rate (sample by slices) or volume_sample_rate (sample by volumes) but not both"
+            )
+
+        self.dataset_cache_file = Path(dataset_cache_file)
+
+        self.transform = transform
+        self.recons_key = (
+            "reconstruction_esc" if challenge == "singlecoil" else "reconstruction_rss"
+        )
+        self.raw_samples = []
+        if raw_sample_filter is None:
+            self.raw_sample_filter = lambda raw_sample: True
+        else:
+            self.raw_sample_filter = raw_sample_filter
+
+        # set default sampling mode if none given
+        if sample_rate is None:
+            sample_rate = 1.0
+        if volume_sample_rate is None:
+            volume_sample_rate = 1.0
+
+        # load dataset cache if we have and user wants to use it
+        if self.dataset_cache_file.exists() and use_dataset_cache:
+            with open(self.dataset_cache_file, "rb") as f:
+                dataset_cache = pickle.load(f)
+        else:
+            dataset_cache = {}
+
+        files = util.get_image_paths(roots)
+
+        # check if our dataset is in the cache
+        # if there, use that metadata, if not, then regenerate the metadata
+        if dataset_cache.get(tuple(files)) is None or not use_dataset_cache:
+            for fname in sorted(files):
+                try:
+                    metadata, num_slices = self._retrieve_metadata(fname)
+                except (OSError, KeyError, ValueError) as e:
+                    logging.warning(f"Skipping file {fname} due to error: {e}")
+                    continue
+
+                new_raw_samples = []
+                for slice_ind in range(num_slices):
+                    raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata)
+                    if self.raw_sample_filter(raw_sample):
+                        new_raw_samples.append(raw_sample)
+
+                self.raw_samples += new_raw_samples
+
+            if dataset_cache.get(tuple(files)) is None and use_dataset_cache:
+                dataset_cache[tuple(files)] = self.raw_samples
+                logging.info(f"Saving dataset cache to {self.dataset_cache_file}.")
+                with open(self.dataset_cache_file, "wb") as cache_f:
+                    pickle.dump(dataset_cache, cache_f)
+        else:
+            logging.info(f"Using dataset cache from {self.dataset_cache_file}.")
+            self.raw_samples = dataset_cache[tuple(files)]
+
+        # subsample if desired
+        if sample_rate < 1.0:  # sample by slice
+            random.shuffle(self.raw_samples)
+            num_raw_samples = round(len(self.raw_samples) * sample_rate)
+            self.raw_samples = self.raw_samples[:num_raw_samples]
+        elif volume_sample_rate < 1.0:  # sample by volume
+            vol_names = sorted(list(set([Path(f[0]).stem for f in self.raw_samples])))
+            random.shuffle(vol_names)
+            num_volumes = round(len(vol_names) * volume_sample_rate)
+            sampled_vols = vol_names[:num_volumes]
+            self.raw_samples = [
+                raw_sample
+                for raw_sample in self.raw_samples
+                if Path(raw_sample[0]).stem in sampled_vols
+            ]
+
+        if num_cols:
+            self.raw_samples = [
+                ex
+                for ex in self.raw_samples
+                if ex[2]["encoding_size"][1] in num_cols
+            ]
+
+    def _retrieve_metadata(self, fname):
+        with h5py.File(fname, "r") as hf:
+            et_root = etree.fromstring(hf["ismrmrd_header"][()])
+
+            enc = ["encoding", "encodedSpace", "matrixSize"]
+            enc_size = (
+                int(et_query(et_root, enc + ["x"])),
+                int(et_query(et_root, enc + ["y"])),
+                int(et_query(et_root, enc + ["z"])),
+            )
+            rec = ["encoding", "reconSpace", "matrixSize"]
+            recon_size = (
+                int(et_query(et_root, rec + ["x"])),
+                int(et_query(et_root, rec + ["y"])),
+                int(et_query(et_root, rec + ["z"])),
+            )
+
+            lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
+            enc_limits_center = int(et_query(et_root, lims + ["center"]))
+            enc_limits_max = int(et_query(et_root, lims + ["maximum"])) + 1
+
+            padding_left = enc_size[1] // 2 - enc_limits_center
+            padding_right = padding_left + enc_limits_max
+
+            num_slices = hf["kspace"].shape[0]
+
+            metadata = {
+                "padding_left": padding_left,
+                "padding_right": padding_right,
+                "encoding_size": enc_size,
+                "recon_size": recon_size,
+                **hf.attrs,
+            }
+
+        return metadata, num_slices
+
+    def __len__(self):
+        return len(self.raw_samples)
+
+    def center_crop(self, img, crop_size):
+        center_x, center_y = img.shape[1] // 2, img.shape[0] // 2
+        crop_x, crop_y = crop_size[1] // 2, crop_size[0] // 2
+
+        start_x = max(center_x - crop_x, 0)
+        start_y = max(center_y - crop_y, 0)
+
+        end_x = min(start_x + crop_size[1], img.shape[1])
+        end_y = min(start_y + crop_size[0], img.shape[0])
+
+        cropped_img = img[start_y:end_y, start_x:end_x]
+        return cropped_img
+
+    def __getitem__(self, i: int):
+        fname, dataslice, metadata = self.raw_samples[i]
+
+        with h5py.File(fname, "r") as hf:
+            img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+
+        img_H = util.modcrop(img_H, self.sf)
+        img_H = self.center_crop(img_H, (self.h_size, self.h_size))
+        img_H = img_H[:, :, np.newaxis]
+     
+        if self.phase == 'train':
+            mode = random.randint(0, 7)
+            img_H = util.augment_img(img_H, mode=mode)
+           
+        if self.degradation_type == 'bsrgan':
+            img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
+        elif self.degradation_type == 'dpsr':
+            img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
+
+        img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
+
+        img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
+            2, self.phw, self.stride
+        )
+        img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
+        img_L_p = img_L_p.view(
+            img_L_p.shape[1] * img_L_p.shape[2],
+            img_L_p.shape[0],
+            img_L_p.shape[3],
+            img_L_p.shape[4],
+        )
+
+        return {'L': img_L,'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
+
+
 class SliceDataset(torch.utils.data.Dataset):
     """
     A PyTorch Dataset that provides access to MR image slices.
@@ -231,6 +432,10 @@ class SliceDataset(torch.utils.data.Dataset):
         dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
         num_cols: Optional[Tuple[int]] = None,
         raw_sample_filter: Optional[Callable] = None,
+        sf :int = 2,
+        phase : str = 'train',
+        phw : int = 32,
+        stride: int = 4
     ):
         """
         Args:
@@ -259,6 +464,10 @@ class SliceDataset(torch.utils.data.Dataset):
                 metadata as input and returns a boolean indicating whether the
                 raw_sample should be included in the dataset.
         """
+        self.sf = sf
+        self.phase = phase
+        self.phw = phw
+        self.stride = stride
         if challenge not in ("singlecoil", "multicoil"):
             raise ValueError('challenge should be either "singlecoil" or "multicoil"')
 
@@ -384,45 +593,53 @@ class SliceDataset(torch.utils.data.Dataset):
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
 
-            target = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+            img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
 
             k_image = np.abs(np.fft.ifftshift(np.fft.ifft2(np.fft.fftshift(kspace))))
             
-            if target is not None:
-                target_shape = target.shape
+            if img_H is not None:
+                target_shape = img_H.shape
                 start_row = (k_image.shape[0] - target_shape[0]) // 2
                 start_col = (k_image.shape[1] - target_shape[1]) // 2
 
-                k_image = k_image[start_row:start_row + target_shape[0], start_col:start_col + target_shape[1]]
+                img_L = k_image[start_row:start_row + target_shape[0], start_col:start_col + target_shape[1]]
 
-            fig, axs = plt.subplots(5, 5, figsize=(15, 15))
-            fig.suptitle('K-Space Images and Target', fontsize=16)
+            img_H = util.uint2single(img_H)
+            img_H = util.modcrop(img_H, self.sf)
 
-           
-            axs[0, 0].imshow(target, cmap='gray')
-            axs[0, 0].set_title('Target Image')
-            axs[0, 0].axis('off')
+            img_H = img_H[:, :, np.newaxis]
+            img_L = img_L.transpose(1, 2, 0)
+            img_L = util.modcrop(img_L, self.sf)
+            img_L = util.imresize_np(img_L, 1 / self.sf, True)
+        
+            if self.phase == 'train':
+                mode = random.randint(0, 7)
+                img_L, img_H = util.augment_img(img_L, mode=mode), util.augment_img(img_H, mode=mode)
 
-            for i in range(20):
-                ax = axs[(i + 1) // 5, (i + 1) % 5]
-                ax.imshow(np.abs(k_image[i]), cmap='gray')
-                ax.set_title(f'K-Space {i+1}')
-                ax.axis('off')
+            img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
 
-            plt.tight_layout(rect=[0, 0, 1, 0.95])
-            plt.show()
+            img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
+                2, self.phw, self.stride
+            )
+            img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
+            img_L_p = img_L_p.view(
+                img_L_p.shape[1] * img_L_p.shape[2],
+                img_L_p.shape[0],
+                img_L_p.shape[3],
+                img_L_p.shape[4],
+            )
 
-            mask = np.asarray(hf["mask"]) if "mask" in hf else None
+            # mask = np.asarray(hf["mask"]) if "mask" in hf else None
 
-            attrs = dict(hf.attrs)
-            attrs.update(metadata)
+            # attrs = dict(hf.attrs)
+            # attrs.update(metadata)
 
-        if self.transform is None:
-            sample = (k_image, mask, target, attrs, fname.name, dataslice)
-        else:
-            sample = self.transform(k_image, mask, target, attrs, fname.name, dataslice)
+        # if self.transform is None:
+        #     sample = (img_L, mask, target, attrs, fname.name, dataslice)
+        # else:
+        #     sample = self.transform(k_image, mask, target, attrs, fname.name, dataslice)
 
-        return sample
+        return {'L': img_L,'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
 
 
 class AnnotatedSliceDataset(SliceDataset):

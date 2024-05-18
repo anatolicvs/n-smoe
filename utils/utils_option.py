@@ -45,13 +45,17 @@ def parse(opt_path, is_train=True):
     for phase, dataset in opt['datasets'].items():
         phase = phase.split('_')[0]
         dataset['phase'] = phase
-        dataset['scale'] = opt['scale']  # broadcast
-        dataset['n_channels'] = opt['n_channels']  # broadcast
+        dataset['scale'] = opt['scale']  
+        dataset['kernel_path'] = opt['kernel_path'] if 'kernel_path' in opt else None
+        dataset['n_channels'] = opt['n_channels']  
         dataset['ang_res'] = opt['ang_res'] if "ang_res" in opt else 5
         if 'dataroot_H' in dataset and dataset['dataroot_H'] is not None:
             dataset['dataroot_H'] = os.path.expanduser(dataset['dataroot_H'])
         if 'dataroot_L' in dataset and dataset['dataroot_L'] is not None:
             dataset['dataroot_L'] = os.path.expanduser(dataset['dataroot_L'])
+        if "phw" and "stride" in opt:
+            dataset['phw'] = opt['phw']
+            dataset['stride'] = opt['stride']
 
     # ----------------------------------------
     # path
@@ -77,6 +81,10 @@ def parse(opt_path, is_train=True):
     opt['netG']['scale'] = opt['scale'] if 'scale' in opt else 1
     opt['netG']['n_channels'] = opt['n_channels'] if 'n_channels' in opt else 3
     opt['netG']['ang_res'] = opt['ang_res'] if 'ang_res' in opt else 5
+
+    if "phw" and "stride" in opt:
+        opt['netG']['phw'] = opt['phw']
+        opt['netG']['stride'] = opt['stride']
 
     if 'netD' in opt:
         opt['netD']['in_nc'] = opt['n_channels'] if 'n_channels' in opt else 3
