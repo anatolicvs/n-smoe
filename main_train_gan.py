@@ -1,4 +1,5 @@
-import os.path
+import json
+import os
 import math
 import argparse
 import time
@@ -18,6 +19,16 @@ from utils.utils_dist import get_dist_info, init_dist
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
+def update_options_with_beeond(options_path, beeond_dir=None):
+    with open(options_path, 'r') as file:
+        options = option.parse(options_path, is_train=True)
+
+    if beeond_dir:
+        # Update dataset paths if BEEOND is set
+        options['datasets']['train']['dataroot_H'] = os.path.join(beeond_dir, os.path.basename(options['datasets']['train']['dataroot_H']))
+        options['datasets']['test']['dataroot_H'] = os.path.join(beeond_dir, os.path.basename(options['datasets']['test']['dataroot_H']))
+    
+    return options
 
 def main(json_path='options/train_f_u_moe.json'):
 
@@ -32,9 +43,14 @@ def main(json_path='options/train_f_u_moe.json'):
     parser.add_argument('--launcher', default='pytorch', help='job launcher')
     parser.add_argument('--local_rank', type=int, default=0)
     parser.add_argument('--dist', default=False)
+    parser.add_argument('--use_beeond', type=str, default='false', help='Whether to use BeeOND or not.')
 
-    opt = option.parse(parser.parse_args().opt, is_train=True)
-    opt['dist'] = parser.parse_args().dist
+    args = parser.parse_args()
+    use_beeond = args.use_beeond.lower() == 'true'
+    beeond_dir = os.getenv('BEEOND') if use_beeond else None
+    
+    opt = update_options_with_beeond(args.opt, beeond_dir)
+    opt['dist'] = args.dist
 
     # ----------------------------------------
     # distributed settings
