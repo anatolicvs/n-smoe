@@ -26,7 +26,7 @@
         , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
         , "lq_patchsize": 32
         , "degradation_type" : "dpsr" // "bsrgan" , "dpsr"
-        , "dataroot_H": "mri/data_for_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  
+        , "dataroot_H": "/tmp/pb035507/dataset/multicoil_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
@@ -39,7 +39,7 @@
         , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 32
         , "degradation_type" : "dpsr" // "bsrgan" , "dpsr"
-        , "dataroot_H": "mri/data_for_test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+        , "dataroot_H": "/tmp/pb035507/dataset/multicoil_train/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
         , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
