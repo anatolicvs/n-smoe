@@ -277,7 +277,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         else:
             dataset_cache = {}
 
-        files = util.get_image_paths(roots)
+        files = util.get_m_image_paths(roots)
 
         # check if our dataset is in the cache
         # if there, use that metadata, if not, then regenerate the metadata

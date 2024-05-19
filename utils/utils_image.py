@@ -118,9 +118,9 @@ def get_lf_image_paths(path_for_train,angRes,scale_factor,data_name):
     return file_list
 
 
-def get_image_paths(dataset_dir,data_name='ALL'):
-    if not os.path.isdir(dataset_dir):
-        raise ValueError(f'{dataset_dir} is not a valid directory')
+def get_m_image_paths(dataset_dir,data_name='ALL'):
+    # if not os.path.isdir(dataset_dir):
+    #     raise ValueError(f'{dataset_dir} is not a valid directory')
 
     if data_name == 'ALL':
         data_list = os.listdir(dataset_dir)
