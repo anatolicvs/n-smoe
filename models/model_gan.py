@@ -250,7 +250,7 @@ class ModelGAN(ModelBase):
             H_np = H_images[i][0]
 
             # Bicubic interpolation for the second low-resolution image
-            L_np_bicubic = zoom(L_np, 2, order=3)  # Assuming 2x upsampling
+            L_np_bicubic = zoom(H_np, 2, order=3)  # Assuming 2x upsampling
 
             L_freq = np.fft.fftshift(np.fft.fft2(L_np))
             H_freq = np.fft.fftshift(np.fft.fft2(H_np))

@@ -387,6 +387,10 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         with h5py.File(fname, "r") as hf:
             img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
 
+        min_val = img_H.min()
+        max_val = img_H.max()
+        img_H = (img_H - min_val) / (max_val - min_val)
+
         if img_H is None or img_H.ndim == 0:
             logging.warning(f"Skipping file {fname} due to zero dimensions.")
             return None
@@ -401,6 +405,8 @@ class SliceDatasetSR(torch.utils.data.Dataset):
            
         if self.degradation_type == 'bsrgan':
             img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
+        elif self.degradation_type == 'bsrgan-plus':
+            img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
         elif self.degradation_type == 'dpsr':
             img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
 

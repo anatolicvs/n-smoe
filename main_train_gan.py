@@ -30,7 +30,7 @@ def update_options_with_beeond(options_path, beeond_dir=None):
     
     return options
 
-def main(json_path='options/train_f_u_moe.json'):
+def main(json_path='options/train_f_u_moe_gan_local.json'):
 
     '''
     # ----------------------------------------
@@ -178,11 +178,14 @@ def main(json_path='options/train_f_u_moe.json'):
 
         for i, train_data in enumerate(train_loader):
 
+            if train_data is None:
+                continue
+
             current_step += 1
           
             model.feed_data(train_data)
 
-            # model.visualize_data()
+            model.visualize_data()
 
             model.optimize_parameters(current_step)
             
