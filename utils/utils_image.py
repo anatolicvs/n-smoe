@@ -63,6 +63,12 @@ def surf(Z, cmap='rainbow', figsize=None):
     plt.show()
 
 
+def custom_collate(batch):
+    batch = list(filter(lambda x: x is not None, batch))
+    if len(batch) == 0:
+        return None
+    return torch.utils.data.dataloader.default_collate(batch)
+
 '''
 # --------------------------------------------
 # get image pathes
@@ -677,22 +683,23 @@ def channel_convert(in_c, tar_type, img_list):
 # --------------------------------------------
 # PSNR
 # --------------------------------------------
-def calculate_psnr(img1, img2, border=0):
+def calculate_psnr(img1, img2, border=0, epsilon=1e-10):
     # img1 and img2 have range [0, 255]
-    #img1 = img1.squeeze()
-    #img2 = img2.squeeze()
     if not img1.shape == img2.shape:
         raise ValueError('Input images must have the same dimensions.')
+    
     h, w = img1.shape[:2]
     img1 = img1[border:h-border, border:w-border]
     img2 = img2[border:h-border, border:w-border]
 
     img1 = img1.astype(np.float64)
     img2 = img2.astype(np.float64)
+    
     mse = np.mean((img1 - img2)**2)
-    if mse == 0:
-        return float('inf')
-    return 20 * math.log10(255.0 / math.sqrt(mse))
+    mse = max(mse, epsilon)  
+    
+    psnr = 20 * math.log10(255.0 / math.sqrt(mse))
+    return psnr
 
 
 # --------------------------------------------

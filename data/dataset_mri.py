@@ -235,9 +235,9 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         phw = opt["phw"] if "phw" in opt else 32
         stride = opt["stride"] if "stride" in opt else 4
         self.h_size = opt['H_size'] if 'H_size' in opt else 96
-        self.lq_patchsize = opt['lq_patchsize'] if opt['lq_patchsize'] else 64
-        self.degradation_type = opt['degradation_type'] if opt['degradation_type'] else 'bsrgan'
-        self.sf = opt['scale'] if opt['scale'] else 4
+        self.lq_patchsize = opt['lq_patchsize'] if 'lq_patchsize' in opt else 64
+        self.degradation_type = opt['degradation_type'] if 'degradation_type' in opt else 'bsrgan'
+        self.sf = opt['scale'] if 'scale' in opt else 4
         self.sf = sf
         self.phase = phase
         self.phw = phw
@@ -387,6 +387,10 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         with h5py.File(fname, "r") as hf:
             img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
 
+        if img_H is None or img_H.ndim == 0:
+            logging.warning(f"Skipping file {fname} due to zero dimensions.")
+            return None
+        
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
         img_H = img_H[:, :, np.newaxis]
@@ -413,7 +417,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
             img_L_p.shape[4],
         )
 
-        return {'L': img_L,'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
+        return {'L': img_L, 'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
 
 
 class SliceDataset(torch.utils.data.Dataset):

@@ -130,20 +130,26 @@ def main(json_path='options/train_f_u_moe.json'):
                                           num_workers=dataset_opt['dataloader_num_workers']//opt['num_gpu'],
                                           drop_last=True,
                                           pin_memory=True,
-                                          sampler=train_sampler)
+                                          sampler=train_sampler,
+                                          collate_fn=util.custom_collate
+                                          )
             else:
                 train_loader = DataLoader(train_set,
                                           batch_size=dataset_opt['dataloader_batch_size'],
                                           shuffle=dataset_opt['dataloader_shuffle'],
                                           num_workers=dataset_opt['dataloader_num_workers'],
                                           drop_last=True,
-                                          pin_memory=True)
+                                          pin_memory=True,
+                                          collate_fn=util.custom_collate
+                                          )
 
         elif phase == 'test':
             test_set = define_Dataset(dataset_opt)
             test_loader = DataLoader(test_set, batch_size=1,
                                      shuffle=False, num_workers=1,
-                                     drop_last=False, pin_memory=True)
+                                     drop_last=False, pin_memory=True,
+                                     collate_fn=util.custom_collate
+                                     )
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
 
@@ -201,6 +207,9 @@ def main(json_path='options/train_f_u_moe.json'):
                 idx = 0
 
                 for test_data in test_loader:
+                    if test_data is None:
+                        continue
+
                     idx += 1
                     image_name_ext = os.path.basename(test_data['L_path'][0])
                     img_name, ext = os.path.splitext(image_name_ext)
