@@ -26,7 +26,7 @@ class DatasetDPSR(data.Dataset):
         self.sigma_min, self.sigma_max = self.sigma[0], self.sigma[1]
         self.sigma_test = opt['sigma_test'] if opt['sigma_test'] else 0
         self.phw = opt['phw']
-        self.stride = opt['stride']
+        self.overlap = opt['overlap']
         # ------------------------------------
         # get paths of L/H
         # ------------------------------------
@@ -34,7 +34,17 @@ class DatasetDPSR(data.Dataset):
         self.paths_L = util.get_image_paths(opt['dataroot_L'])
 
         assert self.paths_H, 'Error: H path is empty.'
-
+    
+    @staticmethod
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
+    
     def __getitem__(self, index):
 
         # ------------------------------------
@@ -123,18 +133,7 @@ class DatasetDPSR(data.Dataset):
         """
         img_L = torch.cat((img_L, M), 0)
         
-        img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
-            2, self.phw, self.stride
-        )
-        img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
-        img_L_p = img_L_p.view(
-            img_L_p.shape[1] * img_L_p.shape[2],
-            img_L_p.shape[0],
-            img_L_p.shape[3],
-            img_L_p.shape[4],
-        )
-
-
+        img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
 
         L_path = H_path
 
