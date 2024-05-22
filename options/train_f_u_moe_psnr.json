@@ -6,7 +6,7 @@
     , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "stride": 2
+    , "stride": 4
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -25,7 +25,7 @@
             "name": "train_dataset"           // just name
           , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
           , "lq_patchsize": 32
-          , "degradation_type" : "dpsr" // "bsrgan" , "dpsr"
+          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
           , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  
           , "dataroot_L": null              // path of L training dataset
           , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
@@ -53,22 +53,22 @@
     , "num_mixtures": 9
     , "num_layers":4
     , "avg_pool": true
-    , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-    , "init_bn_type": "constant"         // "uniform" | "constant"
+    , "init_type": "xavier_uniform"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+    , "init_bn_type": "uniform"         // "uniform" | "constant"
     , "init_gain": 0.2
     //, "pre_trained": "/mnt/d/zoo/Unet-MoE-v1/2023-09-27_00-30-02/Unet-MoE-v1_kernel-9_khw-16-Optimizer-Adam-Criterion-MSE-lr-0.001-lr_min-0.0001-warmup_epochs-3-epochs-50-batch_size-None-size-128-stride-4-kernel_params-7-scale_factor-1-sigma-15-noise_typegaussian_latest.pth"
     }
   
     , "train": {
        "is_moe": true
-      ,"G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+      ,"G_lossfn_type": "l2sum"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
       , "G_lossfn_weight": 1.0            // default
   
       , "G_optimizer_type": "adam"        // fixed, adam is enough
-      , "G_optimizer_lr": 1e-4            // learning rate
+      , "G_optimizer_lr": 1e-5            // learning rate
       , "G_optimizer_clipgrad": null      // unused
   
-      , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
+      , "G_scheduler_type": "CosineAnnealingLR" // "MultiStepLR" is enough
       , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
       , "G_scheduler_gamma": 0.5
   
