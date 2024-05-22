@@ -122,17 +122,28 @@ class ModelPlain(ModelBase):
     # define scheduler, only "MultiStepLR"
     # ----------------------------------------
     def define_scheduler(self):
-        if self.opt_train['G_scheduler_type'] == 'MultiStepLR':
+        g_scheduler_type = self.opt_train['G_scheduler_type']
+        d_scheduler_type = self.opt_train['D_scheduler_type']
+
+        if g_scheduler_type == 'MultiStepLR':
             self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
                                                             self.opt_train['G_scheduler_milestones'],
                                                             self.opt_train['G_scheduler_gamma']
                                                             ))
-        elif self.opt_train['G_scheduler_type'] == 'CosineAnnealingWarmRestarts':
-            self.schedulers.append(lr_scheduler.CosineAnnealingWarmRestarts(self.G_optimizer,
-                                                            self.opt_train['G_scheduler_periods'],
-                                                            self.opt_train['G_scheduler_restart_weights'],
-                                                            self.opt_train['G_scheduler_eta_min']
+        elif g_scheduler_type == 'CosineAnnealingLR':
+            self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
+                                                            T_max=self.opt_train['G_scheduler_T_max'],
+                                                            eta_min=self.opt_train['G_scheduler_eta_min']))
+
+        if d_scheduler_type == 'MultiStepLR':
+            self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
+                                                            self.opt_train['D_scheduler_milestones'],
+                                                            self.opt_train['D_scheduler_gamma']
                                                             ))
+        elif d_scheduler_type == 'CosineAnnealingLR':
+            self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
+                                                                T_max=self.opt_train['D_scheduler_T_max'],
+                                                                eta_min=self.opt_train['D_scheduler_eta_min']))                                                
         else:
             raise NotImplementedError
 

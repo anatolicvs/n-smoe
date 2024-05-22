@@ -233,7 +233,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         sf = opt["scale"] if "scale" in opt else 2
         phase = opt["phase"] if "phase" in opt else 'train'
         phw = opt["phw"] if "phw" in opt else 32
-        stride = opt["stride"] if "stride" in opt else 4
+        overlap = opt["overlap"] if "overlap" in opt else 4
         self.h_size = opt['H_size'] if 'H_size' in opt else 96
         self.lq_patchsize = opt['lq_patchsize'] if 'lq_patchsize' in opt else 64
         self.degradation_type = opt['degradation_type'] if 'degradation_type' in opt else 'bsrgan'
@@ -241,7 +241,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         self.sf = sf
         self.phase = phase
         self.phw = phw
-        self.stride = stride
+        self.overlap = overlap
         self.k = loadmat(opt['kernel_path'])
 
         if challenge not in ("singlecoil", "multicoil"):
@@ -380,6 +380,16 @@ class SliceDatasetSR(torch.utils.data.Dataset):
 
         cropped_img = img[start_y:end_y, start_x:end_x]
         return cropped_img
+    
+    @staticmethod
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
 
     def __getitem__(self, i: int):
         fname, dataslice, metadata = self.raw_samples[i]
@@ -412,16 +422,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
 
-        img_L_p = img_L.unfold(1, self.phw, self.stride).unfold(
-            2, self.phw, self.stride
-        )
-        img_L_p = F.max_pool3d(img_L_p, kernel_size=1, stride=1)
-        img_L_p = img_L_p.view(
-            img_L_p.shape[1] * img_L_p.shape[2],
-            img_L_p.shape[0],
-            img_L_p.shape[3],
-            img_L_p.shape[4],
-        )
+        img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
 
         return {'L': img_L, 'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
 

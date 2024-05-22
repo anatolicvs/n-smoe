@@ -129,6 +129,7 @@ class Encoder(nn.Module):
 
         self.latent_dim = latent_dim
         self.scale_factor = scale_factor
+        self.in_channels = in_channels
         
         self.conv1 = double_conv(in_channels, 64)
         self.down1 = down_layer(64, 128)
@@ -181,7 +182,7 @@ class Encoder(nn.Module):
 
         xf = self.flatten(x_last)
         x = self.fc1(xf)
-        # x = x.view(-1, self.depth, self.latent_dim)
+        x = x.view(-1, self.in_channels, self.latent_dim)
         return x
 
 class MoE(nn.Module):
@@ -201,25 +202,33 @@ class MoE(nn.Module):
         self.clip_value = clip_value
         self.α = sharpening_factor
 
-    @staticmethod
-    def sample_image_grid(
-        shape: tuple[int, ...],
-        device: torch.device = torch.device("cpu"),
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Get normalized (range 0 to 1) coordinates and integer indices for an image."""
-        indices = [torch.arange(length, device=device) for length in shape]
-        stacked_indices = torch.stack(torch.meshgrid(*indices, indexing="ij"), dim=-1)
+    # @staticmethod
+    # def sample_image_grid(
+    #     shape: tuple[int, ...],
+    #     device: torch.device = torch.device("cpu"),
+    # ) -> tuple[torch.Tensor, torch.Tensor]:
+    #     """Get normalized (range 0 to 1) coordinates and integer indices for an image."""
+    #     indices = [torch.arange(length, device=device) for length in shape]
+    #     stacked_indices = torch.stack(torch.meshgrid(*indices, indexing="ij"), dim=-1)
         
-        coordinates = [(idx + 0.5) / length for idx, length in zip(indices, shape)]
-        coordinates = reversed(coordinates)
-        coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
+    #     coordinates = [(idx + 0.5) / length for idx, length in zip(indices, shape)]
+    #     coordinates = reversed(coordinates)
+    #     coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
         
-        return coordinates.reshape(-1, 2), stacked_indices
+    #     return coordinates.reshape(-1, 2), stacked_indices
+
+    def grid(self, height, width):
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), 2).float()
+        return grid.reshape(height * width, 2)
     
     def forward(self, height, width, params):
         
-        grid, _ = self.sample_image_grid((height, width), device=params.device)
-        
+        # grid, _ = self.sample_image_grid((height, width), device=params.device)
+        grid = self.grid(height, width).to(params.device)
+
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
         μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
@@ -258,7 +267,7 @@ class Autoencoder(nn.Module):
         kernel:int=4,
         sharpening_factor:int=1,
         scale_factor:int=1,
-        stride:int=16,
+        overlap:int=16,
         phw:int=64,
         num_layers:int=2,
         avg_pool:bool=False,
@@ -267,7 +276,7 @@ class Autoencoder(nn.Module):
         super().__init__()
 
         self.phw = phw
-        self.stride = stride
+        self.overlap = overlap
         self.latent_dim = latent_dim
         self.scale_factor = scale_factor
         
@@ -288,50 +297,51 @@ class Autoencoder(nn.Module):
         )
 
     @staticmethod
-    def _reconstruct(decoded_patches, row, col, in_channels, stride, patch_size, scale_factor, height, width, batch_size=1, device='cuda:0'):
-        i_indices = torch.arange(0, row * stride, stride, device=device) * scale_factor
-        j_indices = torch.arange(0, col * stride, stride, device=device) * scale_factor
-        start_i_indices, start_j_indices = torch.meshgrid(i_indices, j_indices, indexing='ij')
-
-        end_i_indices = (start_i_indices + patch_size).flatten()
-        end_j_indices = (start_j_indices + patch_size).flatten()
+    def reconstruct(blocks, original_dims, block_size, overlap):
         
-        out = torch.zeros(batch_size, in_channels, height * scale_factor, width * scale_factor, device=device)
-        count = torch.zeros_like(out)
+        batch_size, num_channels, height, width = original_dims
+        step = block_size - overlap
+        device = blocks.device
 
-        patches_per_image = row * col
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+
+        num_blocks_per_row = (width - block_size) // step + 1
+        num_blocks_per_column = (height - block_size) // step + 1
+        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
 
         for b in range(batch_size):
-            for i in range(patches_per_image):
-                patch_idx = b * patches_per_image + i
+            idx_start = b * num_blocks_per_image
+            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            idx = 0
+            for i in range(0, height - block_size + 1, step):
+                for j in range(0, width - block_size + 1, step):
+                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    idx += 1
 
-                start_i, end_i = start_i_indices.flatten()[i], end_i_indices[i]
-                start_j, end_j = start_j_indices.flatten()[i], end_j_indices[i]
-                
-                end_i = min(end_i, height * scale_factor)
-                end_j = min(end_j, width * scale_factor)
-                
-                patch = decoded_patches[patch_idx, :, :end_i-start_i, :end_j-start_j]
-                out[b, :, start_i:end_i, start_j:end_j] += patch
-                count[b, :, start_i:end_i, start_j:end_j] += 1
-
-        count = count.clamp(min=1)
-        out /= count
-        return out
+        recon_images /= count_matrix.clamp(min=1)
+        return recon_images
     
     def forward(self, x, shape):
         if len(x.shape) == 5:
             x = x.view(-1, *x.size()[2:])
 
+        # bs = len(x) // 128
+      
         encoded = self.encoder(x)
+
         B, C, H, W = shape
-        scaled_phw = self.phw * self.scale_factor  
-        row, col = (W - self.phw) // self.stride + 1, (H - self.phw) // self.stride + 1
+        scaled_phw = self.phw * self.scale_factor 
+ 
+        # params = torch.split(encoded, bs, dim=0)
         
-        params = encoded.view(-1, row, col, C, self.latent_dim)
-        params = params.view(-1, *params.size()[3:])
-        decoded = self.decoder(scaled_phw, scaled_phw, params)
+        # decoded = [self.decoder(scaled_phw, scaled_phw, param) for param in params]
+        # decoded = torch.cat(decoded, dim=0)
+
+        decoded = self.decoder(scaled_phw, scaled_phw, encoded)
+
+        y_hat = self.reconstruct(decoded, (B, C, H * self.scale_factor, W * self.scale_factor), scaled_phw, self.overlap*self.scale_factor)
         
-        y_hat = self._reconstruct(decoded, row, col, C, self.stride, self.phw, self.scale_factor, H, W, batch_size=B)
-        
+
         return y_hat
