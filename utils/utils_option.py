@@ -53,9 +53,9 @@ def parse(opt_path, is_train=True):
             dataset['dataroot_H'] = os.path.expanduser(dataset['dataroot_H'])
         if 'dataroot_L' in dataset and dataset['dataroot_L'] is not None:
             dataset['dataroot_L'] = os.path.expanduser(dataset['dataroot_L'])
-        if "phw" and "stride" in opt:
+        if "phw" and "overlap" in opt:
             dataset['phw'] = opt['phw']
-            dataset['stride'] = opt['stride']
+            dataset['overlap'] = opt['overlap']
 
     # ----------------------------------------
     # path
@@ -82,9 +82,9 @@ def parse(opt_path, is_train=True):
     opt['netG']['n_channels'] = opt['n_channels'] if 'n_channels' in opt else 3
     opt['netG']['ang_res'] = opt['ang_res'] if 'ang_res' in opt else 5
 
-    if "phw" and "stride" in opt:
+    if "phw" and "overlap" in opt:
         opt['netG']['phw'] = opt['phw']
-        opt['netG']['stride'] = opt['stride']
+        opt['netG']['overlap'] = opt['overlap']
 
     if 'netD' in opt:
         opt['netD']['in_nc'] = opt['n_channels'] if 'n_channels' in opt else 3

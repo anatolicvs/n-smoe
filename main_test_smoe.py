@@ -18,7 +18,7 @@ from dnnlib import EasyDict
 import matplotlib.cm as cm 
 import numpy as np
 from timm.models.layers import DropPath, trunc_normal_
-
+import matplotlib.pyplot as plt
 
 def network_parameters(nets):
     num_params = sum(param.numel() for param in nets.parameters())
@@ -73,6 +73,17 @@ class OpenImageDataset(Dataset):
         if not self.images:
             raise FileNotFoundError(f"No images found in directory {self.path}")
 
+    @staticmethod
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
+
+
     def __getitem__(self, index: int):
         rng = torch.Generator().manual_seed(torch.initial_seed() + index)
         try:
@@ -85,11 +96,13 @@ class OpenImageDataset(Dataset):
 
             n_y = self.add_noise(gt_y, rng)
 
-            n_y_p = n_y.unfold(1, self.phw, self.stride).unfold(2, self.phw, self.stride)
-            n_y_p = F.max_pool3d(n_y_p, kernel_size=1, stride=1)
-            n_y_p = n_y_p.view(
-                n_y_p.shape[1] * n_y_p.shape[2], n_y_p.shape[0], n_y_p.shape[3], n_y_p.shape[4]
-            )
+            # n_y_p = n_y.unfold(1, self.phw, self.stride).unfold(2, self.phw, self.stride)
+            # n_y_p = F.max_pool3d(n_y_p, kernel_size=1, stride=1)
+            # n_y_p = n_y_p.view(
+            #     n_y_p.shape[1] * n_y_p.shape[2], n_y_p.shape[0], n_y_p.shape[3], n_y_p.shape[4]
+            # )
+            
+            n_y_p = self.extract_blocks(n_y, self.phw, self.stride)
 
             return gt_y.to(self.device), n_y_p.to(self.device), n_y.to(self.device)
         except Exception as e:
@@ -122,7 +135,6 @@ class OpenImageDataset(Dataset):
 
     def __len__(self):
         return len(self.images)
-
 
 @dataclass
 class InceptionConfig:
@@ -651,8 +663,26 @@ class MoE_v1(nn.Module):
     @staticmethod
     def _soft_clipping(x, beta=10):
         return 1 / (1 + torch.exp(-beta * (x - 0.5)))
-
+    
+    # @staticmethod
+    # def sample_image_grid(
+    #     shape: tuple[int, ...],
+    #     device: torch.device = torch.device("cpu"),
+    # ) -> tuple[torch.Tensor, torch.Tensor]:
+    #     """Get normalized (range 0 to 1) coordinates and integer indices for an image."""
+    #     indices = [torch.arange(length, device=device) for length in shape]
+    #     stacked_indices = torch.stack(torch.meshgrid(*indices, indexing="ij"), dim=-1)
+        
+    #     coordinates = [(idx + 0.5) / length for idx, length in zip(indices, shape)]
+    #     coordinates = reversed(coordinates)
+    #     coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
+        
+    #     return coordinates.reshape(-1, 2), stacked_indices
+    
     def forward(self, height, width, params):
+
+        # grid, _ = self.sample_image_grid((height, width), device=params.device)
+
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
         μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
@@ -662,7 +692,8 @@ class MoE_v1(nn.Module):
         w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
 
         Σ = torch.tril(Σ)
-        Σ = torch.mul(Σ, self.α)
+        # Σ = torch.mul(Σ, self.α)
+        # Σ = torch.mul(Σ, 1.2)
 
         grid = self.grid(height, width).to(params.device)
         μ = μ.unsqueeze(dim=2)
@@ -683,7 +714,8 @@ class MoE_v1(nn.Module):
         y_hat = torch.sum(e_norm * torch.unsqueeze(w, dim=-1), dim=1)
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
-        y_hat = y_hat.view(params.shape[0], self.ch, height, width)
+        # y_hat = y_hat.view(params.shape[0], self.ch, height, width)
+        y_hat = y_hat.view(-1, self.ch, height, width)
 
         return y_hat
 
@@ -697,7 +729,8 @@ class UNet(nn.Module):
 
   
         self.latent_dim = latent_dim
-        
+        self.in_channels = in_channels
+
         self.conv1 = double_conv(in_channels, 64)
         self.down1 = down_layer(64, 128)
         self.down2 = down_layer(128, 256)
@@ -733,6 +766,7 @@ class UNet(nn.Module):
         xf = self.flatten(x_last)
         x = self.fc1(xf)
         # x = x.view(-1, self.depth, self.latent_dim)
+        x = x.view(-1, self.in_channels, self.latent_dim)
         return x
 
 class AutoencoderU(nn.Module):
@@ -743,17 +777,18 @@ class AutoencoderU(nn.Module):
         num_mixtures:int=4,
         kernel:int=4,
         sharpening_factor:int=1,
-        stride:int=16,
+        overlap:int=16,
         phw:int=64,
         dropout:int=0.0,
-        layers:int=4,
+        scale_factor:int=16,
         pre_trained:str=None,
     ):
         super().__init__()
 
         self.phw = phw
-        self.stride = stride
+        self.overlap = overlap
         self.latent_dim = latent_dim
+        self.scale_factor = scale_factor
 
         self.encoder= UNet(in_channels=in_channels,latent_dim=latent_dim, size=phw)
 
@@ -775,44 +810,51 @@ class AutoencoderU(nn.Module):
         )
 
     @staticmethod
-    def reconstruct(patches, shape, khw, stride):
-        B, C, H, W = shape
+    def reconstruct(blocks, original_dims, block_size, overlap):
+        
+        batch_size, num_channels, height, width = original_dims
+        step = block_size - overlap
+        device = blocks.device
 
-        patches = patches.view(B, -1, C * khw * khw).transpose(1, 2)
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
 
-        y_hat = F.fold(
-            patches, output_size=(H, W), kernel_size=(khw, khw), stride=stride
-        )
+        num_blocks_per_row = (width - block_size) // step + 1
+        num_blocks_per_column = (height - block_size) // step + 1
+        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
 
-        one_patch = torch.ones((1, khw * khw, patches.shape[-1]), device=patches.device)
-        overlap_count = F.fold(
-            one_patch, output_size=(H, W), kernel_size=(khw, khw), stride=stride
-        )
+        for b in range(batch_size):
+            idx_start = b * num_blocks_per_image
+            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            idx = 0
+            for i in range(0, height - block_size + 1, step):
+                for j in range(0, width - block_size + 1, step):
+                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    idx += 1
 
-        y_hat /= overlap_count.clamp(min=1)
-
-        return y_hat
+        recon_images /= count_matrix.clamp(min=1)
+        return recon_images
 
     def forward(self, x, shape):
         if len(x.shape) == 5:
             x = x.view(-1, *x.size()[2:])
 
-        bs = int(len(x) / 1024)
-        x = torch.split(x, bs, dim=0)
+        bs = len(x) // 1024
+      
+        encoded = self.encoder(x)
 
-        encoded = [self.encoder(batch) for batch in x]
-
-        _, C, H, W = shape
-        row, col = (W - self.phw) // self.stride + 1, (H - self.phw) // self.stride + 1
-
-        params = torch.cat(encoded, dim=0)
-        params = params.view(-1, row, col, C, self.latent_dim)
-        params = torch.split(params.view(-1, *params.size()[3:]), bs, dim=0)
-
-        decoded = [self.decoder(self.phw, self.phw, param) for param in params]
+        B, C, H, W = shape
+        scaled_phw = self.phw * self.scale_factor 
+ 
+        params = torch.split(encoded, bs, dim=0)
+        
+        decoded = [self.decoder(scaled_phw, scaled_phw, param) for param in params]
         decoded = torch.cat(decoded, dim=0)
 
-        y_hat = self.reconstruct(decoded, shape, self.phw, self.stride)
+
+        y_hat = self.reconstruct(decoded, (B, C, H * self.scale_factor, W * self.scale_factor), scaled_phw, self.overlap*self.scale_factor)
+        
 
         return y_hat
 
@@ -1075,9 +1117,65 @@ class AutoencoderC(nn.Module):
         return y_hat
 
 
+def visualize_data(L, H, G):
+    """
+    Visualize restoration, noisy, and ground truth images with advanced scientific representation.
+
+    Parameters:
+    L (tensor): Restored image
+    H (tensor): Noisy image
+    G (tensor): Ground truth image
+    """
+    
+    L_np = L.cpu().numpy()[0][0]
+    H_np = H.cpu().numpy()[0][0]
+    G_np = G.cpu().numpy()[0][0]
+
+    if L_np.ndim == 3 and L_np.shape[0] == 1:
+        L_np = L_np[0]
+    if H_np.ndim == 3 and H_np.shape[0] == 1:
+        H_np = H_np[0]
+    if G_np.ndim == 3 and G_np.shape[0] == 1:
+        G_np = G_np[0]
+
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+
+    im0 = axes[0].imshow(H_np, cmap='gray', aspect='auto')
+    axes[0].set_title('Noisy Image', fontsize=14)
+    axes[0].grid(True, color='white', linestyle='--', linewidth=0.5)
+    cbar0 = fig.colorbar(im0, ax=axes[0], orientation='vertical', fraction=0.046, pad=0.04)
+    cbar0.set_label('Intensity', fontsize=10)
+    axes[0].set_xlabel('X-axis (pixels)', fontsize=10)
+    axes[0].set_ylabel('Y-axis (pixels)', fontsize=10)
+    axes[0].tick_params(axis='both', which='major', labelsize=8)
+
+    im1 = axes[1].imshow(L_np, cmap='gray', aspect='auto')
+    axes[1].set_title('Restored Image', fontsize=14)
+    axes[1].grid(True, color='white', linestyle='--', linewidth=0.5)
+    cbar1 = fig.colorbar(im1, ax=axes[1], orientation='vertical', fraction=0.046, pad=0.04)
+    cbar1.set_label('Intensity', fontsize=10)
+    axes[1].set_xlabel('X-axis (pixels)', fontsize=10)
+    axes[1].set_ylabel('Y-axis (pixels)', fontsize=10)
+    axes[1].tick_params(axis='both', which='major', labelsize=8)
+
+    im2 = axes[2].imshow(G_np, cmap='gray', aspect='auto')
+    axes[2].set_title('Ground Truth Image', fontsize=14)
+    axes[2].grid(True, color='white', linestyle='--', linewidth=0.5)
+    cbar2 = fig.colorbar(im2, ax=axes[2], orientation='vertical', fraction=0.046, pad=0.04)
+    cbar2.set_label('Intensity', fontsize=10)
+    axes[2].set_xlabel('X-axis (pixels)', fontsize=10)
+    axes[2].set_ylabel('Y-axis (pixels)', fontsize=10)
+    axes[2].tick_params(axis='both', which='major', labelsize=8)
+
+    # Adding a unified title
+    fig.suptitle('Comparison of Noisy, Restored, and Ground Truth Images', fontsize=16, y=0.95)
+
+    plt.tight_layout(rect=[0, 0, 1, 0.95])
+    plt.show()
+
 @click.command()
-@click.option("--kernels", default=16, help="Number of Kernels", type=int)
-@click.option("--mixtures", help="Number of Experts", default=16, type=int)
+@click.option("--kernels", default=9, help="Number of Kernels", type=int)
+@click.option("--mixtures", help="Number of Experts", default=9, type=int)
 @click.option("--sharpening_factor", default=1, type=int)
 @click.option("--chan_embed", default=64, help="Channel embeded.", type=int)
 @click.option("--layers", default=1, help="Number of layers.", type=int)
@@ -1108,36 +1206,38 @@ class AutoencoderC(nn.Module):
 
 @click.option(
     "--resume",
-    default="./zoo/Unet-MoE-v1/2023-09-27_00-30-02/Unet-MoE-v1_kernel-9_khw-16-Optimizer-Adam-Criterion-MSE-lr-0.001-lr_min-0.0001-warmup_epochs-3-epochs-50-batch_size-None-size-128-stride-4-kernel_params-7-scale_factor-1-sigma-15-noise_typegaussian_latest.pth",
+    default="/mnt/d/zoo/Unet-MoE-v1/2023-09-27_00-30-02/Unet-MoE-v1_kernel-9_khw-16-Optimizer-Adam-Criterion-MSE-lr-0.001-lr_min-0.0001-warmup_epochs-3-epochs-50-batch_size-None-size-128-stride-4-kernel_params-7-scale_factor-1-sigma-15-noise_typegaussian_latest.pth",
     help="Pre-trained.",
     type=str,
 )
 
 # @click.option(
 #     "--resume",
-#     default="./zoo/cnn-inception-moe/cnn-inception-moe_hw-128_pHW-32_stride-8_color-L_opti-Adam_criter-MSE_lr-0.001_lr_min-0.0001_epochs-100_kernel-16_z-112_noise-lvl-50_noise-typ-gauss-jid-5395540_last_e12.pth",
+#     default="/mnt/d/zoo/cnn-inception-moe/cnn-inception-moe_hw-128_pHW-32_stride-8_color-L_opti-Adam_criter-MSE_lr-0.001_lr_min-0.0001_epochs-100_kernel-16_z-112_noise-lvl-50_noise-typ-gauss-jid-5395540_last_e12.pth",
 #     help="Pre-trained.",
 #     type=str,
 # )
 # @click.option(
 #     "--resume",
-#     default="./zoo/cnn-inception-moe/cnn-inception-moe_hw-128_pHW-32_stride-8_color-L_opti-Adam_criter-MSE_lr-0.001_lr_min-0.0001_epochs-100_kernel-16_z-112_noise-lvl-25_noise-typ-poiss-jid-5395536_last_e11.pth",
+#     default="/mnt/d/zoo/cnn-inception-moe/cnn-inception-moe_hw-128_pHW-32_stride-8_color-L_opti-Adam_criter-MSE_lr-0.001_lr_min-0.0001_epochs-100_kernel-16_z-112_noise-lvl-25_noise-typ-poiss-jid-5395536_last_e11.pth",
 #     help="Pre-trained.",
 #     type=str,
 # )
 @click.option(
     "--test_dir",
-    default="./dataset/BrainMRI/",
+    default="/mnt/e/Medical/BrainMRI/Training/",
     help="Directory containing OpenImages dataset",
 )
 @click.option(
     "--output_dir",
-    default="/BrainMRI",
+    default="/mnt/e/out/BrainMRI",
     help="Directory containing OpenImages dataset",
 )
-@click.option("--stride", default=2, type=int)
+@click.option("--stride", default=12, type=int)
+@click.option("--overlap", default=12, type=int)
+@click.option("--scale_factor", default=50, type=int)
 @click.option("--hw", default=128, help="Image Size.", type=int)
-@click.option("--phw", default=64, help="Patch Size.", type=int)
+@click.option("--phw", default=16, help="Patch Size.", type=int)
 @click.option("--rank", default=0, help="Rank.", type=int)
 @click.option(
     "--noise_type",
@@ -1214,38 +1314,38 @@ def main(**kwargs):
     #     model1.load_state_dict(torch.load(c.resume, map_location=device))
     #     print(f"Pre-trained model loaded: {c.resume}")
     
-    # model2 = AutoencoderU(
+    model2 = AutoencoderU(
+        in_channels=c.in_channels,
+        latent_dim=z,
+        kernel=c.kernels,
+        num_mixtures=c.mixtures,
+        phw=c.phw,
+        overlap=c.overlap,
+        dropout=c.dropout,
+        pre_trained=c.resume,
+        scale_factor=c.scale_factor,
+    )
+
+    model2.eval()
+    model2.to(device)
+    p_number = network_parameters(model2)
+
+    # model3 = AutoencoderC(
     #     in_channels=c.in_channels,
     #     latent_dim=z,
     #     kernel=c.kernels,
     #     num_mixtures=c.mixtures,
     #     phw=c.phw,
     #     stride=c.stride,
-    #     layers=c.layers,
-    #     dropout=c.dropout,
-    #     pre_trained=c.resume
     # )
 
-    # model2.eval()
-    # model2.to(device)
-    # p_number = network_parameters(model2)
+    # if c.resume:
+    #     model3.load_state_dict(torch.load(c.resume, map_location=device))
+    #     print(f"Pre-trained model loaded: {c.resume}")
 
-    model3 = AutoencoderC(
-        in_channels=c.in_channels,
-        latent_dim=z,
-        kernel=c.kernels,
-        num_mixtures=c.mixtures,
-        phw=c.phw,
-        stride=c.stride,
-    )
-
-    if c.resume:
-        model3.load_state_dict(torch.load(c.resume, map_location=device))
-        print(f"Pre-trained model loaded: {c.resume}")
-
-    model3.eval()
-    model3.to(device)
-    p_number = network_parameters(model3)
+    # model3.eval()
+    # model3.to(device)
+    # p_number = network_parameters(model3)
 
     model_name = f"{c.model_name}_pHW-{c.phw}_stride-{c.stride}_kernel-{c.kernels}_z-{z}_noise-lvl-{c.noise_level}_noise-typ-{c.noise_type}"
     psnr_vals, ssim_vals = [], []
@@ -1261,7 +1361,8 @@ def main(**kwargs):
     with torch.no_grad():
         for data in test_dataloader:
             y_gt, y_n_p, y_n = data  
-            restored = model3(y_n_p, y_gt.size())
+            restored = model2(y_n_p, y_gt.size())
+            visualize_data(restored, y_n, y_gt)
             ground_truth_imgs.append(y_gt.cpu())
             noisy_imgs.append(y_n.cpu())
             restored_imgs.append(restored.cpu())

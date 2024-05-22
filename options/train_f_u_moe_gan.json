@@ -6,7 +6,7 @@
     , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "stride": 2
+    , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -105,13 +105,17 @@
        , "G_optimizer_reuse": false
        , "G_scheduler_T_max": 2000000
        , "G_scheduler_eta_min": 1e-7
+        , "G_scheduler_lr_min": 1e-7
+        , "G_scheduler_lr_patience": 1000
         
        , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
        , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
        , "D_scheduler_gamma": 0.5
        , "D_optimizer_reuse": false
        , "D_scheduler_T_max": 2000000
-        , "D_scheduler_eta_min": 1e-7
+        ,"D_scheduler_eta_min": 1e-7
+        ,"D_scheduler_lr_min": 1e-7
+        , "D_scheduler_lr_patience": 1000
    
        , "G_param_strict": true
        , "D_param_strict": true

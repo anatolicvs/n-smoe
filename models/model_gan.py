@@ -177,22 +177,34 @@ class ModelGAN(ModelBase):
         if g_scheduler_type == 'MultiStepLR':
             self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
                                                             self.opt_train['G_scheduler_milestones'],
-                                                            self.opt_train['G_scheduler_gamma']
-                                                            ))
+                                                            self.opt_train['G_scheduler_gamma']))
         elif g_scheduler_type == 'CosineAnnealingLR':
             self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
-                                                            T_max=self.opt_train['G_scheduler_T_max'],
-                                                            eta_min=self.opt_train['G_scheduler_eta_min']))
+                                                                T_max=self.opt_train['G_scheduler_T_max'],
+                                                                eta_min=self.opt_train['G_scheduler_eta_min']))
+        elif g_scheduler_type == 'ReduceLROnPlateau':
+            self.schedulers.append(lr_scheduler.ReduceLROnPlateau(self.G_optimizer, 
+                                                                mode='min', 
+                                                                patience=self.opt_train['G_scheduler_lr_patience'], 
+                                                                factor=0.1, 
+                                                                verbose=True, 
+                                                                min_lr=self.opt_train['G_scheduler_lr_min']))
 
         if d_scheduler_type == 'MultiStepLR':
             self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
                                                             self.opt_train['D_scheduler_milestones'],
-                                                            self.opt_train['D_scheduler_gamma']
-                                                            ))
+                                                            self.opt_train['D_scheduler_gamma']))
         elif d_scheduler_type == 'CosineAnnealingLR':
             self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
                                                                 T_max=self.opt_train['D_scheduler_T_max'],
                                                                 eta_min=self.opt_train['D_scheduler_eta_min']))
+        elif d_scheduler_type == 'ReduceLROnPlateau':
+            self.schedulers.append(lr_scheduler.ReduceLROnPlateau(self.D_optimizer, 
+                                                                mode='min', 
+                                                                patience=self.opt_train['D_scheduler_lr_patience'], 
+                                                                factor=0.1, 
+                                                                verbose=True, 
+                                                                min_lr=self.opt_train['D_scheduler_lr_min']))
 
     """
     # ----------------------------------------
@@ -250,7 +262,7 @@ class ModelGAN(ModelBase):
             H_np = H_images[i][0]
 
             # Bicubic interpolation for the second low-resolution image
-            L_np_bicubic = zoom(H_np, 2, order=3)  # Assuming 2x upsampling
+            L_np_bicubic = zoom(H_np, 0.5, order=3)  # Assuming 2x upsampling
 
             L_freq = np.fft.fftshift(np.fft.fft2(L_np))
             H_freq = np.fft.fftshift(np.fft.fft2(H_np))

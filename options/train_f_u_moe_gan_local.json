@@ -3,10 +3,10 @@
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 4       // broadcast to "netG" if SISR
+    , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat, /home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "stride": 2
+    , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -32,7 +32,7 @@
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -61,7 +61,7 @@
     }
   
     , "netD": {
-      "net_type": "discriminator_vgg_128" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
+      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
       , "base_nc": 64
       , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
       , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
@@ -92,21 +92,21 @@
        , "D_init_iters": 0
    
        , "G_optimizer_type": "adam"
-       , "G_optimizer_lr": 1e-4
+       , "G_optimizer_lr": 1e-3
        , "G_optimizer_wd": 0
    
        , "D_optimizer_type": "adam"
-       , "D_optimizer_lr": 1e-4
+       , "D_optimizer_lr": 1e-3
        , "D_optimizer_wd": 0
    
-       , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+       , "G_scheduler_type": "CosineAnnealingLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
        , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
        , "G_scheduler_gamma": 0.5
        , "G_optimizer_reuse": false
        , "G_scheduler_T_max": 2000000
        , "G_scheduler_eta_min": 1e-7
         
-       , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+       , "D_scheduler_type": "CosineAnnealingLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
        , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
        , "D_scheduler_gamma": 0.5
        , "D_optimizer_reuse": false

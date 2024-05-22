@@ -428,17 +428,6 @@ class RRDB(nn.Module):
         return out.mul_(0.2) + x
 
 
-"""
-# --------------------------------------------
-# Upsampler
-# Kai Zhang, https://github.com/cszn/KAIR
-# --------------------------------------------
-# upsample_pixelshuffle
-# upsample_upconv
-# upsample_convtranspose
-# --------------------------------------------
-"""
-
 
 # --------------------------------------------
 # conv + subp (+ relu)
@@ -475,18 +464,6 @@ def upsample_convtranspose(in_channels=64, out_channels=3, kernel_size=2, stride
     mode = mode.replace(mode[0], 'T')
     up1 = conv(in_channels, out_channels, kernel_size, stride, padding, bias, mode, negative_slope)
     return up1
-
-
-'''
-# --------------------------------------------
-# Downsampler
-# Kai Zhang, https://github.com/cszn/KAIR
-# --------------------------------------------
-# downsample_strideconv
-# downsample_maxpool
-# downsample_avgpool
-# --------------------------------------------
-'''
 
 
 # --------------------------------------------

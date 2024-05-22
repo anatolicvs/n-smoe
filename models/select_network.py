@@ -164,7 +164,7 @@ def define_G(opt):
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net['sharpening_factor'],
             scale_factor=opt_net["scale"],
-            stride=opt_net["stride"],
+            overlap=opt_net["overlap"],
             phw=opt_net["phw"],
             num_layers=opt_net["num_layers"],
             avg_pool=opt_net["avg_pool"],
