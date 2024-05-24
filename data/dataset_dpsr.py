@@ -30,8 +30,8 @@ class DatasetDPSR(data.Dataset):
         # ------------------------------------
         # get paths of L/H
         # ------------------------------------
-        self.paths_H = util.get_image_paths(opt['dataroot_H'])
-        self.paths_L = util.get_image_paths(opt['dataroot_L'])
+        self.paths_H = util.get_m_image_paths(opt['dataroot_H'])
+        self.paths_L = util.get_m_image_paths(opt['dataroot_L'])
 
         assert self.paths_H, 'Error: H path is empty.'
     
