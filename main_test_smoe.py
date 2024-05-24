@@ -1235,7 +1235,7 @@ def visualize_data(L, H, G):
 )
 @click.option("--stride", default=12, type=int)
 @click.option("--overlap", default=12, type=int)
-@click.option("--scale_factor", default=50, type=int)
+@click.option("--scale_factor", default=10, type=int)
 @click.option("--hw", default=128, help="Image Size.", type=int)
 @click.option("--phw", default=16, help="Patch Size.", type=int)
 @click.option("--rank", default=0, help="Rank.", type=int)
