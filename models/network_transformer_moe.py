@@ -1,8 +1,14 @@
+import functools
+import math
+from dataclasses import dataclass
+from typing import Generic, Literal, TypedDict, TypeVar
+
+import numpy as np
 import torch
 import torch.nn as nn
-import math
+import torch.nn.functional as F
+import torchvision
 from einops import rearrange
-import numpy as np
 
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
@@ -74,24 +80,6 @@ def conv_nd(dims, *args, **kwargs):
         return nn.Conv3d(*args, **kwargs)
     raise ValueError(f"unsupported dimensions: {dims}")
 
-def normalization(channels):
-    groups = min(32, channels)
-    return nn.GroupNorm(groups, channels)
-
-def avg_pool_nd(dims, *args, **kwargs):
-    if dims == 1:
-        return nn.AvgPool1d(*args, **kwargs)
-    elif dims == 2:
-        return nn.AvgPool2d(*args, **kwargs)
-    elif dims == 3:
-        return nn.AvgPool3d(*args, **kwargs)
-    raise ValueError(f"unsupported dimensions: {dims}")
-
-def zero_module(module):
-    for p in module.parameters():
-        p.detach().zero_()
-    return module
-
 def count_flops_attn(model, _x, y):
     b, c, *spatial = y[0].shape
     num_spatial = int(np.prod(spatial))
@@ -143,101 +131,6 @@ class AttentionPool2d(nn.Module):
         x = self.c_proj(x)
         return x[:, :, 0]
 
-# class FeedForward(nn.Module):
-#     def __init__(self, dim, hidden_dim, dropout=0.0):
-#         super().__init__()
-#         self.net = nn.Sequential(
-#             nn.Linear(dim, hidden_dim),
-#             nn.GELU(),
-#             nn.Dropout(dropout),
-#             nn.Linear(hidden_dim, dim),
-#             nn.Dropout(dropout),
-#         )
-
-#     def forward(self, x):
-#         return self.net(x)
-
-
-# class PreNorm(nn.Module):
-#     def __init__(self, dim, fn, norm_type='ln'):
-#         super().__init__()
-#         self.norm = nn.LayerNorm(dim)
-#         self.fn = fn
-
-#     def forward(self, x, *args, **kwargs):
-#         x = self.norm(x)
-#         return self.fn(x, *args, **kwargs)
-
-
-# class Transformer(nn.Module):
-#     def __init__(self, dim, depth, heads, mlp_dim, dropout=0.0):
-#         super().__init__()
-#         self.layers = nn.ModuleList([])
-#         for _ in range(depth):
-#             self.layers.append(
-#                 nn.ModuleList(
-#                     [
-#                         PreNorm(
-#                             dim,
-#                             nn.MultiheadAttention(embed_dim=dim, num_heads=heads, dropout=dropout, batch_first=True),
-#                             norm_type='ln'
-#                         ),
-#                         PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout), norm_type='ln'),
-#                     ]
-#                 )
-#             )
-
-#     def forward(self, x, **kwargs):
-#         for attn, ff in self.layers:
-#             attn_out, _ = attn(x, x, x)
-#             x = x + attn_out
-#             x = x + ff(x, **kwargs)
-#         return x
-
-
-# class Encoder(nn.Module):
-#     def __init__(self, in_chans, latent_dim, dim, depth, heads, mlp_dim, dropout=0.0):
-#         super().__init__()
-#         self.in_chans = in_chans
-#         self.latent_dim = latent_dim
-#         self.dim = dim
-
-#         self.to_patch_embedding = nn.Conv2d(in_chans, dim, kernel_size=4, stride=4)
-#         self.transformer = Transformer(dim, depth, heads, mlp_dim, dropout)
-#         self.fc = nn.Linear(dim, latent_dim)
-
-#     def forward(self, x):
-#         B, C, H, W = x.shape
-#         x = self.to_patch_embedding(x)
-#         x = rearrange(x, "b c h w -> b (h w) c")
-#         x = self.transformer(x)
-#         x = self.fc(x)
-#         x = rearrange(x, "b n c -> b c n")  # [Batch, Latent Dim, Color]
-        
-        
-#         num_patches = (H // 4) * (W // 4)
-#         x = rearrange(x, "b c n -> b n c")
-#         x = torch.mean(x, dim=1, keepdim=True)  # Global average pooling to [Batch, 1, Latent Dim]
-#         x = x.expand(B, self.in_chans, self.latent_dim)  # Expand to [Batch, Color, Latent Dim]
-#         return x
-
-
-# if __name__ == "__main__":
-#     dummy_inputs = [torch.randn(1, 3, 128, 128), torch.randn(1, 3, 256, 256), torch.randn(1, 3, 512, 512)]
-
-#     model = Encoder(
-#         in_chans=3,
-#         latent_dim=10,
-#         dim=64,
-#         depth=6,
-#         heads=8,
-#         mlp_dim=128,
-#         dropout=0.1
-#     )
-
-#     for dummy_input in dummy_inputs:
-#         output = model(dummy_input)
-#         print(f"Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
 
 class PatchEmbed(nn.Module):
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
@@ -311,56 +204,305 @@ class Transformer(nn.Module):
             x = x + ff(x, **kwargs)
         return x
 
-class Encoder(nn.Module):
-    def __init__(self, in_chans, latent_dim, embed_dim, depth, heads, mlp_dim, dropout=0.0, patch_size=4):
+class BatchedViews(TypedDict):
+    image: torch.Tensor
+
+T = TypeVar("T")
+
+class Backbone(nn.Module, Generic[T]):
+    def __init__(self, cfg: T):
         super().__init__()
-        self.in_chans = in_chans
-        self.latent_dim = latent_dim
-        self.embed_dim = embed_dim
+        self.cfg = cfg
 
-        self.patch_embed = PatchEmbed(patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
-        self.transformer = Transformer(embed_dim, depth, heads, mlp_dim, dropout)
-    
+    def forward(self, context: BatchedViews) -> torch.Tensor:
+        raise NotImplementedError
+
+    @property
+    def d_out(self) -> int:
+        raise NotImplementedError
+
+@dataclass
+class BackboneResnetCfg:
+    name: Literal["resnet"]
+    model: Literal["resnet18", "resnet34", "resnet50", "resnet101", "resnet152", "dino_resnet50"]
+    num_layers: int
+    use_first_pool: bool
+    d_in: int
+    d_out: int
+
+class BackboneResnet(Backbone[BackboneResnetCfg]):
+    def __init__(self, cfg: BackboneResnetCfg,):
+        super().__init__(cfg)
+        
+        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
+        self.model = getattr(torchvision.models, cfg.model)(pretrained=False, norm_layer=norm_layer)
+
+        self.model.conv1 = nn.Conv2d(cfg.d_in, self.model.conv1.out_channels, kernel_size=self.model.conv1.kernel_size, stride=self.model.conv1.stride, padding=self.model.conv1.padding, bias=False)
+
+        self.projections = nn.ModuleDict()
+        previous_output_channels = self.model.conv1.out_channels  
+        self.projections['layer0'] = nn.Conv2d(previous_output_channels, cfg.d_out, 1)
+
+        layers = [self.model.layer1, self.model.layer2, self.model.layer3, self.model.layer4]
+        for i, layer_group in enumerate(layers[:cfg.num_layers - 1]):
+            output_channels = layer_group[-1].conv3.out_channels if hasattr(layer_group[-1], 'conv3') else layer_group[-1][-1].out_channels
+            self.projections[f'layer{i+1}'] = nn.Conv2d(output_channels, cfg.d_out, 1)
+
+    def forward(self, context: BatchedViews) -> torch.Tensor:
+        x = context['image']
+        x = self.model.conv1(x)
+        x = self.model.bn1(x)
+        x = self.model.relu(x)
+        
+        features = [self.projections['layer0'](x)]
+        layers = [self.model.layer1, self.model.layer2, self.model.layer3, self.model.layer4]
+        for index in range(1, self.cfg.num_layers):
+            x = layers[index - 1](x)
+            features.append(self.projections[f'layer{index}'](x))
+        
+        h, w = context['image'].shape[2:]
+        features = [F.interpolate(feature, (h, w), mode='bilinear', align_corners=True) for feature in features]
+        output = torch.stack(features).sum(dim=0)
+        return output
+
+    @property
+    def d_out(self) -> int:
+        return self.cfg.d_out
+
+@dataclass
+class EncoderConfig:
+    in_chans: int 
+    latent_dim: int
+    embed_dim: int
+    depth: int
+    heads: int
+    mlp_dim: int
+    dropout: float
+    avg_pool: bool
+    scale_factor: int
+    resizer_num_layers: int
+    patch_size: int
+    backbone_cfg: BackboneResnetCfg 
+
+
+class Encoder(Backbone[EncoderConfig]):
+    def __init__(self, cfg: EncoderConfig):
+        super().__init__(cfg)
+        self.in_chans = cfg.in_chans
+        self.latent_dim = cfg.latent_dim
+        self.embed_dim = cfg.embed_dim
+        self.scale_factor = cfg.scale_factor
+
+        if cfg.backbone_cfg is not None:
+            self.backbone = BackboneResnet(cfg.backbone_cfg)
+        else:
+            self.backbone = None
+
+        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=cfg.latent_dim, embed_dim=cfg.embed_dim)
+        self.transformer = Transformer(cfg.embed_dim, cfg.depth, cfg.heads, cfg.mlp_dim, cfg.dropout)
+        
         self.fc = nn.Sequential(
-                nn.Linear(embed_dim, in_chans*latent_dim),
+                nn.Linear(cfg.embed_dim, cfg.in_chans * cfg.latent_dim),
                 nn.ReLU())
-    
+
+        self.resizer = MullerResizer(
+            base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=cfg.resizer_num_layers,
+            dtype=torch.float32, avg_pool=cfg.avg_pool
+        )
+
     def _interpolate(self, x, scale_factor):
-        B, C, H, W = x.size() 
-
-        target_h = int(H * scale_factor)  
-        target_w = int(W * scale_factor)  
-        target_size = (target_h, target_w)  
-
-        x_resized = self.resizer(x, target_size)  
-
+        _, _, H, W = x.size()
+        target_h = int(H * scale_factor)
+        target_w = int(W * scale_factor)
+        target_size = (target_h, target_w)
+        x_resized = self.resizer(x, target_size)
         return x_resized
 
     def forward(self, x):
-        B, C, H, W = x.shape
+        x = self._interpolate(x, self.scale_factor)
+        
+        x = self.backbone({'image': x})
         x = self.patch_embed(x)
         x = self.transformer(x)
         x = self.fc(x)
-        x = rearrange(x, "b n c -> b c n")  # [Batch, Latent Dim, Color]
-
+        x = rearrange(x, "b n c -> b c n")
         x = torch.mean(x, dim=2, keepdim=True)
         x = rearrange(x, 'b (c latent) 1 -> b c latent', c=self.in_chans, latent=self.latent_dim)
         return x
 
+
+@dataclass
+class MoEConfig:
+    in_chans: int = 1
+    num_mixtures: int = 4
+    kernel: int = 4
+    sharpening_factor: float = 1.0
+
+class MoE(Backbone[MoEConfig]):
+    def __init__(
+        self,
+       cfg: MoEConfig
+    ):
+        super(MoE, self).__init__()
+
+        self.ch = cfg.in_chans
+        self.kernel = cfg.kernel
+        self.num_mixtures = cfg.num_mixtures
+        self.α = cfg.sharpening_factor
+
+    def grid(self, height, width):
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), 2).float()
+        return grid.reshape(height * width, 2)
+ 
+    def forward(self, height, width, params):
+        μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
+        μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
+        μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
+        Σ = params[
+            :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
+        ].reshape(-1, self.kernel, 2, 2)
+        w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
+
+        Σ = torch.tril(Σ)
+        Σ = torch.mul(Σ, self.α)
+    
+        grid = self.grid(height, width).to(params.device)
+        μ = μ.unsqueeze(dim=2)
+        grid_expand_dim = torch.unsqueeze(torch.unsqueeze(grid, dim=0), dim=0)
+        x = torch.tile(grid_expand_dim, (μ.shape[0], μ.shape[1], 1, 1))
+        x_sub_μ = torch.unsqueeze(x.float() - μ.float(), dim=-1)
+
+        e = torch.exp(
+            torch.negative(
+                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
+            )
+        )
+
+        g = torch.sum(e, dim=1, keepdim=True)
+        g_max = torch.max(torch.tensor(10e-8), g)
+        e_norm = torch.divide(e, g_max)
+
+        y_hat = torch.sum(e_norm * torch.unsqueeze(w, dim=-1), dim=1)
+        y_hat = torch.clamp(y_hat, min=0, max=1)
+
+        y_hat = y_hat.view(-1, self.ch, height, width)
+
+        return y_hat
+
+
+@dataclass
+class AutoencoderConfig:
+    EncoderConfig: EncoderConfig
+    DecoderConfig: MoEConfig
+    phw: int = 32,
+    overlap: int = 24
+
+class Autoencoder(Backbone[AutoencoderConfig]):
+     def __init__(self, 
+                  cfg: AutoencoderConfig):
+        super().__init__(cfg)
+        
+        self.phw = cfg.phw
+        self.overlap = cfg.overlap
+        
+        self.encoder = Encoder(
+            in_chans=cfg.EncoderConfig.in_chans,
+            latent_dim=cfg.EncoderConfig.latent_dim,
+            embed_dim=cfg.EncoderConfig.embed_dim,
+            depth=cfg.EncoderConfig.depth,
+            heads=cfg.EncoderConfig.heads,
+            mlp_dim=cfg.EncoderConfig.mlp_dim,
+            dropout=cfg.EncoderConfig.dropout,
+            patch_size=cfg.EncoderConfig.patch_size,
+            avg_pool=cfg.EncoderConfig.avg_pool,
+            scale_factor=cfg.EncoderConfig.scale_factor,
+            num_layers=cfg.EncoderConfig.resizer_num_layers,
+            backbone_cfg=cfg.EncoderConfig.backbone_cfg
+        )
+
+        self.decoder = MoE(
+            in_chans=cfg.DecoderConfig.in_chans,
+            num_mixtures=cfg.DecoderConfig.num_mixtures,
+            kernel=cfg.DecoderConfig.kernel,
+            sharpening_factor=cfg.DecoderConfig.sharpening_factor
+        )
+
+     @staticmethod
+     def reconstruct(blocks, original_dims, block_size, overlap):
+        batch_size, num_channels, height, width = original_dims
+        step = block_size - overlap
+        device = blocks.device
+
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+
+        num_blocks_per_row = (width - block_size) // step + 1
+        num_blocks_per_column = (height - block_size) // step + 1
+        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+
+        for b in range(batch_size):
+            idx_start = b * num_blocks_per_image
+            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            idx = 0
+            for i in range(0, height - block_size + 1, step):
+                for j in range(0, width - block_size + 1, step):
+                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    idx += 1
+
+        recon_images /= count_matrix.clamp(min=1)
+        return recon_images
+     
+     def forward(self, x, shape):
+        if len(x.shape) == 5:
+            x = x.view(-1, *x.size()[2:])
+        encoded = self.encoder(x)
+        B, C, H, W = shape
+        sf = self.encoder.scale_factor
+        scaled_phw = self.phw * sf 
+ 
+        decoded = self.decoder(scaled_phw, scaled_phw, encoded)
+        y_hat = self.reconstruct(decoded, (B, C, H * sf, W * sf), scaled_phw, self.overlap*sf)
+        return y_hat
+
+
 if __name__ == "__main__":
     dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256), torch.randn(1, 1, 512, 512)]
 
-    model = Encoder(
+
+
+    encoder_cfg = EncoderConfig(
         in_chans=1,
         latent_dim=78,
-        embed_dim=64,
-        depth=6,
-        heads=8,
-        mlp_dim=128,
-        dropout=0.1,
-        patch_size=4
+        embed_dim=32,
+        depth=2,
+        heads=2,
+        mlp_dim=16,
+        dropout=0.01,
+        patch_size=4,
+        avg_pool=False,
+        scale_factor=2,
+        resizer_num_layers=2,
+        backbone_cfg = BackboneResnetCfg(
+            name="resnet",
+            model="resnet50", 
+            num_layers=2, 
+            use_first_pool=True,
+            d_in=1,
+            d_out=78
+        )
     )
 
+    model = Encoder(
+        cfg=encoder_cfg
+    ).cuda()
+
+    params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {params}")
+
     for dummy_input in dummy_inputs:
-        output = model(dummy_input)
+        output = model(dummy_input.cuda())
         print(f"Input shape: {dummy_input.shape} -> Output shape: {output.shape}")

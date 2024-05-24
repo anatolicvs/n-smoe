@@ -415,7 +415,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
            
         if self.degradation_type == 'bsrgan':
             img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        elif self.degradation_type == 'bsrgan-plus':
+        elif self.degradation_type == 'bsrgan_plus':
             img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
         elif self.degradation_type == 'dpsr':
             img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)

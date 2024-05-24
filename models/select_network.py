@@ -170,6 +170,28 @@ def define_G(opt):
             avg_pool=opt_net["avg_pool"],
             pre_trained=opt_net["pre_trained"]
             )
+        
+    elif net_type == 'transformer_moe':
+        from models.network_transformer_moe import Autoencoder as net
+        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        netG = net(
+            in_channels=opt_net["n_channels"],
+            latent_dim=z,
+            embed_dim=opt_net["embed_dim"],
+            depth=opt_net["depth"],
+            heads=opt_net["heads"],
+            dropout=opt_net["dropout"],
+            patch_size=opt_net["patch_size"],
+            avg_pool=opt_net["avg_pool"],
+            scale_factor=opt_net["scale"],
+            num_layers=opt_net["num_layers"],
+        
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"],
+            kernel=opt_net["kernel"],
+            num_mixtures=opt_net["num_mixtures"],
+            sharpening_factor=opt_net['sharpening_factor']
+            )
 
     elif net_type == 'lft_gan_v':
         from models.network_lft_v import LFT
