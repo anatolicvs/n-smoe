@@ -368,6 +368,7 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         return torch.stack(blocks)
 
     def __getitem__(self, i: int):
+        img_H = None
         fname, dataslice, metadata = self.raw_samples[i]
         if fname.endswith('.h5'):
             with h5py.File(fname, "r") as hf:
@@ -396,6 +397,15 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
+
+        if img_H.ndim >= 2:
+            h, w = img_H.shape[:2]
+            if h < self.lq_patchsize * self.sf or w < self.lq_patchsize * self.sf:
+                logging.warning(f"Image size too small for processing: {fname}")
+                return None
+        else:
+            logging.warning(f"Invalid image dimensions: {fname}")
+            return None
 
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
