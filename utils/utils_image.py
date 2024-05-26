@@ -29,12 +29,11 @@ def pad_collate_fn(batch):
     return padded_batch
 
 
-IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tif', '.h5']
+IMG_EXTENSIONS = ['.jpg', '.JPG', '.jpeg', '.JPEG', '.png', '.PNG', '.ppm', '.PPM', '.bmp', '.BMP', '.tif']
 
 
-def is_image_file(filename):
-    return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
-
+# def is_image_file(filename):
+#     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
 def get_timestamp():
     return datetime.now().strftime('%y%m%d-%H%M%S')
@@ -124,10 +123,24 @@ def get_lf_image_paths(path_for_train,angRes,scale_factor,data_name):
     return file_list
 
 
-def get_m_image_paths(dataset_dir,data_name='ALL'):
-    # if not os.path.isdir(dataset_dir):
-    #     raise ValueError(f'{dataset_dir} is not a valid directory')
+def is_image_file(filename):
+    lower_filename = filename.lower()
+    result = False
+    if lower_filename.endswith('.h5'):
+        result = True
+    elif lower_filename.endswith('.gz'):
+        if '4ch_es.nii' in lower_filename or 't1n' in lower_filename:
+            result = True
+        else:
+            result = False
+    else:
+        result = any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
 
+    # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
+    return result
+
+def get_m_image_paths(dataset_dir, data_name='ALL'):
+    """Retrieve paths to image files that meet specific criteria from the dataset directory."""
     if data_name == 'ALL':
         data_list = os.listdir(dataset_dir)
     else:
@@ -137,13 +150,20 @@ def get_m_image_paths(dataset_dir,data_name='ALL'):
     for data_name in data_list:
         sub_dir = os.path.join(dataset_dir, data_name)
         if not os.path.isdir(sub_dir):
-            continue  # Skip if not a directory
-        tmp_list = os.listdir(sub_dir)
-        for index, file_name in enumerate(tmp_list):
-            if is_image_file(file_name):
-                tmp_list[index] = os.path.join(sub_dir, file_name)
-                file_list.append(tmp_list[index])
+            # print(f"Skipping {sub_dir} because it is not a directory")
+            continue
 
+        sub_dir = os.path.expanduser(sub_dir)
+
+        for root, dirs, files in os.walk(sub_dir):
+            files.sort()
+            for file_name in files:
+                if is_image_file(file_name):
+                    full_path = os.path.join(root, file_name)
+                    file_list.append(full_path)
+            # print(f"Checked {root}, found {len(files)} files, {len([f for f in files if is_image_file(f)])} passed filter")
+
+    print(f"Found {len(file_list)} files in total")
     return file_list
 
 
