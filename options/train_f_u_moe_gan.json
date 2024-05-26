@@ -15,9 +15,9 @@
         
     , "path": {
       "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_gan_discriminator_unet/models/65000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_gan_discriminator_unet/models/65000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_gan_discriminator_unet/models/65000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
     , "datasets": {
@@ -29,10 +29,10 @@
         , "dataroot_H": "/work/pb035507/dataset/rgb/train_0"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 16
-        , "dataloader_batch_size": 192     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -41,8 +41,8 @@
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
         , "dataroot_H": "/work/pb035507/dataset/rgb/test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 8
+        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_num_workers": 16
         , "dataloader_batch_size": 1 
       }
     }
@@ -74,7 +74,7 @@
 
     , "train": {
        "is_moe": true
-       , "G_lossfn_type": "ssim"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+       , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
        , "G_lossfn_weight": 1e-2
    
        , "F_lossfn_type": "l2"  // "l1" | "l2"
@@ -84,7 +84,7 @@
        , "F_use_input_norm": true
        , "F_use_range_norm": false
    
-       , "gan_type": "wgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+       , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
        , "D_lossfn_weight": 5e-3
    
        , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
@@ -92,15 +92,15 @@
        , "D_init_iters": 0
    
        , "G_optimizer_type": "adam"
-       , "G_optimizer_lr": 1e-5
+       , "G_optimizer_lr": 1e-3
        , "G_optimizer_wd": 0
    
        , "D_optimizer_type": "adam"
-       , "D_optimizer_lr": 1e-5
+       , "D_optimizer_lr": 1e-3
        , "D_optimizer_wd": 0
    
        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
+       , "G_scheduler_milestones": [2000, 8000, 12000, 20000]
        , "G_scheduler_gamma": 0.5
        , "G_optimizer_reuse": false
        , "G_scheduler_T_max": 2000000
@@ -109,7 +109,7 @@
         , "G_scheduler_lr_patience": 1000
         
        , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
+       , "D_scheduler_milestones": [2000, 8000, 12000, 20000]
        , "D_scheduler_gamma": 0.5
        , "D_optimizer_reuse": false
        , "D_scheduler_T_max": 2000000
