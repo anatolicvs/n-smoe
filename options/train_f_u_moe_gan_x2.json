@@ -62,7 +62,6 @@
   
     , "netD": {
       "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
-      , "in_nc": 3
       , "base_nc": 64
       , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
       , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'

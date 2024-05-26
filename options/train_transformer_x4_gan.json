@@ -1,10 +1,10 @@
 {
-    "task": "transformer_moe_sr_gan_v1_gan" 
+    "task": "transformer_moe_sr_gan_v1_gan_x4_v1_mri_rgb_gan_discriminator_une" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
     , "scale": 4       // broadcast to "netG" if SISR
-    , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat, /home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat
+    , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -23,26 +23,26 @@
     , "datasets": {
       "train": {
           "name": "train_dataset"           // just name
-        , "dataset_type": "blindsr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-        , "lq_patchsize": 32
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-        , "dataroot_H": "/mnt/e/Medical/oct/data_for_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+        , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
+        , "lq_patchsize": 64
+        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
-        , "dataloader_num_workers": 8
+        , "dataloader_num_workers": 32
         , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
-        , "dataset_type": "blindsr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 32
+        , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+        , "lq_patchsize": 64
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-        , "dataroot_H": "/mnt/e/Medical/oct/data_for_test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 8
+        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_num_workers": 32
         , "dataloader_batch_size": 1 
       }
     }
@@ -72,7 +72,7 @@
     }
   
     , "netD": {
-      "net_type": "discriminator_vgg_128" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
+      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
       , "base_nc": 64
       , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
       , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
@@ -111,7 +111,7 @@
        , "D_optimizer_wd": 0
    
        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
+       , "G_scheduler_milestones": [20000, 80000, 120000, 200000]
        , "G_scheduler_gamma": 0.5
        , "G_optimizer_reuse": false
        , "G_scheduler_T_max": 2000000
@@ -120,7 +120,7 @@
         , "G_scheduler_lr_patience": 1000
         
        , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
+       , "D_scheduler_milestones": [20000, 80000, 120000, 200000]
        , "D_scheduler_gamma": 0.5
        , "D_optimizer_reuse": false
        , "D_scheduler_T_max": 2000000
