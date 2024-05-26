@@ -401,10 +401,10 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         if img_H.ndim >= 2:
             h, w = img_H.shape[:2]
             if h < self.lq_patchsize * self.sf or w < self.lq_patchsize * self.sf:
-                logging.warning(f"Image size too small for processing: {fname}")
+                # logging.warning(f"Image size too small for processing: {fname}")
                 return None
         else:
-            logging.warning(f"Invalid image dimensions: {fname}")
+            # logging.warning(f"Invalid image dimensions: {fname}")
             return None
 
         if img_H.ndim == 2:
