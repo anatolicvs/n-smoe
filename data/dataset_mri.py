@@ -35,7 +35,7 @@ import utils.utils_image as util
 import torch.nn.functional as F
 from utils import utils_blindsr as blindsr
 from scipy.io import loadmat
-
+import nibabel
 
 def et_query(
     root: etree.Element,
@@ -221,6 +221,7 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
 
 class SliceDatasetSR(torch.utils.data.Dataset):
     def __init__(self, opt):
+        self.n_channels = opt['n_channels'] if opt['n_channels'] else 3
         roots = opt["dataroot_H"]
         challenge = opt['challenge'] if 'challenge' in opt else 'multicoil'
         transform: Optional[Callable] = None
@@ -228,7 +229,6 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         sample_rate = opt["sample_rate"] if "sample_rate" in opt else None
         volume_sample_rate = opt["volume_sample_rate"] if "volume_sample_rate" in opt else None
         dataset_cache_file = opt["dataset_cache_file"] if "dataset_cache_file" in opt else "dataset_cache.pkl"
-        num_cols = opt["num_cols"] if "num_cols" in opt else None
         raw_sample_filter = opt["raw_sample_filter"] if "raw_sample_filter" in opt else None
         sf = opt["scale"] if "scale" in opt else 2
         phase = opt["phase"] if "phase" in opt else 'train'
@@ -264,13 +264,6 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         else:
             self.raw_sample_filter = raw_sample_filter
 
-        # set default sampling mode if none given
-        if sample_rate is None:
-            sample_rate = 1.0
-        if volume_sample_rate is None:
-            volume_sample_rate = 1.0
-
-        # load dataset cache if we have and user wants to use it
         if self.dataset_cache_file.exists() and use_dataset_cache:
             with open(self.dataset_cache_file, "rb") as f:
                 dataset_cache = pickle.load(f)
@@ -279,56 +272,39 @@ class SliceDatasetSR(torch.utils.data.Dataset):
 
         files = util.get_m_image_paths(roots)
 
-        # check if our dataset is in the cache
-        # if there, use that metadata, if not, then regenerate the metadata
         if dataset_cache.get(tuple(files)) is None or not use_dataset_cache:
             for fname in sorted(files):
-                try:
-                    metadata, num_slices = self._retrieve_metadata(fname)
-                except (OSError, KeyError, ValueError) as e:
-                    logging.warning(f"Skipping file {fname} due to error: {e}")
-                    continue
 
-                new_raw_samples = []
-                for slice_ind in range(num_slices):
-                    raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata)
-                    if self.raw_sample_filter(raw_sample):
-                        new_raw_samples.append(raw_sample)
+                if fname.endswith('.h5'):
+                    try:
+                        metadata, num_slices = self._retrieve_metadata(fname)
+                    except (OSError, KeyError, ValueError) as e:
+                        logging.warning(f"Skipping file {fname} due to error: {e}")
+                        continue
 
-                self.raw_samples += new_raw_samples
+                    new_raw_samples = []
+                    for slice_ind in range(num_slices):
+                        raw_sample = FastMRIRawDataSample(fname, slice_ind, metadata)
+                        if self.raw_sample_filter(raw_sample):
+                            new_raw_samples.append(raw_sample)
 
-            if dataset_cache.get(tuple(files)) is None and use_dataset_cache:
-                dataset_cache[tuple(files)] = self.raw_samples
-                logging.info(f"Saving dataset cache to {self.dataset_cache_file}.")
-                with open(self.dataset_cache_file, "wb") as cache_f:
-                    pickle.dump(dataset_cache, cache_f)
+                    self.raw_samples += new_raw_samples
+
+                elif fname.endswith('.gz'):
+                    self.raw_samples.append(FastMRIRawDataSample(fname, 0, {}))
+                
+                else:
+                    self.raw_samples.append(FastMRIRawDataSample(fname, 0, {}))
+                    
+
         else:
             logging.info(f"Using dataset cache from {self.dataset_cache_file}.")
             self.raw_samples = dataset_cache[tuple(files)]
-
-        # subsample if desired
-        if sample_rate < 1.0:  # sample by slice
-            random.shuffle(self.raw_samples)
-            num_raw_samples = round(len(self.raw_samples) * sample_rate)
-            self.raw_samples = self.raw_samples[:num_raw_samples]
-        elif volume_sample_rate < 1.0:  # sample by volume
-            vol_names = sorted(list(set([Path(f[0]).stem for f in self.raw_samples])))
-            random.shuffle(vol_names)
-            num_volumes = round(len(vol_names) * volume_sample_rate)
-            sampled_vols = vol_names[:num_volumes]
-            self.raw_samples = [
-                raw_sample
-                for raw_sample in self.raw_samples
-                if Path(raw_sample[0]).stem in sampled_vols
-            ]
-
-        if num_cols:
-            self.raw_samples = [
-                ex
-                for ex in self.raw_samples
-                if ex[2]["encoding_size"][1] in num_cols
-            ]
-
+    
+    def _get_best_slice(self, volume):
+        variances = [np.var(volume[:, :, i]) for i in range(volume.shape[2])]
+        return np.argmax(variances)
+    
     def _retrieve_metadata(self, fname):
         with h5py.File(fname, "r") as hf:
             et_root = etree.fromstring(hf["ismrmrd_header"][()])
@@ -393,13 +369,26 @@ class SliceDatasetSR(torch.utils.data.Dataset):
 
     def __getitem__(self, i: int):
         fname, dataslice, metadata = self.raw_samples[i]
+        if fname.endswith('.h5'):
+            with h5py.File(fname, "r") as hf:
+                img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+        
+        elif fname.endswith('.gz') and 't1n' in fname:
+            nib_img = nibabel.load(fname)
+            volume = nib_img.get_fdata()
+            best_slice_index = self._get_best_slice(volume)
+            img_H = volume[:, :, best_slice_index]
 
-        with h5py.File(fname, "r") as hf:
-            img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+        elif fname.endswith('.gz') and '4CH_ES.nii' in fname:
+            nib_img = nibabel.load(fname)
+            img_H = nib_img.get_fdata()
 
-        min_val = img_H.min()
-        max_val = img_H.max()
-        img_H = (img_H - min_val) / (max_val - min_val)
+        else :
+            img_H = util.imread_uint(fname, self.n_channels)
+            img_H = util.uint2single(img_H)
+
+        img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
+        img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H))
 
         if img_H is None or img_H.ndim == 0:
             logging.warning(f"Skipping file {fname} due to zero dimensions.")
@@ -407,7 +396,9 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
-        img_H = img_H[:, :, np.newaxis]
+
+        if img_H.ndim == 2:
+            img_H = img_H[:, :, np.newaxis]
      
         if self.phase == 'train':
             mode = random.randint(0, 7)

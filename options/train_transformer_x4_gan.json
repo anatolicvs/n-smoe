@@ -1,9 +1,9 @@
 {
-    "task": "f_u_moe_muller__sr_gan_x4_v2_mri_gan_vgg_128" 
+    "task": "transformer_moe_sr_gan_v1_gan" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 2       // broadcast to "netG" if SISR
+    , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat, /home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 12
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution, /home/pb035507/superresolution
+      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -23,45 +23,56 @@
     , "datasets": {
       "train": {
           "name": "train_dataset"           // just name
-        , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr" | "blindsr"
+        , "dataset_type": "blindsr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
         , "lq_patchsize": 32
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr", "bsrgan_plus"
-        , "dataroot_H": "/mnt/e/Medical/mri/data_for_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+        , "dataroot_H": "/mnt/e/Medical/oct/data_for_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
         , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
-        , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+        , "dataset_type": "blindsr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 32
-        , "degradation_type" : "dpsr" // "bsrgan" , "dpsr"
-        , "dataroot_H": "/mnt/e/Medical/mri/data_for_test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+        , "dataroot_H": "/mnt/e/Medical/oct/data_for_test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 8
         , "dataloader_batch_size": 1 
       }
     }
   
     , "netG": {
-      "net_type": "f_u_moe"
-      , "sharpening_factor": 1
+      "net_type": "transformer_moe"
+      
       , "kernel": 9
       , "num_mixtures": 9
-      , "num_layers":4
-      , "avg_pool": true
+      , "sharpening_factor": 1
+      , "embed_dim": 64
+      , "depth": 2
+      , "heads": 4
+      , "mlp_dim": 32
+      , "dropout": 0.01
+      , "patch_size": 4
+      
+      , "avg_pool": false
+      , "resizer_num_layers":2
+
+      , "resnet_model": "resnet50"
+      , "resnet_num_layers" : 4
+      
       , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "constant"         // "uniform" | "constant"
       , "init_gain": 0.2
-      //, "pre_trained": "/mnt/d/zoo/Unet-MoE-v1/2023-09-27_00-30-02/Unet-MoE-v1_kernel-9_khw-16-Optimizer-Adam-Criterion-MSE-lr-0.001-lr_min-0.0001-warmup_epochs-3-epochs-50-batch_size-None-size-128-stride-4-kernel_params-7-scale_factor-1-sigma-15-noise_typegaussian_latest.pth"
     }
   
     , "netD": {
-      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
+      "net_type": "discriminator_vgg_128" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
       , "base_nc": 64
       , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
       , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
@@ -92,26 +103,30 @@
        , "D_init_iters": 0
    
        , "G_optimizer_type": "adam"
-       , "G_optimizer_lr": 1e-3
+       , "G_optimizer_lr": 1e-4
        , "G_optimizer_wd": 0
    
        , "D_optimizer_type": "adam"
-       , "D_optimizer_lr": 1e-3
+       , "D_optimizer_lr": 1e-4
        , "D_optimizer_wd": 0
    
-       , "G_scheduler_type": "CosineAnnealingLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+       , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
        , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
        , "G_scheduler_gamma": 0.5
        , "G_optimizer_reuse": false
        , "G_scheduler_T_max": 2000000
        , "G_scheduler_eta_min": 1e-7
+        , "G_scheduler_lr_min": 1e-7
+        , "G_scheduler_lr_patience": 1000
         
-       , "D_scheduler_type": "CosineAnnealingLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+       , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
        , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
        , "D_scheduler_gamma": 0.5
        , "D_optimizer_reuse": false
        , "D_scheduler_T_max": 2000000
-        , "D_scheduler_eta_min": 1e-7
+        ,"D_scheduler_eta_min": 1e-7
+        ,"D_scheduler_lr_min": 1e-7
+        , "D_scheduler_lr_patience": 1000
    
        , "G_param_strict": true
        , "D_param_strict": true

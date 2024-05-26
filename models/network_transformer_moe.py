@@ -10,6 +10,9 @@ import torch.nn.functional as F
 import torchvision
 from einops import rearrange
 
+import torchvision.transforms as transforms
+from PIL import Image
+
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
     def __init__(self, base_resize_method='bilinear', antialias=False,
@@ -180,7 +183,8 @@ class PreNorm(nn.Module):
         return self.fn(x, *args, **kwargs)
 
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, mlp_dim, dropout=0.0):
+    def __init__(self, dim, depth, heads, mlp_dim, dropout=0.0,selfatt=True,
+        kv_dim=None):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
@@ -343,7 +347,7 @@ class MoE(Backbone[MoEConfig]):
         self,
        cfg: MoEConfig
     ):
-        super(MoE, self).__init__()
+        super(MoE, self).__init__(cfg)
 
         self.ch = cfg.in_chans
         self.kernel = cfg.kernel
@@ -409,25 +413,11 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.overlap = cfg.overlap
         
         self.encoder = Encoder(
-            in_chans=cfg.EncoderConfig.in_chans,
-            latent_dim=cfg.EncoderConfig.latent_dim,
-            embed_dim=cfg.EncoderConfig.embed_dim,
-            depth=cfg.EncoderConfig.depth,
-            heads=cfg.EncoderConfig.heads,
-            mlp_dim=cfg.EncoderConfig.mlp_dim,
-            dropout=cfg.EncoderConfig.dropout,
-            patch_size=cfg.EncoderConfig.patch_size,
-            avg_pool=cfg.EncoderConfig.avg_pool,
-            scale_factor=cfg.EncoderConfig.scale_factor,
-            num_layers=cfg.EncoderConfig.resizer_num_layers,
-            backbone_cfg=cfg.EncoderConfig.backbone_cfg
+            cfg.EncoderConfig
         )
 
         self.decoder = MoE(
-            in_chans=cfg.DecoderConfig.in_chans,
-            num_mixtures=cfg.DecoderConfig.num_mixtures,
-            kernel=cfg.DecoderConfig.kernel,
-            sharpening_factor=cfg.DecoderConfig.sharpening_factor
+            cfg.DecoderConfig
         )
 
      @staticmethod
@@ -469,40 +459,80 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return y_hat
 
 
-if __name__ == "__main__":
-    dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256), torch.randn(1, 1, 512, 512)]
+# if __name__ == "__main__":
+#     dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256)]
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+#     def extract_blocks(img_tensor, block_size, overlap):
+#         blocks = []
+#         step = block_size - overlap
+#         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+#             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+#                 block = img_tensor[:, i:i+block_size, j:j+block_size]
+#                 blocks.append(block)
+#         return torch.stack(blocks)
+#     def load_image(image_path):
+#         image = Image.open(image_path)
+#         transform = transforms.ToTensor()
+#         return transform(image).to(device)  # Move tensor to GPU
+    
+#     image_path = '/home/ozkan/works/n-smoe/utils/test.png'
+#     image_tensor = load_image(image_path)
+    
+#     blocks = extract_blocks(image_tensor, 32, 16)
+#     image_tensor = image_tensor.unsqueeze(0)
+
+#     encoder_cfg = EncoderConfig(
+#         in_chans=3,
+#         latent_dim=63,
+#         embed_dim=16,
+#         depth=4,
+#         heads=1,
+#         mlp_dim=16,
+#         dropout=0.01,
+#         patch_size=4,
+#         avg_pool=False,
+#         scale_factor=2,
+#         resizer_num_layers=2,
+#         backbone_cfg = BackboneResnetCfg(
+#             name="resnet",
+#             model="resnet50", 
+#             num_layers=1, 
+#             use_first_pool=True,
+#             d_in=3,
+#             d_out=63
+#         )
+#     )
+#     decoder_cfg = MoEConfig(
+#         in_chans=3,
+#         num_mixtures=9,
+#         kernel=9,
+#         sharpening_factor=1.0
+#     )
 
 
+#     autoenocer_cfg = AutoencoderConfig(
+#         EncoderConfig=encoder_cfg,
+#         DecoderConfig=decoder_cfg,
+#         phw=32,
+#         overlap=16
+#     )
 
-    encoder_cfg = EncoderConfig(
-        in_chans=1,
-        latent_dim=78,
-        embed_dim=32,
-        depth=2,
-        heads=2,
-        mlp_dim=16,
-        dropout=0.01,
-        patch_size=4,
-        avg_pool=False,
-        scale_factor=2,
-        resizer_num_layers=2,
-        backbone_cfg = BackboneResnetCfg(
-            name="resnet",
-            model="resnet50", 
-            num_layers=2, 
-            use_first_pool=True,
-            d_in=1,
-            d_out=78
-        )
-    )
+#     model = Autoencoder(
+#         cfg=autoenocer_cfg
+#     )
 
-    model = Encoder(
-        cfg=encoder_cfg
-    ).cuda()
+#     params = sum(p.numel() for p in model.parameters())
+#     print(f"Total number of parameters: {params}")
 
-    params = sum(p.numel() for p in model.parameters())
-    print(f"Total number of parameters: {params}")
+#     model = model.to(device)
 
-    for dummy_input in dummy_inputs:
-        output = model(dummy_input.cuda())
-        print(f"Input shape: {dummy_input.shape} -> Output shape: {output.shape}")
+#     output = model(blocks, image_tensor.shape)
+#     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+
+    # model = Encoder(
+    #     cfg=encoder_cfg
+    # )
+    # for dummy_input in dummy_inputs:
+    #     output = model(dummy_input.cuda())
+    #     print(f"Input shape: {dummy_input.shape} -> Output shape: {output.shape}")

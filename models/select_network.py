@@ -172,26 +172,40 @@ def define_G(opt):
             )
         
     elif net_type == 'transformer_moe':
-        from models.network_transformer_moe import Autoencoder as net
+        from models.network_transformer_moe import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
-        netG = net(
-            in_channels=opt_net["n_channels"],
+        encoder_cfg = EncoderConfig(
+            in_chans=opt_net["n_channels"],
             latent_dim=z,
             embed_dim=opt_net["embed_dim"],
             depth=opt_net["depth"],
             heads=opt_net["heads"],
+            mlp_dim=opt_net["mlp_dim"],
             dropout=opt_net["dropout"],
             patch_size=opt_net["patch_size"],
             avg_pool=opt_net["avg_pool"],
             scale_factor=opt_net["scale"],
-            num_layers=opt_net["num_layers"],
-        
-            phw=opt_net["phw"],
-            overlap=opt_net["overlap"],
-            kernel=opt_net["kernel"],
-            num_mixtures=opt_net["num_mixtures"],
-            sharpening_factor=opt_net['sharpening_factor']
+            resizer_num_layers=opt_net["resizer_num_layers"],
+            backbone_cfg = BackboneResnetCfg(
+                name="resnet",
+                model=opt_net["resnet_model"], 
+                num_layers=opt_net["resnet_num_layers"], 
+                use_first_pool=True,
+                d_in=opt_net["n_channels"],
+                d_out=z
             )
+        )
+        decoder_cfg = MoEConfig(
+            in_chans=opt_net["n_channels"],
+            num_mixtures=opt_net["num_mixtures"],
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net['sharpening_factor'])
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"])
+        netG = Autoencoder(cfg=autoenocer_cfg)
 
     elif net_type == 'lft_gan_v':
         from models.network_lft_v import LFT
