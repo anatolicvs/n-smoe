@@ -8,10 +8,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
-from einops import rearrange
+from einops import rearrange, repeat
 
-import torchvision.transforms as transforms
-from PIL import Image
+# import torchvision.transforms as transforms
+# from PIL import Image
 
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
@@ -182,8 +182,51 @@ class PreNorm(nn.Module):
         x = self.norm(x)
         return self.fn(x, *args, **kwargs)
 
+class Attention(nn.Module):
+    def __init__(self, dim, heads=8, dim_head=64, dropout=0.0, selfatt=True, kv_dim=None):
+        super().__init__()
+        inner_dim = dim_head * heads
+        project_out = not (heads == 1 and dim_head == dim)
+
+        self.heads = heads
+        self.scale = dim_head ** -0.5
+        self.selfatt = selfatt  # Ensure selfatt is accessible throughout the class
+
+        self.attend = nn.Softmax(dim=-1)
+        if selfatt:
+            self.to_qkv = nn.Linear(dim, inner_dim * 3, bias=False)
+        else:
+            if kv_dim is None:
+                raise ValueError("kv_dim must be set when selfatt is False")
+            self.to_q = nn.Linear(dim, inner_dim, bias=False)
+            self.to_kv = nn.Linear(kv_dim, inner_dim * 2, bias=False)
+
+        self.to_out = (
+            nn.Sequential(nn.Linear(inner_dim, dim), nn.Dropout(dropout))
+            if project_out
+            else nn.Identity()
+        )
+
+    def forward(self, x, z=None):
+        if self.selfatt:  # Use internal selfatt state
+            qkv = self.to_qkv(x).chunk(3, dim=-1)
+        else:
+            if z is None:
+                raise ValueError("z must be provided when selfatt is False")
+            q = self.to_q(x)
+            k, v = self.to_kv(z).chunk(2, dim=-1)
+            qkv = (q, k, v)
+
+        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.heads), qkv)
+
+        dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
+        attn = self.attend(dots)
+        out = torch.matmul(attn, v)
+        out = rearrange(out, "b h n d -> b n (h d)")
+        return self.to_out(out)
+
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, mlp_dim, dropout=0.0,selfatt=True,
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.0,selfatt=True,
         kv_dim=None):
         super().__init__()
         self.layers = nn.ModuleList([])
@@ -193,8 +236,14 @@ class Transformer(nn.Module):
                     [
                         PreNorm(
                             dim,
-                            nn.MultiheadAttention(embed_dim=dim, num_heads=heads, dropout=dropout, batch_first=True),
-                            norm_type='ln'
+                             Attention(
+                                dim,
+                                heads=heads,
+                                dim_head=dim_head,
+                                dropout=dropout,
+                                selfatt=selfatt,
+                                kv_dim=kv_dim,
+                            ),
                         ),
                         PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout), norm_type='ln'),
                     ]
@@ -203,7 +252,7 @@ class Transformer(nn.Module):
 
     def forward(self, x, **kwargs):
         for attn, ff in self.layers:
-            attn_out, _ = attn(x, x, x)
+            attn_out = attn(x)
             x = x + attn_out
             x = x + ff(x, **kwargs)
         return x
@@ -231,26 +280,26 @@ class BackboneResnetCfg:
     model: Literal["resnet18", "resnet34", "resnet50", "resnet101", "resnet152", "dino_resnet50"]
     num_layers: int
     use_first_pool: bool
-    d_in: int
-    d_out: int
+    # d_in: int
+    # d_out: int
 
 class BackboneResnet(Backbone[BackboneResnetCfg]):
-    def __init__(self, cfg: BackboneResnetCfg,):
+    def __init__(self, cfg: BackboneResnetCfg,d_in:int,d_out:int):
         super().__init__(cfg)
         
         norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
         self.model = getattr(torchvision.models, cfg.model)(pretrained=False, norm_layer=norm_layer)
 
-        self.model.conv1 = nn.Conv2d(cfg.d_in, self.model.conv1.out_channels, kernel_size=self.model.conv1.kernel_size, stride=self.model.conv1.stride, padding=self.model.conv1.padding, bias=False)
+        self.model.conv1 = nn.Conv2d(d_in, self.model.conv1.out_channels, kernel_size=self.model.conv1.kernel_size, stride=self.model.conv1.stride, padding=self.model.conv1.padding, bias=False)
 
         self.projections = nn.ModuleDict()
         previous_output_channels = self.model.conv1.out_channels  
-        self.projections['layer0'] = nn.Conv2d(previous_output_channels, cfg.d_out, 1)
+        self.projections['layer0'] = nn.Conv2d(previous_output_channels, d_out, 1)
 
         layers = [self.model.layer1, self.model.layer2, self.model.layer3, self.model.layer4]
         for i, layer_group in enumerate(layers[:cfg.num_layers - 1]):
             output_channels = layer_group[-1].conv3.out_channels if hasattr(layer_group[-1], 'conv3') else layer_group[-1][-1].out_channels
-            self.projections[f'layer{i+1}'] = nn.Conv2d(output_channels, cfg.d_out, 1)
+            self.projections[f'layer{i+1}'] = nn.Conv2d(output_channels, d_out, 1)
 
     def forward(self, context: BatchedViews) -> torch.Tensor:
         x = context['image']
@@ -273,40 +322,99 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
     def d_out(self) -> int:
         return self.cfg.d_out
 
+
+@dataclass
+class BackboneDinoCfg:
+    name: Literal["dino"]
+    model: Literal["dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"]
+    # d_in : int
+    # d_out: int
+    backbone_cfg: BackboneResnetCfg 
+
+class BackboneDino(Backbone[BackboneDinoCfg]):
+    def __init__(self, cfg: BackboneDinoCfg, d_in: int, d_out: int) -> None:
+        super().__init__(cfg)
+        self.dino = torch.hub.load("facebookresearch/dino:main", cfg.model)
+        self._configure_dino_patch_embedding(d_in)
+        self.resnet_backbone = BackboneResnet(cfg.backbone_cfg, d_in, d_out)
+        self.global_token_mlp = self._create_mlp(768, d_out)
+        self.local_token_mlp = self._create_mlp(768, d_out)
+
+    def _configure_dino_patch_embedding(self, d_in: int):
+        old_conv = self.dino.patch_embed.proj
+        params = {
+            'out_channels': old_conv.out_channels,
+            'kernel_size': self._ensure_tuple(old_conv.kernel_size),
+            'stride': self._ensure_tuple(old_conv.stride),
+            'padding': self._ensure_tuple(old_conv.padding),
+            'bias': old_conv.bias is not None
+        }
+        self.dino.patch_embed.proj = nn.Conv2d(d_in, **params)
+
+    def _ensure_tuple(self, value):
+        return value if isinstance(value, tuple) else tuple(value.tolist())
+
+    def _create_mlp(self, input_dim: int, output_dim: int):
+        return nn.Sequential(
+            nn.Linear(input_dim, input_dim),
+            nn.ReLU(),
+            nn.Linear(input_dim, output_dim),
+        )
+
+    def forward(self, context: BatchedViews) -> torch.Tensor:
+        resnet_features = self.resnet_backbone(context)
+        b, _, h, w = context["image"].shape
+        assert h % self.patch_size == 0 and w % self.patch_size == 0
+
+        tokens = self.dino.get_intermediate_layers(context["image"])[0]
+        global_token = self.global_token_mlp(tokens[:, 0])
+        local_tokens = self.local_token_mlp(tokens[:, 1:])
+
+        global_token = repeat(global_token, "b c -> b c h w", b=b, h=h, w=w)
+        local_tokens = repeat(local_tokens, "b (h w) c -> b c (h hps) (w wps)", b=b, h=h // self.patch_size, hps=self.patch_size, w=w // self.patch_size, wps=self.patch_size)
+
+        return resnet_features + local_tokens + global_token
+
+    @property
+    def patch_size(self) -> int:
+        return int("".join(filter(str.isdigit, self.cfg.model)))
+
 @dataclass
 class EncoderConfig:
-    in_chans: int 
-    latent_dim: int
+    # d_in: int 
+    # d_out: int
     embed_dim: int
     depth: int
     heads: int
+    dim_head: int
     mlp_dim: int
     dropout: float
     avg_pool: bool
     scale_factor: int
     resizer_num_layers: int
     patch_size: int
-    backbone_cfg: BackboneResnetCfg 
+    backbone_cfg: BackboneDinoCfg 
 
 
 class Encoder(Backbone[EncoderConfig]):
-    def __init__(self, cfg: EncoderConfig):
+    def __init__(self, cfg: EncoderConfig, d_in:int, d_out:int):
         super().__init__(cfg)
-        self.in_chans = cfg.in_chans
-        self.latent_dim = cfg.latent_dim
+        self.d_in = d_in
+        self.latent = d_out
+     
         self.embed_dim = cfg.embed_dim
         self.scale_factor = cfg.scale_factor
 
         if cfg.backbone_cfg is not None:
-            self.backbone = BackboneResnet(cfg.backbone_cfg)
+              self.backbone = BackboneDino(cfg.backbone_cfg, d_in=d_in,d_out=d_out)
         else:
             self.backbone = None
 
-        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=cfg.latent_dim, embed_dim=cfg.embed_dim)
-        self.transformer = Transformer(cfg.embed_dim, cfg.depth, cfg.heads, cfg.mlp_dim, cfg.dropout)
+        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim)
+        self.transformer = Transformer(cfg.embed_dim, cfg.depth, cfg.heads, cfg.dim_head, cfg.mlp_dim, cfg.dropout)
         
         self.fc = nn.Sequential(
-                nn.Linear(cfg.embed_dim, cfg.in_chans * cfg.latent_dim),
+                nn.Linear(cfg.embed_dim, d_in * d_out),
                 nn.ReLU())
 
         self.resizer = MullerResizer(
@@ -331,13 +439,12 @@ class Encoder(Backbone[EncoderConfig]):
         x = self.fc(x)
         x = rearrange(x, "b n c -> b c n")
         x = torch.mean(x, dim=2, keepdim=True)
-        x = rearrange(x, 'b (c latent) 1 -> b c latent', c=self.in_chans, latent=self.latent_dim)
+        x = rearrange(x, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
         return x
-
+    
 
 @dataclass
 class MoEConfig:
-    in_chans: int = 1
     num_mixtures: int = 4
     kernel: int = 4
     sharpening_factor: float = 1.0
@@ -345,11 +452,12 @@ class MoEConfig:
 class MoE(Backbone[MoEConfig]):
     def __init__(
         self,
-       cfg: MoEConfig
+        cfg: MoEConfig,
+        d_in: int,
     ):
         super(MoE, self).__init__(cfg)
 
-        self.ch = cfg.in_chans
+        self.ch = d_in
         self.kernel = cfg.kernel
         self.num_mixtures = cfg.num_mixtures
         self.α = cfg.sharpening_factor
@@ -401,6 +509,8 @@ class MoE(Backbone[MoEConfig]):
 class AutoencoderConfig:
     EncoderConfig: EncoderConfig
     DecoderConfig: MoEConfig
+    d_in: int
+    d_out: int
     phw: int = 32,
     overlap: int = 24
 
@@ -413,11 +523,14 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.overlap = cfg.overlap
         
         self.encoder = Encoder(
-            cfg.EncoderConfig
+            cfg.EncoderConfig,
+            d_in=cfg.d_in,
+            d_out=cfg.d_out
         )
 
         self.decoder = MoE(
-            cfg.DecoderConfig
+            cfg.DecoderConfig,
+            d_in=cfg.d_in
         )
 
      @staticmethod
@@ -460,75 +573,84 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
 
 # if __name__ == "__main__":
-#     dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256)]
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#     def extract_blocks(img_tensor, block_size, overlap):
-#         blocks = []
-#         step = block_size - overlap
-#         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
-#             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-#                 block = img_tensor[:, i:i+block_size, j:j+block_size]
-#                 blocks.append(block)
-#         return torch.stack(blocks)
-#     def load_image(image_path):
-#         image = Image.open(image_path)
-#         transform = transforms.ToTensor()
-#         return transform(image).to(device)  # Move tensor to GPU
+    # dino_cfg = BackboneDinoCfg(name="dino", model="dino_vitb8", d_out=512,d_in=3, backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=1, use_first_pool=True))
+    # backbone_dino = BackboneDino(dino_cfg)
+    # sample_input = torch.rand(1, 3, 128, 128)  # Simulate an input image tensor
+    # batched_views = BatchedViews(image=sample_input)
+
+    # # # Run the test
+    # output = backbone_dino(batched_views)
+    # print("Output shape:", output.shape)
+
+    # dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256)]
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # def extract_blocks(img_tensor, block_size, overlap):
+    #     blocks = []
+    #     step = block_size - overlap
+    #     for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+    #         for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+    #             block = img_tensor[:, i:i+block_size, j:j+block_size]
+    #             blocks.append(block)
+    #     return torch.stack(blocks)
+    # def load_image(image_path):
+    #     image = Image.open(image_path)
+    #     transform = transforms.ToTensor()
+    #     return transform(image).to(device)  # Move tensor to GPU
     
-#     image_path = '/home/ozkan/works/n-smoe/utils/test.png'
-#     image_tensor = load_image(image_path)
+    # image_path = '/home/ozkan/works/n-smoe/utils/test.png'
+    # image_tensor = load_image(image_path)
     
-#     blocks = extract_blocks(image_tensor, 32, 16)
-#     image_tensor = image_tensor.unsqueeze(0)
+    # image_tensor = torch.randn(1, 128, 128).cuda()
 
-#     encoder_cfg = EncoderConfig(
-#         in_chans=3,
-#         latent_dim=63,
-#         embed_dim=16,
-#         depth=4,
-#         heads=1,
-#         mlp_dim=16,
-#         dropout=0.01,
-#         patch_size=4,
-#         avg_pool=False,
-#         scale_factor=2,
-#         resizer_num_layers=2,
-#         backbone_cfg = BackboneResnetCfg(
-#             name="resnet",
-#             model="resnet50", 
-#             num_layers=1, 
-#             use_first_pool=True,
-#             d_in=3,
-#             d_out=63
-#         )
-#     )
-#     decoder_cfg = MoEConfig(
-#         in_chans=3,
-#         num_mixtures=9,
-#         kernel=9,
-#         sharpening_factor=1.0
-#     )
+    # blocks = extract_blocks(image_tensor, 32, 16)
+    # image_tensor = image_tensor.unsqueeze(0)
+
+    # encoder_cfg = EncoderConfig(
+    #     embed_dim=64,
+    #     depth=16,
+    #     heads=16,
+    #     dim_head=64,
+    #     mlp_dim=64,
+    #     dropout=0.01,
+    #     patch_size=8,
+    #     avg_pool=False,
+    #     scale_factor=2,
+    #     resizer_num_layers=2,
+    #     backbone_cfg = BackboneDinoCfg(
+    #             name="dino", 
+    #             model="dino_vitb8", 
+    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
+    #                                            num_layers=1, use_first_pool=True))
+    # )
+    # decoder_cfg = MoEConfig(
+    #     num_mixtures=9,
+    #     kernel=9,
+    #     sharpening_factor=1.0
+    # )
 
 
-#     autoenocer_cfg = AutoencoderConfig(
-#         EncoderConfig=encoder_cfg,
-#         DecoderConfig=decoder_cfg,
-#         phw=32,
-#         overlap=16
-#     )
+    # autoenocer_cfg = AutoencoderConfig(
+    #     EncoderConfig=encoder_cfg,
+    #     DecoderConfig=decoder_cfg,
+    #     d_in=1,
+    #     d_out=63,
+    #     phw=32,
+    #     overlap=16
+    # )
 
-#     model = Autoencoder(
-#         cfg=autoenocer_cfg
-#     )
+    # model = Autoencoder(
+    #     cfg=autoenocer_cfg
+    # )
 
-#     params = sum(p.numel() for p in model.parameters())
-#     print(f"Total number of parameters: {params}")
+    # params = sum(p.numel() for p in model.parameters())
+    # print(f"Total number of parameters: {params}")
 
-#     model = model.to(device)
+    # model = model.to(device)
 
-#     output = model(blocks, image_tensor.shape)
-#     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+    # output = model(blocks, image_tensor.shape)
+    # print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 
     # model = Encoder(
     #     cfg=encoder_cfg

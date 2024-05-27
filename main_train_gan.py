@@ -1,20 +1,17 @@
-import json
 import os
 import math
 import argparse
-import time
 import random
 import numpy as np
-from collections import OrderedDict
 import logging
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 import torch
 
-from utils import utils_logger
-from utils import utils_image as util
-from utils import utils_option as option
-from utils.utils_dist import get_dist_info, init_dist
+from utils_n import utils_logger
+from utils_n import utils_image as util
+from utils_n import utils_option as option
+from utils_n.utils_dist import get_dist_info, init_dist
 
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
@@ -30,14 +27,9 @@ def update_options_with_beeond(options_path, beeond_dir=None):
     
     return options
 
-def main(json_path='options/train_f_u_moe_gan_local.json'):
+def main(json_path='options/train_transformer_x2_gan_local.json'):
 
-    '''
-    # ----------------------------------------
-    # Step--1 (prepare opt)
-    # ----------------------------------------
-    '''
-
+   
     parser = argparse.ArgumentParser()
     parser.add_argument('--opt', type=str, default=json_path, help='Path to option JSON file.')
     parser.add_argument('--launcher', default='pytorch', help='job launcher')
@@ -153,11 +145,7 @@ def main(json_path='options/train_f_u_moe_gan_local.json'):
         else:
             raise NotImplementedError("Phase [%s] is not recognized." % phase)
 
-    '''
-    # ----------------------------------------
-    # Step--3 (initialize model)
-    # ----------------------------------------
-    '''
+   
 
     model = define_Model(opt)
 
@@ -166,11 +154,6 @@ def main(json_path='options/train_f_u_moe_gan_local.json'):
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    '''
-    # ----------------------------------------
-    # Step--4 (main training)
-    # ----------------------------------------
-    '''
                 
     for epoch in range(1000000):  # keep running
         if opt['dist']:

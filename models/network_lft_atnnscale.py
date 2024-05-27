@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-import math
+
 
 class LFT(nn.Module):
     def __init__(self, args):

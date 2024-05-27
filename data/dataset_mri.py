@@ -31,9 +31,9 @@ import requests
 import torch
 import yaml
 import matplotlib.pyplot as plt
-import utils.utils_image as util
+import utils_n.utils_image as util
 import torch.nn.functional as F
-from utils import utils_blindsr as blindsr
+from utils_n import utils_blindsr as blindsr
 from scipy.io import loadmat
 import nibabel
 

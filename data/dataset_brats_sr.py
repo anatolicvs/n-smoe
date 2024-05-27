@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 import torch.utils.data
 import numpy as np
 import os

@@ -9,8 +9,8 @@ from models.model_base import ModelBase
 from models.loss import CharbonnierLoss
 from models.loss_ssim import SSIMLoss
 
-from utils.utils_model import test_mode
-from utils.utils_regularizers import regularizer_orth, regularizer_clip
+from utils_n.utils_model import test_mode
+from utils_n.utils_regularizers import regularizer_orth, regularizer_clip
 
 
 class ModelPlain(ModelBase):
