@@ -172,39 +172,37 @@ def define_G(opt):
             )
         
     elif net_type == 'transformer_moe':
-        from models.network_transformer_moe import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig
+        from models.network_transformer_moe import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig,BackboneDinoCfg
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         encoder_cfg = EncoderConfig(
-            in_chans=opt_net["n_channels"],
-            latent_dim=z,
             embed_dim=opt_net["embed_dim"],
             depth=opt_net["depth"],
             heads=opt_net["heads"],
+            dim_head=64,
             mlp_dim=opt_net["mlp_dim"],
             dropout=opt_net["dropout"],
             patch_size=opt_net["patch_size"],
             avg_pool=opt_net["avg_pool"],
             scale_factor=opt_net["scale"],
             resizer_num_layers=opt_net["resizer_num_layers"],
-            backbone_cfg = BackboneResnetCfg(
-                name="resnet",
-                model=opt_net["resnet_model"], 
-                num_layers=opt_net["resnet_num_layers"], 
-                use_first_pool=True,
-                d_in=opt_net["n_channels"],
-                d_out=z
-            )
+            backbone_cfg = BackboneDinoCfg(
+                name="dino", 
+                model= opt_net["dino_model"],
+                backbone_cfg=BackboneResnetCfg(name="resnet", model=opt_net["resnet_model"], 
+                                               num_layers=opt_net["resnet_num_layers"], use_first_pool=opt_net["use_first_pool"]))
         )
         decoder_cfg = MoEConfig(
-            in_chans=opt_net["n_channels"],
             num_mixtures=opt_net["num_mixtures"],
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net['sharpening_factor'])
         autoenocer_cfg = AutoencoderConfig(
             EncoderConfig=encoder_cfg,
             DecoderConfig=decoder_cfg,
+            d_in=opt_net["n_channels"],
+            d_out=z,
             phw=opt_net["phw"],
             overlap=opt_net["overlap"])
+        
         netG = Autoencoder(cfg=autoenocer_cfg)
 
     elif net_type == 'lft_gan_v':
