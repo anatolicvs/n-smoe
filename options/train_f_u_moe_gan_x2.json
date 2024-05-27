@@ -1,5 +1,5 @@
 {
-    "task": "f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet" 
+    "task": "f_u_moe_muller__sr_gan_x2_v9_mri_rgb_gan_discriminator_unet" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -14,10 +14,10 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v7_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v7_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v7_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      "root": "/hpcwork/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
     , "datasets": {
@@ -38,7 +38,7 @@
         "name": "test_dataset"            // just name
         , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 64
-        , "degradation_type" : "dpsr" // "bsrgan" , "dpsr", "bsrgan_plus"
+        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr", "bsrgan_plus"
         , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test | /work/pb035507/dataset/rgb/test
         , "dataroot_L": null              // path of L testing dataset
         , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192

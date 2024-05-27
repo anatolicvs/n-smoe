@@ -1,5 +1,5 @@
 {
-    "task": "transformer_moe_sr_gan_v1_gan_x22_v1_mri_rgb_gan_discriminator_une" 
+    "task": "transformer_moe_sr_gan_v1_gan_x2_v2_mri_rgb_gan_discriminator_unet" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/hpcwork/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -53,18 +53,23 @@
       , "kernel": 9
       , "num_mixtures": 9
       , "sharpening_factor": 1
+
       , "embed_dim": 64
-      , "depth": 2
+      , "depth": 4
       , "heads": 4
-      , "mlp_dim": 32
+      , "dim_head" : 64
+      , "mlp_dim": 64
       , "dropout": 0.01
       , "patch_size": 4
       
       , "avg_pool": false
       , "resizer_num_layers":2
 
+      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 4
+      , "resnet_num_layers" : 2
+      , "use_first_pool": true
       
       , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "constant"         // "uniform" | "constant"
@@ -84,57 +89,57 @@
     }
 
     , "train": {
-       "is_moe": true
-       , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
-       , "G_lossfn_weight": 1e-2
-   
-       , "F_lossfn_type": "l2"  // "l1" | "l2"
-       , "F_lossfn_weight": 1
-       , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
-       , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
-       , "F_use_input_norm": true
-       , "F_use_range_norm": false
-   
-       , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
-       , "D_lossfn_weight": 5e-3
-   
-       , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
-   
-       , "D_init_iters": 0
-   
-       , "G_optimizer_type": "adam"
-       , "G_optimizer_lr": 1e-4
-       , "G_optimizer_wd": 0
-   
-       , "D_optimizer_type": "adam"
-       , "D_optimizer_lr": 1e-4
-       , "D_optimizer_wd": 0
-   
-       , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "G_scheduler_milestones": [20000, 80000, 120000, 200000]
-       , "G_scheduler_gamma": 0.5
-       , "G_optimizer_reuse": false
-       , "G_scheduler_T_max": 2000000
-       , "G_scheduler_eta_min": 1e-7
-        , "G_scheduler_lr_min": 1e-7
-        , "G_scheduler_lr_patience": 1000
-        
-       , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
-       , "D_scheduler_milestones": [20000, 80000, 120000, 200000]
-       , "D_scheduler_gamma": 0.5
-       , "D_optimizer_reuse": false
-       , "D_scheduler_T_max": 2000000
-        ,"D_scheduler_eta_min": 1e-7
-        ,"D_scheduler_lr_min": 1e-7
-        , "D_scheduler_lr_patience": 1000
-   
-       , "G_param_strict": true
-       , "D_param_strict": true
-       , "E_param_strict": true
-   
-       , "checkpoint_test": 5000
-       , "checkpoint_save": 5000
-       , "checkpoint_print": 200
-     }
+      "is_moe": true
+      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_weight": 1e-2
+  
+      , "F_lossfn_type": "l1"  // "l1" | "l2"
+      , "F_lossfn_weight": 1
+      , "F_feature_layer": [2,7,16,25,34]  // 25 | [2,7,16,25,34]
+      , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+      , "F_use_input_norm": true
+      , "F_use_range_norm": false
+  
+      , "gan_type": "lsgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+      , "D_lossfn_weight": 5e-3
+  
+      , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+  
+      , "D_init_iters": 0
+  
+      , "G_optimizer_type": "adam"
+      , "G_optimizer_lr": 5e-5
+      , "G_optimizer_wd": 0
+  
+      , "D_optimizer_type": "adam"
+      , "D_optimizer_lr": 5e-5
+      , "D_optimizer_wd": 0
+  
+      , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+      , "G_scheduler_milestones": [2000, 8000, 12000, 20000]
+      , "G_scheduler_gamma": 0.5
+      , "G_optimizer_reuse": false
+      , "G_scheduler_T_max": 2000000
+      , "G_scheduler_eta_min": 1e-7
+       , "G_scheduler_lr_min": 1e-7
+       , "G_scheduler_lr_patience": 1000
+       
+      , "D_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
+      , "D_scheduler_milestones": [2000, 8000, 12000, 20000]
+      , "D_scheduler_gamma": 0.5
+      , "D_optimizer_reuse": false
+      , "D_scheduler_T_max": 2000000
+       ,"D_scheduler_eta_min": 1e-7
+       ,"D_scheduler_lr_min": 1e-7
+       , "D_scheduler_lr_patience": 1000
+  
+      , "G_param_strict": true
+      , "D_param_strict": true
+      , "E_param_strict": true
+  
+      , "checkpoint_test": 5000
+      , "checkpoint_save": 5000
+      , "checkpoint_print": 200
+    }
   }
   

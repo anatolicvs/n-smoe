@@ -29,7 +29,9 @@ class DatasetBlindSR(data.Dataset):
         self.phase = opt["phase"] if "phase" in opt else 'train'
         self.phw = opt['phw']
         self.overlap = opt['overlap']
-        self.paths_H = util.get_m_image_paths(opt['dataroot_H'])
+        # sub directory for each dataset
+        # self.paths_H = util.get_m_image_paths(opt['dataroot_H'])
+        self.paths_H = util.get_image_paths(opt['dataroot_H'])
         print(len(self.paths_H))
 
 #        for n, v in enumerate(self.paths_H):

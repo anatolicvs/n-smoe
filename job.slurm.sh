@@ -88,7 +88,7 @@ echo; nvidia-smi; echo
 
 # ls -lt $DATASET_DIR
 
-apptainer exec --nv --bind $WORK,$HOME,$HPCWORK $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
+apptainer exec --nv --bind $HOME,$HPCWORK,$WORK $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
 EOT
 
 echo "Job $JOB_ID"

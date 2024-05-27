@@ -1,5 +1,5 @@
 {
-    "task": "f_u_moe_muller__sr_gan_x4_v7_mri_rgb_gan_discriminator_unet" 
+    "task": "f_u_moe_muller__sr_gan_x4_v8_mri_rgb_gan_discriminator_unet" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -7,17 +7,17 @@
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 14
-    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color 
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
     , "merge_bn": false              // if no BN exists, set false
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
-    , "path": {
-      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v6_mri_rgb_gan_discriminator_unet/models/10000_G.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v6_mri_rgb_gan_discriminator_unet/models/10000_D.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v6_mri_rgb_gan_discriminator_unet/models/10000_E.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+    , "path": { 
+      "root": "/hpcwork/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v7_mri_rgb_gan_discriminator_unet/models/45000_G.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v7_mri_rgb_gan_discriminator_unet/models/45000_D.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v7_mri_rgb_gan_discriminator_unet/models/45000_E.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
     , "datasets": {
@@ -25,9 +25,8 @@
           "name": "train_dataset"           // just name
         , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
         , "lq_patchsize": 32
-        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+        , "degradation_type" : "bsrgan" // "bsrgan" ,"bsrgan_plus" ,"dpsr"
         , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0   | /work/pb035507/dataset/rgb/train_0
-        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 320                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
@@ -65,7 +64,7 @@
     , "netD": {
       "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
       , "in_nc": 3
-      , "base_nc": 128
+      , "base_nc": 64
       , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
       , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
   
@@ -86,7 +85,7 @@
        , "F_use_input_norm": true
        , "F_use_range_norm": false
    
-       , "gan_type": "lsgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+       , "gan_type": "wgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
        , "D_lossfn_weight": 5e-3
    
        , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
