@@ -123,8 +123,6 @@ class ModelPlain(ModelBase):
     # ----------------------------------------
     def define_scheduler(self):
         g_scheduler_type = self.opt_train['G_scheduler_type']
-        d_scheduler_type = self.opt_train['D_scheduler_type']
-
         if g_scheduler_type == 'MultiStepLR':
             self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
                                                             self.opt_train['G_scheduler_milestones'],
@@ -133,26 +131,9 @@ class ModelPlain(ModelBase):
         elif g_scheduler_type == 'CosineAnnealingLR':
             self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
                                                             T_max=self.opt_train['G_scheduler_T_max'],
-                                                            eta_min=self.opt_train['G_scheduler_eta_min']))
-
-        if d_scheduler_type == 'MultiStepLR':
-            self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
-                                                            self.opt_train['D_scheduler_milestones'],
-                                                            self.opt_train['D_scheduler_gamma']
-                                                            ))
-        elif d_scheduler_type == 'CosineAnnealingLR':
-            self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
-                                                                T_max=self.opt_train['D_scheduler_T_max'],
-                                                                eta_min=self.opt_train['D_scheduler_eta_min']))                                                
+                                                            eta_min=self.opt_train['G_scheduler_eta_min']))                                              
         else:
             raise NotImplementedError
-
-    """
-    # ----------------------------------------
-    # Optimization during training with data
-    # Testing/evaluation
-    # ----------------------------------------
-    """
 
     # ----------------------------------------
     # feed L/H data

@@ -1,20 +1,11 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import torch
-from utils import utils_image as util
+from utils_n import utils_image as util
 import re
 import glob
 import os
 
-
-'''
-# --------------------------------------------
-# Model
-# --------------------------------------------
-# Kai Zhang (github: https://github.com/cszn)
-# 03/Mar/2019
-# --------------------------------------------
-'''
 
 
 def find_last_checkpoint(save_dir, net_type='G', pretrained_path=None):

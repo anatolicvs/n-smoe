@@ -14,19 +14,19 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/hpcwork/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      , "pretrained_netG": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/25000_G.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/25000_D.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v5_mri_rgb_gan_discriminator_unet/models/25000_E.pth" // "/home/pb035507/superresolution/f_u_moe_muller__sr_gan_x2_v8_mri_rgb_gan_discriminator_unet/models/45000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
     , "datasets": {
       "train": {
           "name": "train_dataset"           // just name
-        , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
+        , "dataset_type": "blindsr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
         , "lq_patchsize": 64
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr", "bsrgan_plus"
-        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  | /work/pb035507/dataset/rgb/train_0
+        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr", "bsrgan_plus"
+        , "dataroot_H": "/work/pb035507/dataset/rgb/train_0" //"/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0  | /work/pb035507/dataset/rgb/train_0
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
@@ -36,10 +36,10 @@
       }
       , "test": {
         "name": "test_dataset"            // just name
-        , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+        , "dataset_type": "blindsr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 64
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr", "bsrgan_plus"
-        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test | /work/pb035507/dataset/rgb/test
+        , "dataroot_H": "/work/pb035507/dataset/rgb/test" // "/hpcwork/pb035507/dataset/mri/data_for_test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test | /work/pb035507/dataset/rgb/test
         , "dataroot_L": null              // path of L testing dataset
         , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 32
@@ -54,8 +54,8 @@
       , "num_mixtures": 9
       , "num_layers":2
       , "avg_pool": false
-      , "init_type": "orthogonal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-      , "init_bn_type": "uniform"         // "uniform" | "constant"
+      , "init_type": "default"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      // , "init_bn_type": "uniform"         // "uniform" | "constant"
       , "init_gain": 0.2
       //, "pre_trained": "/mnt/d/zoo/Unet-MoE-v1/2023-09-27_00-30-02/Unet-MoE-v1_kernel-9_khw-16-Optimizer-Adam-Criterion-MSE-lr-0.001-lr_min-0.0001-warmup_epochs-3-epochs-50-batch_size-None-size-128-stride-4-kernel_params-7-scale_factor-1-sigma-15-noise_typegaussian_latest.pth"
     }
@@ -73,7 +73,7 @@
 
     , "train": {
       "is_moe": true
-      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
       , "G_lossfn_weight": 1e-2
   
       , "F_lossfn_type": "l1"  // "l1" | "l2"
@@ -83,7 +83,7 @@
       , "F_use_input_norm": true
       , "F_use_range_norm": false
   
-      , "gan_type": "lsgan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+      , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
       , "D_lossfn_weight": 5e-3
   
       , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
@@ -101,7 +101,7 @@
       , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "ReduceLROnPlateau"
       , "G_scheduler_milestones": [2000, 8000, 12000, 20000]
       , "G_scheduler_gamma": 0.5
-      , "G_optimizer_reuse": false
+      , "G_optimizer_reuse": true
       , "G_scheduler_T_max": 2000000
       , "G_scheduler_eta_min": 1e-7
        , "G_scheduler_lr_min": 1e-7
