@@ -146,25 +146,30 @@ def get_m_image_paths(dataset_dir, data_name='ALL'):
     else:
         data_list = [data_name]
 
-    file_list = []
-    for data_name in data_list:
-        sub_dir = os.path.join(dataset_dir, data_name)
-        if not os.path.isdir(sub_dir):
-            # print(f"Skipping {sub_dir} because it is not a directory")
-            continue
+    full_paths = [os.path.join(dataset_dir, item) for item in data_list]
 
-        sub_dir = os.path.expanduser(sub_dir)
+    if any(os.path.isfile(path) for path in full_paths):
+        return get_image_paths(dataset_dir)
+    else:
+        file_list = []
+        for data_name in data_list:
+            sub_dir = os.path.join(dataset_dir, data_name)
+            if not os.path.isdir(sub_dir):
+                # print(f"Skipping {sub_dir} because it is not a directory")
+                continue
 
-        for root, dirs, files in os.walk(sub_dir):
-            files.sort()
-            for file_name in files:
-                if is_image_file(file_name):
-                    full_path = os.path.join(root, file_name)
-                    file_list.append(full_path)
-            # print(f"Checked {root}, found {len(files)} files, {len([f for f in files if is_image_file(f)])} passed filter")
+            sub_dir = os.path.expanduser(sub_dir)
 
-    print(f"Found {len(file_list)} files in total")
-    return file_list
+            for root, dirs, files in os.walk(sub_dir):
+                files.sort()
+                for file_name in files:
+                    if is_image_file(file_name):
+                        full_path = os.path.join(root, file_name)
+                        file_list.append(full_path)
+                # print(f"Checked {root}, found {len(files)} files, {len([f for f in files if is_image_file(f)])} passed filter")
+
+        print(f"Found {len(file_list)} files in total")
+        return file_list
 
 
 '''

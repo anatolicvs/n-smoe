@@ -370,23 +370,27 @@ class SliceDatasetSR(torch.utils.data.Dataset):
     def __getitem__(self, i: int):
         img_H = None
         fname, dataslice, metadata = self.raw_samples[i]
-        if fname.endswith('.h5'):
-            with h5py.File(fname, "r") as hf:
-                img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
-        
-        elif fname.endswith('.gz') and 't1n' in fname:
-            nib_img = nibabel.load(fname)
-            volume = nib_img.get_fdata()
-            best_slice_index = self._get_best_slice(volume)
-            img_H = volume[:, :, best_slice_index]
-
-        elif fname.endswith('.gz') and '4CH_ES.nii' in fname:
-            nib_img = nibabel.load(fname)
-            img_H = nib_img.get_fdata()
-
-        else :
-            img_H = util.imread_uint(fname, self.n_channels)
-            img_H = util.uint2single(img_H)
+        try:
+            if fname.endswith('.h5'):
+                with h5py.File(fname, "r") as hf:
+                    img_H = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+            elif fname.endswith('.gz') and 't1n' in fname:
+                nib_img = nibabel.load(fname)
+                volume = nib_img.get_fdata()
+                best_slice_index = self._get_best_slice(volume)
+                img_H = volume[:, :, best_slice_index]
+            elif fname.endswith('.gz') and '4CH_ES.nii' in fname:
+                nib_img = nibabel.load(fname)
+                img_H = nib_img.get_fdata()
+            else:
+                img_H = util.imread_uint(fname, self.n_channels)
+                img_H = util.uint2single(img_H)
+        except PermissionError as e:
+            logging.warning(f"Skipping file {fname} due to PermissionError: {e}")
+            return None
+        except Exception as e:
+            logging.warning(f"Skipping file {fname} due to error: {e}")
+            return None
 
         img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
         img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H))
@@ -394,26 +398,24 @@ class SliceDatasetSR(torch.utils.data.Dataset):
         if img_H is None or img_H.ndim == 0:
             logging.warning(f"Skipping file {fname} due to zero dimensions.")
             return None
-        
+
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
 
         if img_H.ndim >= 2:
             h, w = img_H.shape[:2]
             if h < self.lq_patchsize * self.sf or w < self.lq_patchsize * self.sf:
-                # logging.warning(f"Image size too small for processing: {fname}")
                 return None
         else:
-            # logging.warning(f"Invalid image dimensions: {fname}")
             return None
 
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
-     
+
         if self.phase == 'train':
             mode = random.randint(0, 7)
             img_H = util.augment_img(img_H, mode=mode)
-           
+
         if self.degradation_type == 'bsrgan':
             img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
         elif self.degradation_type == 'bsrgan_plus':

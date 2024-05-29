@@ -148,7 +148,7 @@ def main(json_path='options/train_transformer_x2_gan_local.json'):
    
 
     model = define_Model(opt)
-
+    
     model.init_train()
     if opt['rank'] == 0:
         logger.info(model.info_network())
@@ -168,7 +168,7 @@ def main(json_path='options/train_transformer_x2_gan_local.json'):
           
             model.feed_data(train_data)
 
-            model.visualize_data()
+            # model.visualize_data()
 
             model.optimize_parameters(current_step)
             

@@ -205,6 +205,58 @@ def define_G(opt):
         
         netG = Autoencoder(cfg=autoenocer_cfg)
 
+    elif net_type == 'selfattention_transformer':
+        from models.network_selfattention_transformer_moe import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig,BackboneDinoCfg,SelfAttentionTransformerCfg,ImageSelfAttentionCfg
+        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        
+        encoder_cfg = EncoderConfig(
+            embed_dim=opt_net["embed_dim"], 
+            dropout=opt_net["dropout"],
+            patch_size= opt_net["patch_size"], 
+            avg_pool=opt_net["avg_pool"], 
+            scale_factor=opt_net["scale"],
+            resizer_num_layers=opt_net["resizer_num_layers"], 
+            backbone_cfg = BackboneDinoCfg(
+                    name="dino", 
+                    model=opt_net["dino_model"],
+                    backbone_cfg=BackboneResnetCfg(name="resnet", model=opt_net["resnet_model"], 
+                                                num_layers=opt_net["num_layers"], use_first_pool=opt_net["use_first_pool"])),
+
+            transformer_cfg = SelfAttentionTransformerCfg(
+                    self_attention=ImageSelfAttentionCfg(
+                        patch_size=opt_net["patch_size"],
+                        num_octaves=opt_net["num_octaves"],
+                        num_layers=opt_net["num_layers"],
+                        num_heads=opt_net["num_heads"],
+                        d_token=opt_net["d_token"],
+                        d_dot=opt_net["d_dot"],
+                        d_mlp=opt_net["d_mlp"],
+                    ),
+                    num_layers=opt_net["num_layers"],
+                    num_heads=opt_net["num_heads"],
+                    d_dot=opt_net["d_dot"],
+                    d_mlp=opt_net["d_mlp"],
+                    downscale=opt_net["downscale"]))
+        
+        decoder_cfg = MoEConfig(
+            num_mixtures=opt_net["num_mixtures"],
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net['sharpening_factor']
+        )
+
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            d_in=opt_net["n_channels"],
+            d_out=z,
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"]
+        )
+
+        netG = Autoencoder(
+            cfg=autoenocer_cfg
+        )
+
     elif net_type == 'lft_gan_v':
         from models.network_lft_v import LFT
         netG = LFT(opt_net)

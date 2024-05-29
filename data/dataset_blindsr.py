@@ -30,8 +30,8 @@ class DatasetBlindSR(data.Dataset):
         self.phw = opt['phw']
         self.overlap = opt['overlap']
         # sub directory for each dataset
-        # self.paths_H = util.get_m_image_paths(opt['dataroot_H'])
-        self.paths_H = util.get_image_paths(opt['dataroot_H'])
+        self.paths_H = util.get_m_image_paths(opt['dataroot_H'])
+        # self.paths_H = util.get_image_paths(opt['dataroot_H'])
         print(len(self.paths_H))
 
 #        for n, v in enumerate(self.paths_H):
