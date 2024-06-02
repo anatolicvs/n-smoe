@@ -168,7 +168,7 @@ def main(json_path='options/train_selfattention_transformer_gan_local.json'):
           
             model.feed_data(train_data)
 
-            model.visualize_data()
+            # model.visualize_data()
 
             model.optimize_parameters(current_step)
             
@@ -198,10 +198,10 @@ def main(json_path='options/train_selfattention_transformer_gan_local.json'):
 
                     idx += 1
                     image_name_ext = os.path.basename(test_data['L_path'][0])
-                    img_name, ext = os.path.splitext(image_name_ext)
+                    # img_name, ext = os.path.splitext(image_name_ext)
 
-                    img_dir = os.path.join(opt['path']['images'], img_name)
-                    util.mkdir(img_dir)
+                    # img_dir = os.path.join(opt['path']['images'], img_name)
+                    # util.mkdir(img_dir)
 
                     model.feed_data(test_data)
                     model.test()
@@ -213,8 +213,8 @@ def main(json_path='options/train_selfattention_transformer_gan_local.json'):
                     # -----------------------
                     # save estimated image E
                     # -----------------------
-                    save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
-                    util.imsave(E_img, save_img_path)
+                    # save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
+                    # util.imsave(E_img, save_img_path)
 
                     # -----------------------
                     # calculate PSNR

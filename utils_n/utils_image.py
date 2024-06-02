@@ -127,14 +127,17 @@ def is_image_file(filename):
     lower_filename = filename.lower()
     result = False
     if lower_filename.endswith('.h5'):
-        result = True
+        result = False
     elif lower_filename.endswith('.gz'):
         if '4ch_es.nii' in lower_filename or 't1n' in lower_filename:
-            result = True
+            result = False
         else:
             result = False
+    elif lower_filename.endswith('.npy'):
+            result = True
     else:
-        result = any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
+        result = False 
+        # any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
 
     # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
     return result

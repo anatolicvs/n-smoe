@@ -296,7 +296,6 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
                 else:
                     self.raw_samples.append(FastMRIRawDataSample(fname, 0, {}))
                     
-
         else:
             logging.info(f"Using dataset cache from {self.dataset_cache_file}.")
             self.raw_samples = dataset_cache[tuple(files)]
@@ -379,6 +378,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
                 volume = nib_img.get_fdata()
                 best_slice_index = self._get_best_slice(volume)
                 img_H = volume[:, :, best_slice_index]
+            elif fname.endswith('.npy'):
+                img_H = np.load(fname)[dataslice]
             elif fname.endswith('.gz') and '4CH_ES.nii' in fname:
                 nib_img = nibabel.load(fname)
                 img_H = nib_img.get_fdata()
