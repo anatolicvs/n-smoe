@@ -27,7 +27,7 @@ def update_options_with_beeond(options_path, beeond_dir=None):
     
     return options
 
-def main(json_path='options/train_transformer_x2_gan_local.json'):
+def main(json_path='options/train_selfattention_transformer_gan_local.json'):
 
    
     parser = argparse.ArgumentParser()
@@ -168,7 +168,7 @@ def main(json_path='options/train_transformer_x2_gan_local.json'):
           
             model.feed_data(train_data)
 
-            # model.visualize_data()
+            model.visualize_data()
 
             model.optimize_parameters(current_step)
             

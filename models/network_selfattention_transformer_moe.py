@@ -10,6 +10,7 @@ import torchvision
 from einops import einsum, rearrange, repeat
 from jaxtyping import Float, Int64
 from torch import Tensor
+import cuda_block_ops
 
 # import torchvision.transforms as transforms
 # from PIL import Image
@@ -686,63 +687,135 @@ class AutoencoderConfig:
     phw: int = 32,
     overlap: int = 24
 
-class Autoencoder(Backbone[AutoencoderConfig]):
-     def __init__(self, 
-                  cfg: AutoencoderConfig):
-        super().__init__(cfg)
+# class Autoencoder(Backbone[AutoencoderConfig]):
+#      def __init__(self, 
+#                   cfg: AutoencoderConfig):
+#         super().__init__(cfg)
         
+#         self.phw = cfg.phw
+#         self.overlap = cfg.overlap
+        
+#         self.encoder = Encoder(
+#             cfg.EncoderConfig,
+#             d_in=cfg.d_in,
+#             d_out=cfg.d_out
+#         )
+
+#         self.decoder = MoE(
+#             cfg.DecoderConfig,
+#             d_in=cfg.d_in
+#         )
+
+#      @staticmethod
+#      def reconstruct(blocks, original_dims, block_size, overlap):
+#         batch_size, num_channels, height, width = original_dims
+#         step = block_size - overlap
+#         device = blocks.device
+
+#         recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+#         count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+
+#         num_blocks_per_row = (width - block_size) // step + 1
+#         num_blocks_per_column = (height - block_size) // step + 1
+#         num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+
+#         for b in range(batch_size):
+#             idx_start = b * num_blocks_per_image
+#             current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+#             idx = 0
+#             for i in range(0, height - block_size + 1, step):
+#                 for j in range(0, width - block_size + 1, step):
+#                     recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+#                     count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+#                     idx += 1
+
+#         recon_images /= count_matrix.clamp(min=1)
+#         return recon_images
+     
+#      def forward(self, x, shape):
+#         if len(x.shape) == 5:
+#             x = x.view(-1, *x.size()[2:])
+#         encoded = self.encoder(x)
+#         B, C, H, W = shape
+#         sf = self.encoder.scale_factor
+#         scaled_phw = self.phw * sf 
+ 
+#         decoded = self.decoder(scaled_phw, scaled_phw, encoded)
+#         y_hat = self.reconstruct(decoded, (B, C, H * sf, W * sf), scaled_phw, self.overlap*sf)
+#         return y_hat
+
+
+class Autoencoder(Backbone[AutoencoderConfig]):
+    def __init__(self, cfg: AutoencoderConfig):
+        super().__init__(cfg)
         self.phw = cfg.phw
         self.overlap = cfg.overlap
-        
-        self.encoder = Encoder(
-            cfg.EncoderConfig,
-            d_in=cfg.d_in,
-            d_out=cfg.d_out
-        )
+        self.encoder = Encoder(cfg.EncoderConfig, d_in=cfg.d_in, d_out=cfg.d_out)
+        self.decoder = MoE(cfg.DecoderConfig, d_in=cfg.d_in)
 
-        self.decoder = MoE(
-            cfg.DecoderConfig,
-            d_in=cfg.d_in
-        )
+    @staticmethod
+    def reconstruct(blocks, original_dims, block_size, overlap):
 
-     @staticmethod
-     def reconstruct(blocks, original_dims, block_size, overlap):
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(batch_size, num_channels, height, width, device=device)
 
-        num_blocks_per_row = (width - block_size) // step + 1
-        num_blocks_per_column = (height - block_size) // step + 1
-        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+        cuda_block_ops.reconstruct(
+            blocks.contiguous(),  
+            recon_images,        
+            batch_size,           
+            num_channels,        
+            height,
+            width,
+            block_size,
+            step
+        )
 
-        for b in range(batch_size):
-            idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
-            idx = 0
-            for i in range(0, height - block_size + 1, step):
-                for j in range(0, width - block_size + 1, step):
-                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
-                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
-                    idx += 1
-
-        recon_images /= count_matrix.clamp(min=1)
         return recon_images
-     
-     def forward(self, x, shape):
-        if len(x.shape) == 5:
-            x = x.view(-1, *x.size()[2:])
-        encoded = self.encoder(x)
-        B, C, H, W = shape
-        sf = self.encoder.scale_factor
-        scaled_phw = self.phw * sf 
- 
-        decoded = self.decoder(scaled_phw, scaled_phw, encoded)
-        y_hat = self.reconstruct(decoded, (B, C, H * sf, W * sf), scaled_phw, self.overlap*sf)
-        return y_hat
+    
+    def mem_lim(self):
+        dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if dev == 'cuda':
+            torch.cuda.set_device(0)
+            tot_mem = torch.cuda.get_device_properties(0).total_memory
+            used_mem = torch.cuda.memory_allocated(0)
+            free_mem = tot_mem - used_mem
 
+            thresholds = [0.5, 0.3, 0.1]
+            for percent in thresholds:
+                threshold = tot_mem * percent
+                if free_mem > threshold:
+                    return threshold
+
+            min_threshold = max(1 * 2**30, tot_mem * 0.05)
+            return min_threshold
+        else:
+            return 1 * 2**30
+
+    def forward(self, x, s):
+        if x.ndim == 5:
+            x = x.reshape(-1, *x.shape[2:])
+
+        es = x.element_size()
+        ml = self.mem_lim()
+        bm = x.shape[1:].numel() * es
+        mx_bs = ml // bm
+        n = max(1, min(x.shape[0] // 1024, mx_bs))
+        cs = (x.shape[0] + n - 1) // n
+
+        b = torch.split(x, cs)
+
+        enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+
+        B, C, H, W = s
+        sp = self.phw * self.encoder.scale_factor
+
+        dec = torch.cat([self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0)
+
+        y = self.reconstruct(dec, (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor), sp, self.overlap * self.encoder.scale_factor)
+        return y
 
 if __name__ == "__main__":
     # dino_cfg = BackboneDinoCfg(name="dino", model="dino_vitb8", d_out=512,d_in=3, backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=1, use_first_pool=True))
@@ -774,7 +847,7 @@ if __name__ == "__main__":
     # image_path = '/home/ozkan/works/n-smoe/utils/test.png'
     # image_tensor = load_image(image_path)
     
-    image_tensor = torch.randn(1, 256, 256).cuda()
+    image_tensor = torch.randn(1, 512, 512).cuda()
 
     blocks = extract_blocks(image_tensor, 32, 16)
     image_tensor = image_tensor.unsqueeze(0)
@@ -813,15 +886,15 @@ if __name__ == "__main__":
                     patch_size=4,
                     num_octaves=10,
                     num_layers=2,
-                    num_heads=4,
+                    num_heads=2,
                     d_token=128,
                     d_dot=128,
-                    d_mlp=256
+                    d_mlp=128
                 ),
                 num_layers=2,
-                num_heads=4,
+                num_heads=2,
                 d_dot=128,
-                d_mlp=256,
+                d_mlp=128,
                 downscale=4))
     
     decoder_cfg = MoEConfig(

@@ -210,8 +210,8 @@ def main(json_path='options/train_convsmoe_psnr.json'):
                     # -----------------------
                     # save estimated image E
                     # -----------------------
-                    save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
-                    util.imsave(E_img, save_img_path)
+                    # save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
+                    # util.imsave(E_img, save_img_path)
 
                     # -----------------------
                     # calculate PSNR
