@@ -50,9 +50,9 @@ def parse(opt_path, is_train=True):
         dataset['n_channels'] = opt['n_channels']  
         dataset['ang_res'] = opt['ang_res'] if "ang_res" in opt else 5
         if 'dataroot_H' in dataset and dataset['dataroot_H'] is not None:
-            dataset['dataroot_H'] = os.path.expanduser(dataset['dataroot_H'])
+            dataset['dataroot_H'] = dataset['dataroot_H'] # os.path.expanduser(dataset['dataroot_H']) 
         if 'dataroot_L' in dataset and dataset['dataroot_L'] is not None:
-            dataset['dataroot_L'] = os.path.expanduser(dataset['dataroot_L'])
+            dataset['dataroot_L'] = dataset['dataroot_H'] # os.path.expanduser(dataset['dataroot_L'])
         if "phw" and "overlap" in opt:
             dataset['phw'] = opt['phw']
             dataset['overlap'] = opt['overlap']

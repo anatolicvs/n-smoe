@@ -139,7 +139,14 @@ def is_image_file(filename):
     # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
     return result
 
-def get_m_image_paths(dataset_dir, data_name='ALL'):
+def get_m_image_paths(dataset_dirs, data_name='ALL'):
+    file_list = []
+    for dataset_dir in dataset_dirs:
+        current_list = _explore_directory(dataset_dir, data_name)
+        file_list.extend(current_list)
+    return file_list
+
+def _explore_directory(dataset_dir, data_name='ALL'):
     """Retrieve paths to image files that meet specific criteria from the dataset directory."""
     if data_name == 'ALL':
         data_list = os.listdir(dataset_dir)
@@ -170,7 +177,6 @@ def get_m_image_paths(dataset_dir, data_name='ALL'):
 
         print(f"Found {len(file_list)} files in total")
         return file_list
-
 
 '''
 # --------------------------------------------
