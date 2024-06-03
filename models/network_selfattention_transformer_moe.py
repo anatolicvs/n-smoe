@@ -847,7 +847,7 @@ if __name__ == "__main__":
     # image_path = '/home/ozkan/works/n-smoe/utils/test.png'
     # image_tensor = load_image(image_path)
     
-    image_tensor = torch.randn(1, 512, 512).cuda()
+    image_tensor = torch.randn(1, 128, 128).cuda()
 
     blocks = extract_blocks(image_tensor, 32, 16)
     image_tensor = image_tensor.unsqueeze(0)
@@ -868,35 +868,95 @@ if __name__ == "__main__":
     #     d_mlp: 256
     #     downscale: 4
 
-    encoder_cfg = EncoderConfig(
-        embed_dim=128,
-        dropout=0.01,
-        patch_size=4,
-        scale_factor=2,
-        avg_pool=False,
-        resizer_num_layers=2,
-        backbone_cfg = BackboneDinoCfg(
-                name="dino", 
-                model="dino_vitb8", 
-                backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
-                                               num_layers=1, use_first_pool=True)),
+    # encoder_cfg = EncoderConfig(
+    #     embed_dim=128,
+    #     dropout=0.01,
+    #     patch_size=4,
+    #     scale_factor=2,
+    #     avg_pool=False,
+    #     resizer_num_layers=2,
+    #     backbone_cfg = BackboneDinoCfg(
+    #             name="dino", 
+    #             model="dino_vitb8", 
+    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
+    #                                            num_layers=1, use_first_pool=True)),
 
-        transformer_cfg = SelfAttentionTransformerCfg(
-                self_attention=ImageSelfAttentionCfg(
-                    patch_size=4,
-                    num_octaves=10,
-                    num_layers=2,
-                    num_heads=2,
-                    d_token=128,
-                    d_dot=128,
-                    d_mlp=128
-                ),
-                num_layers=2,
-                num_heads=2,
+    #     transformer_cfg = SelfAttentionTransformerCfg(
+    #             self_attention=ImageSelfAttentionCfg(
+    #                 patch_size=4,
+    #                 num_octaves=10,
+    #                 num_layers=2,
+    #                 num_heads=2,
+    #                 d_token=128,
+    #                 d_dot=128,
+    #                 d_mlp=128
+    #             ),
+    #             num_layers=2,
+    #             num_heads=2,
+    #             d_dot=128,
+    #             d_mlp=128,
+    #             downscale=4))
+
+    encoder_cfg = EncoderConfig(
+        embed_dim=128,                   
+        dropout=0.1,                     
+        patch_size=4,                    
+        scale_factor=2,                  
+        avg_pool=False,                  
+        resizer_num_layers=2,            
+        backbone_cfg=BackboneDinoCfg(
+            name="dino",
+            model="dino_vitb8",        
+            backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=2, use_first_pool=True)
+        ),
+        transformer_cfg=SelfAttentionTransformerCfg(
+            self_attention=ImageSelfAttentionCfg(
+                patch_size=4,
+                num_octaves=16,           
+                num_layers=4,            
+                num_heads=8,           
+                d_token=128,
                 d_dot=128,
-                d_mlp=128,
-                downscale=4))
-    
+                d_mlp=256
+            ),
+            num_layers=4,                 
+            num_heads=8,
+            d_dot=128,
+            d_mlp=256,
+            downscale=1                   
+        )
+    )
+
+    # encoder_cfg_medium = EncoderConfig(
+    #     embed_dim=256,
+    #     dropout=0.05,
+    #     patch_size=6,
+    #     scale_factor=2,
+    #     avg_pool=False,
+    #     resizer_num_layers=3,
+    #     backbone_cfg=BackboneDinoCfg(
+    #         name="dino",
+    #         model="dino_vitb8",
+    #         backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=2, use_first_pool=True)
+    #     ),
+    #     transformer_cfg=SelfAttentionTransformerCfg(
+    #         self_attention=ImageSelfAttentionCfg(
+    #             patch_size=6,
+    #             num_octaves=10,
+    #             num_layers=4,
+    #             num_heads=4,
+    #             d_token=256,
+    #             d_dot=256,
+    #             d_mlp=512
+    #         ),
+    #         num_layers=4,
+    #         num_heads=4,
+    #         d_dot=256,
+    #         d_mlp=512,
+    #         downscale=4
+    #     )
+    # )
+
     decoder_cfg = MoEConfig(
         num_mixtures=9,
         kernel=9,
