@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v1_x2_mri_rgb_disc_unet" 
+    "task": "sa_trans_moe_sr_gan_v3_x2_mri_rgb_disc_unet" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -29,7 +29,7 @@
         , "dataroot_H": "/work/pb035507/dataset/rgb/train_0"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 384                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 32
         , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
@@ -37,11 +37,11 @@
     , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "blindsr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 64
+        , "lq_patchsize": 96
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
         , "dataroot_H": "/work/pb035507/dataset/rgb/test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 384                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 32
         , "dataloader_batch_size": 1 
         }
@@ -53,7 +53,7 @@
       , "num_mixtures": 9
       , "sharpening_factor": 1
 
-      , "embed_dim": 128
+      , "embed_dim": 64
       , "dropout": 0.0
       , "patch_size": 4
       
@@ -70,8 +70,8 @@
       , "num_heads" : 4
       ,  "d_token" : 128
       ,  "d_dot": 128
-      , "d_mlp": 256
-      , "downscale" : 4
+      , "d_mlp": 128
+      , "downscale" : 2
    
       , "init_type": "default"         
     }
@@ -116,12 +116,12 @@
         , "D_optimizer_wd": 0
     
         , "G_scheduler_type": "MultiStepLR"
-        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "G_scheduler_milestones": [4000, 5000, 5500, 5750, 6000]
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
         , "D_scheduler_type": "MultiStepLR"
-        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "D_scheduler_milestones": [4000, 5000, 5500, 5750, 6000]
         , "D_scheduler_gamma": 0.5
         , "D_optimizer_reuse": false
     
@@ -129,7 +129,7 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 5000  // skip testing
+        , "checkpoint_test": 5000
         , "checkpoint_save": 5000
         , "checkpoint_print": 200
       }
