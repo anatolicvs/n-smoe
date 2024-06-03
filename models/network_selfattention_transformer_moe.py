@@ -11,6 +11,7 @@ from einops import einsum, rearrange, repeat
 from jaxtyping import Float, Int64
 from torch import Tensor
 import cuda_block_ops
+from torch.autograd import Function
 
 # import torchvision.transforms as transforms
 # from PIL import Image
@@ -745,6 +746,21 @@ class AutoencoderConfig:
 #         return y_hat
 
 
+class ReconstructFunction(Function):
+    @staticmethod
+    def forward(ctx, blocks, batch_size, num_channels, height, width, block_size, step):
+        ctx.save_for_backward(blocks)
+        ctx.intermediates = (batch_size, num_channels, height, width, block_size, step)
+        return blocks.clone()
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        blocks, = ctx.saved_tensors
+        batch_size, num_channels, height, width, block_size, step = ctx.intermediates
+        grad_blocks = torch.zeros_like(blocks)
+        cuda_block_ops.reconstruct_backward(grad_output.contiguous(), blocks, grad_blocks, batch_size, num_channels, height, width, block_size, step)
+        return grad_blocks, None, None, None, None, None, None
+
 class Autoencoder(Backbone[AutoencoderConfig]):
     def __init__(self, cfg: AutoencoderConfig):
         super().__init__(cfg)
@@ -753,29 +769,40 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.encoder = Encoder(cfg.EncoderConfig, d_in=cfg.d_in, d_out=cfg.d_out)
         self.decoder = MoE(cfg.DecoderConfig, d_in=cfg.d_in)
 
+    # @staticmethod
+    # def reconstruct(blocks, original_dims, block_size, overlap):
+    #     batch_size, num_channels, height, width = original_dims
+    #     step = block_size - overlap
+    #     return ReconstructFunction.apply(blocks, batch_size, num_channels, height, width, block_size, step)
+    
     @staticmethod
     def reconstruct(blocks, original_dims, block_size, overlap):
-
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width, device=device)
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
 
-        cuda_block_ops.reconstruct(
-            blocks.contiguous(),  
-            recon_images,        
-            batch_size,           
-            num_channels,        
-            height,
-            width,
-            block_size,
-            step
-        )
+        num_blocks_per_row = (width - block_size) // step + 1
+        num_blocks_per_column = (height - block_size) // step + 1
+        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
 
+        for b in range(batch_size):
+            idx_start = b * num_blocks_per_image
+            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            idx = 0
+            for i in range(0, height - block_size + 1, step):
+                for j in range(0, width - block_size + 1, step):
+                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    idx += 1
+
+        recon_images /= count_matrix.clamp(min=1)
         return recon_images
     
-    def mem_lim(self):
+    @staticmethod
+    def mem_lim():
         dev = 'cuda' if torch.cuda.is_available() else 'cpu'
         if dev == 'cuda':
             torch.cuda.set_device(0)
@@ -818,6 +845,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return y
 
 if __name__ == "__main__":
+
     # dino_cfg = BackboneDinoCfg(name="dino", model="dino_vitb8", d_out=512,d_in=3, backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=1, use_first_pool=True))
     # backbone_dino = BackboneDino(dino_cfg)
     # sample_input = torch.rand(1, 3, 128, 128)  # Simulate an input image tensor

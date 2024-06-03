@@ -297,54 +297,53 @@ class Autoencoder(nn.Module):
             sharpening_factor=sharpening_factor
         )
 
-    # @staticmethod
-    # def reconstruct(blocks, original_dims, block_size, overlap):
-        
-    #     batch_size, num_channels, height, width = original_dims
-    #     step = block_size - overlap
-    #     device = blocks.device
-
-    #     recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-    #     count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
-
-    #     num_blocks_per_row = (width - block_size) // step + 1
-    #     num_blocks_per_column = (height - block_size) // step + 1
-    #     num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
-
-    #     for b in range(batch_size):
-    #         idx_start = b * num_blocks_per_image
-    #         current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
-    #         idx = 0
-    #         for i in range(0, height - block_size + 1, step):
-    #             for j in range(0, width - block_size + 1, step):
-    #                 recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
-    #                 count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
-    #                 idx += 1
-
-    #     recon_images /= count_matrix.clamp(min=1)
-    #     return recon_images
-    
     @staticmethod
     def reconstruct(blocks, original_dims, block_size, overlap):
-
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width, device=device)
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
 
-        cuda_block_ops.reconstruct(
-            blocks.contiguous(),  
-            recon_images,        
-            batch_size,           
-            num_channels,        
-            height,
-            width,
-            block_size,
-            step
-        )
+        num_blocks_per_row = (width - block_size) // step + 1
+        num_blocks_per_column = (height - block_size) // step + 1
+        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
 
+        for b in range(batch_size):
+            idx_start = b * num_blocks_per_image
+            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            idx = 0
+            for i in range(0, height - block_size + 1, step):
+                for j in range(0, width - block_size + 1, step):
+                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    idx += 1
+
+        recon_images /= count_matrix.clamp(min=1)
         return recon_images
+    
+    # @staticmethod
+    # def reconstruct(blocks, original_dims, block_size, overlap):
+
+    #     batch_size, num_channels, height, width = original_dims
+    #     step = block_size - overlap
+    #     device = blocks.device
+
+    #     recon_images = torch.zeros(batch_size, num_channels, height, width, device=device)
+
+    #     cuda_block_ops.reconstruct(
+    #         blocks.contiguous(),  
+    #         recon_images,        
+    #         batch_size,           
+    #         num_channels,        
+    #         height,
+    #         width,
+    #         block_size,
+    #         step
+    #     )
+
+    #     return recon_images
     
     def mem_lim(self):
         dev = 'cuda' if torch.cuda.is_available() else 'cpu'
