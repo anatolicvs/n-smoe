@@ -4,3 +4,7 @@ __pycache__/
 *.pyc
 matlab/denoising_color_results/
 matlab/denoising_gray_results/
+cu/build
+cu/build_ops.egg-info
+cu/cuda_block_ops.egg-info
+cu/dist

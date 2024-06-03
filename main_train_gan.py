@@ -27,7 +27,7 @@ def update_options_with_beeond(options_path, beeond_dir=None):
     
     return options
 
-def main(json_path='options/train_transformer_x2_gan_local.json'):
+def main(json_path='options/train_selfattention_transformer_gan_local.json'):
 
    
     parser = argparse.ArgumentParser()
@@ -198,10 +198,10 @@ def main(json_path='options/train_transformer_x2_gan_local.json'):
 
                     idx += 1
                     image_name_ext = os.path.basename(test_data['L_path'][0])
-                    img_name, ext = os.path.splitext(image_name_ext)
+                    # img_name, ext = os.path.splitext(image_name_ext)
 
-                    img_dir = os.path.join(opt['path']['images'], img_name)
-                    util.mkdir(img_dir)
+                    # img_dir = os.path.join(opt['path']['images'], img_name)
+                    # util.mkdir(img_dir)
 
                     model.feed_data(test_data)
                     model.test()
@@ -213,8 +213,8 @@ def main(json_path='options/train_transformer_x2_gan_local.json'):
                     # -----------------------
                     # save estimated image E
                     # -----------------------
-                    save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
-                    util.imsave(E_img, save_img_path)
+                    # save_img_path = os.path.join(img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
+                    # util.imsave(E_img, save_img_path)
 
                     # -----------------------
                     # calculate PSNR

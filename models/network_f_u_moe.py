@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import cuda_block_ops
 
 class up(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -296,52 +297,90 @@ class Autoencoder(nn.Module):
             sharpening_factor=sharpening_factor
         )
 
+    # @staticmethod
+    # def reconstruct(blocks, original_dims, block_size, overlap):
+        
+    #     batch_size, num_channels, height, width = original_dims
+    #     step = block_size - overlap
+    #     device = blocks.device
+
+    #     recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+    #     count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+
+    #     num_blocks_per_row = (width - block_size) // step + 1
+    #     num_blocks_per_column = (height - block_size) // step + 1
+    #     num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+
+    #     for b in range(batch_size):
+    #         idx_start = b * num_blocks_per_image
+    #         current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+    #         idx = 0
+    #         for i in range(0, height - block_size + 1, step):
+    #             for j in range(0, width - block_size + 1, step):
+    #                 recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+    #                 count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+    #                 idx += 1
+
+    #     recon_images /= count_matrix.clamp(min=1)
+    #     return recon_images
+    
     @staticmethod
     def reconstruct(blocks, original_dims, block_size, overlap):
-        
+
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(batch_size, num_channels, height, width, device=device)
 
-        num_blocks_per_row = (width - block_size) // step + 1
-        num_blocks_per_column = (height - block_size) // step + 1
-        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+        cuda_block_ops.reconstruct(
+            blocks.contiguous(),  
+            recon_images,        
+            batch_size,           
+            num_channels,        
+            height,
+            width,
+            block_size,
+            step
+        )
 
-        for b in range(batch_size):
-            idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
-            idx = 0
-            for i in range(0, height - block_size + 1, step):
-                for j in range(0, width - block_size + 1, step):
-                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
-                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
-                    idx += 1
-
-        recon_images /= count_matrix.clamp(min=1)
         return recon_images
     
-    def forward(self, x, shape):
-        if len(x.shape) == 5:
-            x = x.view(-1, *x.size()[2:])
+    def mem_lim(self):
+        dev = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if dev == 'cuda':
+            torch.cuda.set_device(0)
+            tot_mem = torch.cuda.get_device_properties(0).total_memory
+            used_mem = torch.cuda.memory_allocated(0)
+            free_mem = tot_mem - used_mem
 
-        # bs = len(x) // 128
-      
-        encoded = self.encoder(x)
-
-        B, C, H, W = shape
-        scaled_phw = self.phw * self.scale_factor 
- 
-        # params = torch.split(encoded, bs, dim=0)
+            th = [4 * 2**30, 2 * 2**30]  # Thresholds for 4GB and 2GB
+            for t in th:
+                if free_mem > t:
+                    return t
+            return 1 * 2**30  # Default to 1GB
+        else:
+            return 1 * 2**30
         
-        # decoded = [self.decoder(scaled_phw, scaled_phw, param) for param in params]
-        # decoded = torch.cat(decoded, dim=0)
+    def forward(self, x, s):
+        if x.ndim == 5:
+            x = x.reshape(-1, *x.shape[2:])
 
-        decoded = self.decoder(scaled_phw, scaled_phw, encoded)
+        es = x.element_size()
+        ml = self.mem_lim()
+        bm = x.shape[1:].numel() * es
+        mx_bs = ml // bm
+        n = max(1, min(x.shape[0] // 1024, mx_bs))
+        cs = (x.shape[0] + n - 1) // n
 
-        y_hat = self.reconstruct(decoded, (B, C, H * self.scale_factor, W * self.scale_factor), scaled_phw, self.overlap*self.scale_factor)
-        
+        b = torch.split(x, cs)
 
-        return y_hat
+        enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+
+        B, C, H, W = s
+        sp = self.phw * self.scale_factor
+
+        dec = torch.cat([self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0)
+
+        y = self.reconstruct(dec, (B, C, H * self.scale_factor, W * self.scale_factor), sp, self.overlap * self.scale_factor)
+        return y

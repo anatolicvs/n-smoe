@@ -127,19 +127,29 @@ def is_image_file(filename):
     lower_filename = filename.lower()
     result = False
     if lower_filename.endswith('.h5'):
-        result = True
+        result = False
     elif lower_filename.endswith('.gz'):
         if '4ch_es.nii' in lower_filename or 't1n' in lower_filename:
-            result = True
+            result = False
         else:
             result = False
+    elif lower_filename.endswith('.npy'):
+            result = True
     else:
-        result = any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
+        result = False 
+        # any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
 
     # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
     return result
 
-def get_m_image_paths(dataset_dir, data_name='ALL'):
+def get_m_image_paths(dataset_dirs, data_name='ALL'):
+    file_list = []
+    for dataset_dir in dataset_dirs:
+        current_list = _explore_directory(dataset_dir, data_name)
+        file_list.extend(current_list)
+    return file_list
+
+def _explore_directory(dataset_dir, data_name='ALL'):
     """Retrieve paths to image files that meet specific criteria from the dataset directory."""
     if data_name == 'ALL':
         data_list = os.listdir(dataset_dir)
@@ -170,7 +180,6 @@ def get_m_image_paths(dataset_dir, data_name='ALL'):
 
         print(f"Found {len(file_list)} files in total")
         return file_list
-
 
 '''
 # --------------------------------------------
@@ -381,6 +390,17 @@ def tensor2uint(img):
         img = np.transpose(img, (1, 2, 0))
     return np.uint8((img*255.0).round())
 
+def _tensor2uint(img):
+    img = img.data.squeeze().float().cpu().numpy()
+    if img.ndim == 3:
+        img = np.transpose(img, (1, 2, 0))
+        
+    min_val = img.min()
+    max_val = img.max()
+    img = (img - min_val) / (max_val - min_val)  # Scale img to [0, 1]
+    img = np.uint8(img * 255)  # Scale img to [0, 255] and convert to uint8
+    
+    return img
 
 # --------------------------------------------
 # numpy(single) (HxWxC) <--->  tensor
@@ -1082,6 +1102,16 @@ def imresize_np(img, scale, antialiasing=True):
         out_2.squeeze_()
 
     return out_2.numpy()
+
+
+
+def make_1ch(im):
+    assert im.shape[0] == 3, "Input tensor must have three channels"
+    return torch.mean(im, dim=0, keepdim=True) 
+
+def make_3ch(im):
+    assert im.shape[1] == 1, "Input tensor must have one channel"
+    return im.repeat(1, 3, 1, 1)
 
 
 if __name__ == '__main__':

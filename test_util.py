@@ -1,6 +1,6 @@
 
-from utils import utils_image as util
-from utils.utils_blindsr import degradation_bsrgan, upsample_and_clip
+from utils_n import utils_image as util
+from utils_n.utils_blindsr import degradation_bsrgan, upsample_and_clip
 import cv2
 import numpy as np
 import traceback

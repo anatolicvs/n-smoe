@@ -30,7 +30,7 @@ import pandas as pd
 import requests
 import torch
 import yaml
-import matplotlib.pyplot as plt
+
 import utils_n.utils_image as util
 import torch.nn.functional as F
 from utils_n import utils_blindsr as blindsr
@@ -219,7 +219,7 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
                 i = i - len(dataset)
 
 
-class SliceDatasetSR(torch.utils.data.Dataset):
+class MedicalDatasetSR(torch.utils.data.Dataset):
     def __init__(self, opt):
         self.n_channels = opt['n_channels'] if opt['n_channels'] else 3
         roots = opt["dataroot_H"]
@@ -296,7 +296,6 @@ class SliceDatasetSR(torch.utils.data.Dataset):
                 else:
                     self.raw_samples.append(FastMRIRawDataSample(fname, 0, {}))
                     
-
         else:
             logging.info(f"Using dataset cache from {self.dataset_cache_file}.")
             self.raw_samples = dataset_cache[tuple(files)]
@@ -379,6 +378,8 @@ class SliceDatasetSR(torch.utils.data.Dataset):
                 volume = nib_img.get_fdata()
                 best_slice_index = self._get_best_slice(volume)
                 img_H = volume[:, :, best_slice_index]
+            elif fname.endswith('.npy'):
+                img_H = np.load(fname)[dataslice]
             elif fname.endswith('.gz') and '4CH_ES.nii' in fname:
                 nib_img = nibabel.load(fname)
                 img_H = nib_img.get_fdata()
@@ -416,12 +417,24 @@ class SliceDatasetSR(torch.utils.data.Dataset):
             mode = random.randint(0, 7)
             img_H = util.augment_img(img_H, mode=mode)
 
-        if self.degradation_type == 'bsrgan':
+
+        degradation_models = ['bsrgan', 'bsrgan_plus', 'dspr']
+        chosen_model = random.choice(degradation_models)
+
+        # herusticly select the degradation model
+        if chosen_model == 'bsrgan':
             img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        elif self.degradation_type == 'bsrgan_plus':
+        elif chosen_model == 'bsrgan_plus':
             img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        elif self.degradation_type == 'dpsr':
+        elif chosen_model == 'dspr':
             img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
+
+        # if self.degradation_type == 'bsrgan':
+        #     img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
+        # elif self.degradation_type == 'bsrgan_plus':
+        #     img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
+        # elif self.degradation_type == 'dpsr':
+        #     img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
 
