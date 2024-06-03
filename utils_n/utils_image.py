@@ -123,63 +123,92 @@ def get_lf_image_paths(path_for_train,angRes,scale_factor,data_name):
     return file_list
 
 
-def is_image_file(filename):
-    lower_filename = filename.lower()
-    result = False
-    if lower_filename.endswith('.h5'):
-        result = True
-    elif lower_filename.endswith('.gz'):
-        if '4ch_es.nii' in lower_filename or 't1n' in lower_filename:
-            result = True
-        else:
-            result = False
-    elif lower_filename.endswith('.npy'):
-            result = True
-    else:
-        # result = False 
-        result = any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
+# def is_image_file(filename):
+#     lower_filename = filename.lower()
+#     result = False
+#     if lower_filename.endswith('.h5'):
+#         result = True
+#     elif lower_filename.endswith('.gz'):
+#         if '4ch_es.nii' in lower_filename or 't1n' in lower_filename:
+#             result = True
+#         else:
+#             result = False
+#     elif lower_filename.endswith('.npy'):
+#             result = True
+#     else:
+#         # result = False 
+#         result = any(lower_filename.endswith(extension) for extension in IMG_EXTENSIONS) 
 
-    # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
-    return result
+#     # print(f"Checking file: {filename}, Pass filter: {result}")  # Debugging output
+#     return result
+
+# def get_m_image_paths(dataset_dirs, data_name='ALL'):
+#     file_list = []
+#     for dataset_dir in dataset_dirs:
+#         current_list = _explore_directory(dataset_dir, data_name)
+#         file_list.extend(current_list)
+#     return file_list
+
+# def _explore_directory(dataset_dir, data_name='ALL'):
+#     """Retrieve paths to image files that meet specific criteria from the dataset directory."""
+#     if data_name == 'ALL':
+#         data_list = os.listdir(dataset_dir)
+#     else:
+#         data_list = [data_name]
+
+#     full_paths = [os.path.join(dataset_dir, item) for item in data_list]
+
+#     if any(os.path.isfile(path) for path in full_paths):
+#         return get_image_paths(dataset_dir)
+#     else:
+#         file_list = []
+#         for data_name in data_list:
+#             sub_dir = os.path.join(dataset_dir, data_name)
+#             if not os.path.isdir(sub_dir):
+#                 # print(f"Skipping {sub_dir} because it is not a directory")
+#                 continue
+
+#             sub_dir = os.path.expanduser(sub_dir)
+
+#             for root, dirs, files in os.walk(sub_dir):
+#                 files.sort()
+#                 for file_name in files:
+#                     if is_image_file(file_name):
+#                         full_path = os.path.join(root, file_name)
+#                         file_list.append(full_path)
+#                 # print(f"Checked {root}, found {len(files)} files, {len([f for f in files if is_image_file(f)])} passed filter")
+
+#         print(f"Found {len(file_list)} files in total")
+#         return file_list
 
 def get_m_image_paths(dataset_dirs, data_name='ALL'):
     file_list = []
     for dataset_dir in dataset_dirs:
-        current_list = _explore_directory(dataset_dir, data_name)
-        file_list.extend(current_list)
+        file_list.extend(_explore_directory(dataset_dir, data_name))
     return file_list
 
-def _explore_directory(dataset_dir, data_name='ALL'):
-    """Retrieve paths to image files that meet specific criteria from the dataset directory."""
-    if data_name == 'ALL':
-        data_list = os.listdir(dataset_dir)
-    else:
-        data_list = [data_name]
-
-    full_paths = [os.path.join(dataset_dir, item) for item in data_list]
-
-    if any(os.path.isfile(path) for path in full_paths):
-        return get_image_paths(dataset_dir)
-    else:
-        file_list = []
-        for data_name in data_list:
-            sub_dir = os.path.join(dataset_dir, data_name)
-            if not os.path.isdir(sub_dir):
-                # print(f"Skipping {sub_dir} because it is not a directory")
-                continue
-
-            sub_dir = os.path.expanduser(sub_dir)
-
-            for root, dirs, files in os.walk(sub_dir):
-                files.sort()
+def _explore_directory(dataset_dir, data_name):
+    file_list = []
+    for item in os.listdir(dataset_dir):
+        path = os.path.join(dataset_dir, item)
+        if os.path.isfile(path) and is_image_file(path):
+            file_list.append(path)
+        elif os.path.isdir(path):
+            path = os.path.expanduser(path)
+            for root, dirs, files in os.walk(path):
                 for file_name in files:
-                    if is_image_file(file_name):
-                        full_path = os.path.join(root, file_name)
+                    full_path = os.path.join(root, file_name)
+                    if is_image_file(full_path):
                         file_list.append(full_path)
-                # print(f"Checked {root}, found {len(files)} files, {len([f for f in files if is_image_file(f)])} passed filter")
+    return file_list
 
-        print(f"Found {len(file_list)} files in total")
-        return file_list
+def is_image_file(filename):
+    lower_filename = filename.lower()
+    if lower_filename.endswith('.h5') or lower_filename.endswith('.npy'):
+        return True
+    if lower_filename.endswith('.gz') and ('4ch_es.nii' in lower_filename or 't1n' in lower_filename):
+        return True
+    return any(lower_filename.endswith(ext) for ext in IMG_EXTENSIONS)
 
 '''
 # --------------------------------------------

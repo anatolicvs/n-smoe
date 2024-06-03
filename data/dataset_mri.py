@@ -418,7 +418,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             img_H = util.augment_img(img_H, mode=mode)
 
 
-        degradation_models = ['bsrgan', 'bsrgan_plus', 'dspr']
+        degradation_models = ['bsrgan', 'bsrgan_plus']
         chosen_model = random.choice(degradation_models)
 
         # herusticly select the degradation model
