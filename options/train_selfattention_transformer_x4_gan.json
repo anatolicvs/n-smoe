@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v4_x4_mri_rgb_disc_unet" 
+    "task": "sa_trans_moe_sr_gan_v5_x4_mri_rgb_disc_patchgan" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -22,70 +22,69 @@
   
       , "datasets": {
         "train": {
-            "name": "train_dataset"           // just name
-            , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-            , "lq_patchsize": 64
-            , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-            , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train/"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train  ||, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-            , "dataroot_L": null              // path of L training dataset
-            , "H_size": 384                    // patch size 40 | 64 | 96 | 128 | 192
-            , "dataloader_shuffle": true
-            , "dataloader_num_workers": 16
-            , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
-        }
+          "name": "train_dataset"           // just name
+          , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
+          , "lq_patchsize": 32
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/work/pb035507/dataset/rgb/train_0"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+          , "dataroot_L": null              // path of L training dataset
+          , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_shuffle": true
+          , "dataloader_num_workers": 64
+          , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+      }
         , "test": {
-            "name": "test_dataset"            // just name
-            , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-            , "lq_patchsize": 96
-            , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-            , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_test/"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
-            , "dataroot_L": null              // path of L testing dataset
-            , "H_size": 384                   // patch size 40 | 64 | 96 | 128 | 192
-            , "dataloader_num_workers": 16
-            , "dataloader_batch_size": 1 
-            }
-        }
+          "name": "test_dataset"            // just name
+          , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "lq_patchsize": 32
+          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+          , "dataroot_L": null              // path of L testing dataset
+          , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 32
+          , "dataloader_batch_size": 1 
+          }
+      }
   
         , "netG": {
           "net_type": "selfattention_transformer"
-          , "kernel": 16
-          , "num_mixtures": 16
+          , "kernel": 9
+          , "num_mixtures": 9
           , "sharpening_factor": 1
     
           , "embed_dim": 128
-          , "dropout": 0.0
+          , "dropout": 0.1
           , "patch_size": 4
           
           , "avg_pool": false
           , "resizer_num_layers":2
         
-          , "dino_model" : "dino_vitb16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+          , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
           , "resnet_model": "resnet50"
-          , "resnet_num_layers" : 4
-          ,  "use_first_pool": true
+          , "resnet_num_layers" : 2
+          , "use_first_pool": true
         
           , "num_octaves" : 16
-          , "num_layers": 4
+          , "num_layers": 2
           , "num_heads" : 4
           ,  "d_token" : 128
           ,  "d_dot": 128
           , "d_mlp": 128
-          , "downscale" : 4
+          , "downscale" : 1
        
           , "init_type": "default"         
-    }
+        }
   
-    , "netD": {
-        "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
-        , "in_nc": 3
-        , "base_nc": 64
-        , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
-        , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
-    
-        , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-        , "init_bn_type": "uniform"      // "uniform" | "constant"
-        , "init_gain": 0.2
-      }
+        , "netD": {
+          "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
+          , "base_nc": 64
+          , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
+          , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
+          , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          , "init_bn_type": "uniform"      // "uniform" | "constant"
+          , "init_gain": 0.2
+        }
     
       , "train": {
            "is_moe": true
