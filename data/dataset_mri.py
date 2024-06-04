@@ -304,6 +304,9 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         variances = [np.var(volume[:, :, i]) for i in range(volume.shape[2])]
         return np.argmax(variances)
     
+    def is_valid_image(self, file_path):
+        return not file_path.split('/')[-1].startswith('.')
+
     def _retrieve_metadata(self, fname):
         with h5py.File(fname, "r") as hf:
             et_root = etree.fromstring(hf["ismrmrd_header"][()])
@@ -369,6 +372,11 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
     def __getitem__(self, i: int):
         img_H = None
         fname, dataslice, metadata = self.raw_samples[i]
+
+        if not self.is_valid_image(fname):
+            logging.warning(f"Skipping non-image or system file: {fname}")
+            return None
+        
         try:
             if fname.endswith('.h5'):
                 with h5py.File(fname, "r") as hf:
@@ -393,11 +401,15 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             logging.warning(f"Skipping file {fname} due to error: {e}")
             return None
 
+        if img_H is None or np.max(img_H) == np.min(img_H):
+            logging.warning(f"Skipping file {fname} due to zero variation in pixel values.")
+            return None
+
         img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
         img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H))
 
-        if img_H is None or img_H.ndim == 0:
-            logging.warning(f"Skipping file {fname} due to zero dimensions.")
+        if img_H.ndim < 2:
+            logging.warning(f"Skipping file {fname} due to inadequate image dimensions.")
             return None
 
         img_H = util.modcrop(img_H, self.sf)
@@ -407,8 +419,6 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             h, w = img_H.shape[:2]
             if h < self.lq_patchsize * self.sf or w < self.lq_patchsize * self.sf:
                 return None
-        else:
-            return None
 
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
@@ -417,27 +427,15 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             mode = random.randint(0, 7)
             img_H = util.augment_img(img_H, mode=mode)
 
+        chosen_model = random.choice(['bsrgan', 'bsrgan_plus']) # dspr'
 
-        degradation_models = ['bsrgan', 'bsrgan_plus']
-        chosen_model = random.choice(degradation_models)
-
-        # herusticly select the degradation model
-        if chosen_model == 'bsrgan':
-            img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        elif chosen_model == 'bsrgan_plus':
-            img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        elif chosen_model == 'dspr':
-            img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
-
-        # if self.degradation_type == 'bsrgan':
-        #     img_L, img_H = blindsr.degradation_bsrgan(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        # elif self.degradation_type == 'bsrgan_plus':
-        #     img_L, img_H = blindsr.degradation_bsrgan_plus(img_H, sf=self.sf, lq_patchsize=self.lq_patchsize)
-        # elif self.degradation_type == 'dpsr':
-        #     img_L = blindsr.dpsr_degradation(img_H, k=self.k['kernels'][0][1], sf=self.sf)
+        img_L, img_H = {
+            'bsrgan': lambda x: blindsr.degradation_bsrgan(x, sf=self.sf, lq_patchsize=self.lq_patchsize),
+            'bsrgan_plus': lambda x: blindsr.degradation_bsrgan_plus(x, sf=self.sf, lq_patchsize=self.lq_patchsize),
+            'dspr': lambda x: (blindsr.dpsr_degradation(x, k=self.k['kernels'][0][1], sf=self.sf), x)
+        }[chosen_model](img_H)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
-
         img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
 
         return {'L': img_L, 'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
