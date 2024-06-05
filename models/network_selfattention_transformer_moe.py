@@ -381,6 +381,7 @@ class SelfAttentionTransformer(nn.Module):
         self,
         cfg: SelfAttentionTransformerCfg,
         d_in: int,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         
@@ -395,6 +396,7 @@ class SelfAttentionTransformer(nn.Module):
             cfg.d_mlp,
             selfatt=True,
             kv_dim=None,
+            dropout=dropout,
             feed_forward_layer=feed_forward_layer,
         )
 
@@ -584,7 +586,7 @@ class Encoder(Backbone[EncoderConfig]):
         else:
             self.backbone = None
 
-        self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out)
+        self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
         self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim)
 
         self.fc = nn.Sequential(
