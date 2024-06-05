@@ -401,7 +401,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             logging.warning(f"Skipping file {fname} due to error: {e}")
             return None
 
-        if img_H.ndim < 2:
+        if img_H is None or img_H.ndim < 2:
             logging.warning(f"Skipping file {fname} due to inadequate image dimensions.")
             return None
 

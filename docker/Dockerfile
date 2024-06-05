@@ -30,7 +30,7 @@ RUN pip3 install --pre torch torchvision torchaudio --index-url https://download
 RUN pip install pandas wandb -U scikit-learn timm lightning['extra'] tensorboard \
                                pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
                                torchensemble torchattacks torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
-                               "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat
+                               "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch cupy ruamel.yaml
 
 COPY ../cu/block_ops.cu /usr/src/
 COPY ../cu/build_ops.py /usr/src/
