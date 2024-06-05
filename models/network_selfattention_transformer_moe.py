@@ -94,6 +94,8 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
+
+
 class PatchEmbed(nn.Module):
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
@@ -587,11 +589,15 @@ class Encoder(Backbone[EncoderConfig]):
             self.backbone = None
 
         self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
-        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim)
+        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim, norm_layer=nn.LayerNorm)
 
         self.fc = nn.Sequential(
-                nn.Linear(cfg.embed_dim, d_in * d_out),
-                nn.ReLU())
+            nn.Linear(cfg.embed_dim, d_in * d_out),
+            nn.ReLU(),  
+            nn.Linear(d_in * d_out, d_in * d_out),
+            nn.LayerNorm(d_in * d_out),
+            nn.ReLU()  
+        )
 
         self.resizer = MullerResizer(
             base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=cfg.resizer_num_layers,
