@@ -178,6 +178,10 @@ class ModelGAN(ModelBase):
             self.schedulers.append(lr_scheduler.MultiStepLR(self.G_optimizer,
                                                             self.opt_train['G_scheduler_milestones'],
                                                             self.opt_train['G_scheduler_gamma']))
+        elif g_scheduler_type == 'CyclicLR':
+            self.schedulers.append(lr_scheduler.CyclicLR(self.G_optimizer, self.opt_train["G_optimizer_lr"], self.opt_train["G_scheduler_max_lr"], 
+step_size_up=self.opt_train["G_scheduler_step_size_up"], step_size_down=self.opt_train["G_scheduler_step_size_down"], mode=self.opt_train["G_scheduler_mode"], gamma=1.0,cycle_momentum=self.opt_train["G_scheduler_cycle_momentum"], base_momentum=0.8, max_momentum=0.9, last_epoch=-1, verbose=False))
+        
         elif g_scheduler_type == 'CosineAnnealingLR':
             self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.G_optimizer,
                                                                 T_max=self.opt_train['G_scheduler_T_max'],
@@ -194,6 +198,12 @@ class ModelGAN(ModelBase):
             self.schedulers.append(lr_scheduler.MultiStepLR(self.D_optimizer,
                                                             self.opt_train['D_scheduler_milestones'],
                                                             self.opt_train['D_scheduler_gamma']))
+        
+        elif d_scheduler_type == 'CyclicLR':
+            self.schedulers.append(lr_scheduler.CyclicLR(self.D_optimizer, self.opt_train["D_optimizer_lr"], self.opt_train["D_scheduler_max_lr"], 
+step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt_train["D_scheduler_step_size_down"], mode=self.opt_train["D_scheduler_mode"], gamma=1.0,cycle_momentum=self.opt_train["D_scheduler_cycle_momentum"], base_momentum=0.8, max_momentum=0.9, last_epoch=-1, verbose=False))
+        
+        
         elif d_scheduler_type == 'CosineAnnealingLR':
             self.schedulers.append(lr_scheduler.CosineAnnealingLR(self.D_optimizer,
                                                                 T_max=self.opt_train['D_scheduler_T_max'],

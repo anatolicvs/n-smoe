@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "/usr/local/cuda/include",
+                "/home/ozkan/miniconda3/envs/venv11/lib/python3.11/site-packages/torch/include/torch",
+                "${workspaceFolder}/**",
+                "/home/ozkan/miniconda3/envs/venv11/lib/python3.11/site-packages/torch/include/torch/csrc/api/include",
+                "/home/ozkan/miniconda3/envs/venv11/lib/python3.11/site-packages/torch/include",
+                "/usr/include/python3.10"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/gcc",
+            "cStandard": "c17",
+            "cppStandard": "gnu++17",
+            "intelliSenseMode": "linux-gcc-x64",
+            "mergeConfigurations": true,
+            "browse": {
+                "path": [
+                    "/home/ozkan/miniconda3/envs/venv11/lib/python3.11/site-packages/torch/include"
+                ]
+            }
+        }
+    ],
+    "version": 4
+}

@@ -401,16 +401,23 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             logging.warning(f"Skipping file {fname} due to error: {e}")
             return None
 
+        if img_H.ndim < 2:
+            logging.warning(f"Skipping file {fname} due to inadequate image dimensions.")
+            return None
+
         if img_H is None or np.max(img_H) == np.min(img_H):
             logging.warning(f"Skipping file {fname} due to zero variation in pixel values.")
             return None
 
         img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
         img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H))
-
-        if img_H.ndim < 2:
-            logging.warning(f"Skipping file {fname} due to inadequate image dimensions.")
+        
+        if img_H is None or np.max(img_H) == np.min(img_H):
+            logging.warning(f"Skipping file {fname} due to zero variation in pixel values.")
             return None
+        
+        img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
+        img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H) + np.finfo(img_H.dtype).eps)
 
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
