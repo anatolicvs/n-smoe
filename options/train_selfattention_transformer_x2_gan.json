@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v4_x2_mri_rgb_disc_unet" 
+    "task": "sa_trans_moe_sr_gan_v7_x2_mri_rgb_disc_patchgan" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -60,14 +60,14 @@
       , "avg_pool": false
       , "resizer_num_layers":2
     
-      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+      , "dino_model" : "dino_vitb16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 2
+      , "resnet_num_layers" : 4
       , "use_first_pool": true
     
       , "num_octaves" : 16
       , "num_layers": 2
-      , "num_heads" : 4
+      , "num_heads" : 8
       ,  "d_token" : 128
       ,  "d_dot": 128
       , "d_mlp": 128
@@ -75,7 +75,7 @@
    
       , "init_type": "default"         
     }
-  
+
     , "netD": {
         "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
         , "base_nc": 64
@@ -87,7 +87,7 @@
       }
     
       , "train": {
-           "is_moe": true
+          "is_moe": true
         , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
         , "G_lossfn_weight": 1
     
@@ -106,20 +106,30 @@
         , "D_init_iters": 0
     
         , "G_optimizer_type": "adam"
-        , "G_optimizer_lr": 1e-4  // learning rate
+        , "G_optimizer_lr": 1.5e-4  // learning rate
         , "G_optimizer_wd": 0
     
         , "D_optimizer_type": "adam"
-        , "D_optimizer_lr": 1e-4  // learning rate
+        , "D_optimizer_lr": 1.5e-4  // learning rate
         , "D_optimizer_wd": 0
-    
-        , "G_scheduler_type": "MultiStepLR"
-        , "G_scheduler_milestones": [4000, 5000, 5500, 5750, 6000]
+        
+        , "G_scheduler_type": "CyclicLR"
+        , "G_scheduler_max_lr": 1e-3
+        , "G_scheduler_step_size_up": 30000
+        , "G_scheduler_step_size_down": 30000
+        , "G_scheduler_mode": "triangular"
+        , "G_scheduler_cycle_momentum": false
+        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
-        , "D_scheduler_type": "MultiStepLR"
-        , "D_scheduler_milestones": [4000, 5000, 5500, 5750, 6000]
+        , "D_scheduler_type": "CyclicLR"
+        , "D_scheduler_max_lr": 1e-3
+        , "D_scheduler_step_size_up": 30000
+        , "D_scheduler_step_size_down": 30000
+        , "D_scheduler_mode": "triangular"
+        , "D_scheduler_cycle_momentum": false
+        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
         , "D_scheduler_gamma": 0.5
         , "D_optimizer_reuse": false
     
@@ -127,7 +137,7 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 5000
+        , "checkpoint_test": 5000  // skip testing
         , "checkpoint_save": 5000
         , "checkpoint_print": 200
       }

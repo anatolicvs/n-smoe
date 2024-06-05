@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v5_x4_mri_rgb_disc_patchgan" 
+    "task": "sa_trans_moe_sr_gan_v7_x4_mri_rgb_disc_patchgan" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -53,22 +53,22 @@
           , "num_mixtures": 9
           , "sharpening_factor": 1
     
-          , "embed_dim": 128
+          , "embed_dim": 256
           , "dropout": 0.1
           , "patch_size": 4
           
           , "avg_pool": false
           , "resizer_num_layers":2
         
-          , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+          , "dino_model" : "dino_vitb16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
           , "resnet_model": "resnet50"
           , "resnet_num_layers" : 2
           , "use_first_pool": true
         
-          , "num_octaves" : 16
-          , "num_layers": 2
+          , "num_octaves" : 32
+          , "num_layers": 4
           , "num_heads" : 4
-          ,  "d_token" : 128
+          ,  "d_token" : 256
           ,  "d_dot": 128
           , "d_mlp": 128
           , "downscale" : 1
@@ -79,7 +79,7 @@
         , "netD": {
           "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
           , "base_nc": 64
-          , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
+          , "n_layers": 4                  // only for "net_type":"discriminator_patchgan"
           , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
           , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
           , "init_bn_type": "uniform"      // "uniform" | "constant"
