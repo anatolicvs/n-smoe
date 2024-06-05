@@ -376,7 +376,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         if not self.is_valid_image(fname):
             logging.warning(f"Skipping non-image or system file: {fname}")
             return None
-        
+
         try:
             if fname.endswith('.h5'):
                 with h5py.File(fname, "r") as hf:
@@ -401,45 +401,36 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             logging.warning(f"Skipping file {fname} due to error: {e}")
             return None
 
-        if img_H is None or img_H.ndim < 2:
-            logging.warning(f"Skipping file {fname} due to inadequate image dimensions.")
+        if img_H is None or img_H.ndim < 2 or np.max(img_H) == np.min(img_H):
+            logging.warning(f"Skipping image at index {i} due to inadequate data.")
             return None
 
-        if img_H is None or np.max(img_H) == np.min(img_H):
-            logging.warning(f"Skipping file {fname} due to zero variation in pixel values.")
-            return None
-
-        img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
-        img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H))
-        
-        if img_H is None or np.max(img_H) == np.min(img_H):
-            logging.warning(f"Skipping file {fname} due to zero variation in pixel values.")
-            return None
         
         img_H = np.clip(img_H, np.quantile(img_H, 0.001), np.quantile(img_H, 0.999))
-        img_H = (img_H - np.min(img_H)) / (np.max(img_H) - np.min(img_H) + np.finfo(img_H.dtype).eps)
+        normalized_diff = np.max(img_H) - np.min(img_H)
+        if normalized_diff == 0:
+            logging.warning(f"Skipping image at index {i} due to zero variation after clipping.")
+            return None
+        img_H = (img_H - np.min(img_H)) / (normalized_diff + np.finfo(img_H.dtype).eps)
 
         img_H = util.modcrop(img_H, self.sf)
         img_H = self.center_crop(img_H, (self.h_size, self.h_size))
 
-        if img_H.ndim >= 2:
-            h, w = img_H.shape[:2]
-            if h < self.lq_patchsize * self.sf or w < self.lq_patchsize * self.sf:
-                return None
-
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
+
+        if img_H.shape[0] < self.lq_patchsize * self.sf or img_H.shape[1] < self.lq_patchsize * self.sf:
+            logging.warning(f"Skipping image at index {i} due to size constraints.")
+            return None
 
         if self.phase == 'train':
             mode = random.randint(0, 7)
             img_H = util.augment_img(img_H, mode=mode)
 
-        chosen_model = random.choice(['bsrgan', 'bsrgan_plus']) # dspr'
-
+        chosen_model = random.choice(['bsrgan', 'bsrgan_plus'])  # 'dspr' is also an option
         img_L, img_H = {
             'bsrgan': lambda x: blindsr.degradation_bsrgan(x, sf=self.sf, lq_patchsize=self.lq_patchsize),
             'bsrgan_plus': lambda x: blindsr.degradation_bsrgan_plus(x, sf=self.sf, lq_patchsize=self.lq_patchsize),
-            'dspr': lambda x: (blindsr.dpsr_degradation(x, k=self.k['kernels'][0][1], sf=self.sf), x)
         }[chosen_model](img_H)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
