@@ -210,8 +210,7 @@ def define_G(opt):
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
         
         encoder_cfg = EncoderConfig(
-            dropout=opt_net["dropout"],
-            patch_size= opt_net["patch_size"], 
+            dropout=opt_net["dropout"], 
             avg_pool=opt_net["avg_pool"], 
             scale_factor=opt_net["scale"],
             resizer_num_layers=opt_net["resizer_num_layers"], 
