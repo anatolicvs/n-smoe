@@ -6,7 +6,7 @@
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 12
+    , "overlap": 14
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -32,7 +32,7 @@
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
         "name": "test_dataset"            // just name
@@ -53,7 +53,7 @@
       , "num_mixtures": 16
       , "sharpening_factor": 1
 
-      , "embed_dim": 128
+      
       , "dropout": 0.1
       , "patch_size": 4
       

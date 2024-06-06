@@ -564,7 +564,6 @@ class BackboneDino(Backbone[BackboneDinoCfg]):
 
 @dataclass
 class EncoderConfig:
-    embed_dim: int
     dropout: float
     avg_pool: bool
     scale_factor: int
@@ -580,7 +579,6 @@ class Encoder(Backbone[EncoderConfig]):
         self.d_in = d_in
         self.latent = d_out
      
-        self.embed_dim = cfg.embed_dim
         self.scale_factor = cfg.scale_factor
 
         if cfg.backbone_cfg is not None:
@@ -589,12 +587,15 @@ class Encoder(Backbone[EncoderConfig]):
             self.backbone = None
 
         self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
-        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim, norm_layer=nn.LayerNorm)
+        
+        self.high_resolution_skip = nn.Sequential(
+            nn.Conv2d(d_in, d_out, 7, 1, 3),
+            nn.ReLU(),
+        )
 
-        self.fc = nn.Sequential(
-            nn.Linear(cfg.embed_dim, d_in * d_out),
-            nn.ReLU(),  
-            nn.Linear(d_in * d_out, d_in * d_out),
+        self.to_gaussians = nn.Sequential(
+            nn.ReLU(),
+            nn.Linear(d_out, d_in * d_out),
             nn.LayerNorm(d_in * d_out),
             nn.ReLU()  
         )
@@ -615,14 +616,21 @@ class Encoder(Backbone[EncoderConfig]):
     def forward(self, x):
         x = self._interpolate(x, self.scale_factor)
         
-        x = self.backbone({'image': x})
-        x = self.transformer(x)
-        x = self.patch_embed(x)
-        x = self.fc(x)
-        x = rearrange(x, "b n c -> b c n")
-        x = torch.mean(x, dim=2, keepdim=True)
-        x = rearrange(x, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
-        return x
+        features = self.backbone({'image': x})
+        features = self.transformer(features)
+        
+        skip = self.high_resolution_skip(x)
+        features = features + skip
+
+        features = rearrange(features, "b c h w -> b (h w) c")
+
+        gaussians = self.to_gaussians(features)
+        gaussians = gaussians.sigmoid()
+        gaussians = rearrange(gaussians, "b n c -> b c n")
+        gaussians = torch.mean(gaussians, dim=2, keepdim=True)
+        gaussians = rearrange(gaussians, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
+
+        return gaussians
     
 
 @dataclass
@@ -933,8 +941,7 @@ if __name__ == "__main__":
     #             d_mlp=128,
     #             downscale=4))
 
-    encoder_cfg = EncoderConfig(
-        embed_dim=128,                   
+    encoder_cfg = EncoderConfig(               
         dropout=0.1,                     
         patch_size=4,                    
         scale_factor=2,                  
@@ -942,18 +949,18 @@ if __name__ == "__main__":
         resizer_num_layers=2,            
         backbone_cfg=BackboneDinoCfg(
             name="dino",
-            model="dino_vitb8",        
+            model="dino_vits8",        
             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=2, use_first_pool=True)
         ),
         transformer_cfg=SelfAttentionTransformerCfg(
             self_attention=ImageSelfAttentionCfg(
                 patch_size=4,
                 num_octaves=16,           
-                num_layers=4,            
-                num_heads=8,           
+                num_layers=2,            
+                num_heads=4,           
                 d_token=128,
                 d_dot=128,
-                d_mlp=256
+                d_mlp=128
             ),
             num_layers=4,                 
             num_heads=8,
