@@ -52,8 +52,7 @@
       , "kernel": 9
       , "num_mixtures": 9
       , "sharpening_factor": 1
-
-      , "embed_dim": 128
+      
       , "dropout": 0.1
       , "patch_size": 4
       
