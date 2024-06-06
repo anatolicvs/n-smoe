@@ -1,12 +1,12 @@
 {
-    "task": "sa_trans_moe_sr_gan_v7_x2_mri_rgb_disc_patchgan" 
+    "task": "sa_trans_moe_sr_gan_v11_x2_mri_rgb_disc_patchgan" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 10
+    , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -32,7 +32,7 @@
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 64
-        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
         "name": "test_dataset"            // just name
@@ -49,8 +49,8 @@
   
     , "netG": {
       "net_type": "selfattention_transformer"
-      , "kernel": 9
-      , "num_mixtures": 9
+      , "kernel": 16
+      , "num_mixtures": 16
       , "sharpening_factor": 1
 
       , "embed_dim": 128
@@ -60,9 +60,9 @@
       , "avg_pool": false
       , "resizer_num_layers":2
     
-      , "dino_model" : "dino_vitb16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 4
+      , "resnet_num_layers" : 2
       , "use_first_pool": true
     
       , "num_octaves" : 16
