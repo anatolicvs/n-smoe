@@ -94,8 +94,6 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
-
-
 class PatchEmbed(nn.Module):
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
@@ -496,7 +494,6 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
     def d_out(self) -> int:
         return self.cfg.d_out
 
-
 @dataclass
 class BackboneDinoCfg:
     name: Literal["dino"]
@@ -568,7 +565,6 @@ class EncoderConfig:
     avg_pool: bool
     scale_factor: int
     resizer_num_layers: int
-    patch_size: int
     backbone_cfg: BackboneDinoCfg 
     transformer_cfg : SelfAttentionTransformerCfg
 
@@ -704,6 +700,7 @@ class AutoencoderConfig:
     phw: int = 32,
     overlap: int = 24
 
+#region v1
 # class Autoencoder(Backbone[AutoencoderConfig]):
 #      def __init__(self, 
 #                   cfg: AutoencoderConfig):
@@ -760,7 +757,7 @@ class AutoencoderConfig:
 #         decoded = self.decoder(scaled_phw, scaled_phw, encoded)
 #         y_hat = self.reconstruct(decoded, (B, C, H * sf, W * sf), scaled_phw, self.overlap*sf)
 #         return y_hat
-
+#endregion
 
 class ReconstructFunction(Function):
     @staticmethod
@@ -942,8 +939,7 @@ if __name__ == "__main__":
     #             downscale=4))
 
     encoder_cfg = EncoderConfig(               
-        dropout=0.1,                     
-        patch_size=4,                    
+        dropout=0.1,                                       
         scale_factor=2,                  
         avg_pool=False,                  
         resizer_num_layers=2,            
@@ -954,7 +950,7 @@ if __name__ == "__main__":
         ),
         transformer_cfg=SelfAttentionTransformerCfg(
             self_attention=ImageSelfAttentionCfg(
-                patch_size=4,
+                patch_size=8,
                 num_octaves=16,           
                 num_layers=2,            
                 num_heads=4,           
