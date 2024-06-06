@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v11_x2_mri_rgb_disc_patchgan" 
+    "task": "sa_trans_moe_sr_gan_v13_x2_mri_rgb_disc_discriminator_unet_schd_MultiStepLR" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -32,7 +32,7 @@
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 64
-        , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
         "name": "test_dataset"            // just name
@@ -49,13 +49,12 @@
   
     , "netG": {
       "net_type": "selfattention_transformer"
-      , "kernel": 16
-      , "num_mixtures": 16
+      , "kernel": 9
+      , "num_mixtures": 9
       , "sharpening_factor": 1
 
-      , "embed_dim": 128
-      , "dropout": 0.1
-      , "patch_size": 4
+      , "dropout": 0.0
+      , "patch_size": 8
       
       , "avg_pool": false
       , "resizer_num_layers":2
@@ -65,9 +64,9 @@
       , "resnet_num_layers" : 2
       , "use_first_pool": true
     
-      , "num_octaves" : 16
+      , "num_octaves" : 10
       , "num_layers": 2
-      , "num_heads" : 8
+      , "num_heads" : 4
       ,  "d_token" : 128
       ,  "d_dot": 128
       , "d_mlp": 128
@@ -77,7 +76,7 @@
     }
 
     , "netD": {
-        "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
+        "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "base_nc": 64
         , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
@@ -106,30 +105,30 @@
         , "D_init_iters": 0
     
         , "G_optimizer_type": "adam"
-        , "G_optimizer_lr": 1.5e-4  // learning rate
+        , "G_optimizer_lr": 1e-4  // learning rate
         , "G_optimizer_wd": 0
     
         , "D_optimizer_type": "adam"
-        , "D_optimizer_lr": 1.5e-4  // learning rate
+        , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
         
-        , "G_scheduler_type": "CyclicLR"
+        , "G_scheduler_type": "MultiStepLR" // CyclicLR | MultiStepLR | CosineAnnealingLR
         , "G_scheduler_max_lr": 1e-3
         , "G_scheduler_step_size_up": 30000
         , "G_scheduler_step_size_down": 30000
         , "G_scheduler_mode": "triangular"
         , "G_scheduler_cycle_momentum": false
-        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "G_scheduler_milestones": [10000, 20000, 30000, 40000, 50000]
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
-        , "D_scheduler_type": "CyclicLR"
+        , "D_scheduler_type": "MultiStepLR"
         , "D_scheduler_max_lr": 1e-3
         , "D_scheduler_step_size_up": 30000
         , "D_scheduler_step_size_down": 30000
         , "D_scheduler_mode": "triangular"
         , "D_scheduler_cycle_momentum": false
-        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "D_scheduler_milestones": [10000, 20000, 30000, 40000, 50000]
         , "D_scheduler_gamma": 0.5
         , "D_optimizer_reuse": false
     

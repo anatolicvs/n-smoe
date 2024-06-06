@@ -36,10 +36,10 @@ JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
 
 NODES=1
 NTASKS=1
-CPUS_PER_TASK=16
+CPUS_PER_TASK=64
 GPUS=1
-MEMORY="24G"
-TIME="24:00:00"
+MEMORY="32G"
+TIME="20:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -56,7 +56,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 # c18m: 1240 total, 48 cores/node, 192 GB/node, default partition for the "default" project
 # c18g: 54 total, 48 cores/node, 192 GB/node, 2 V100 gpus, request of volta gpu needed to submit to this partition
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
-
+# Has to be used without an project!
 
 PARTITION="c23g"
 
@@ -79,7 +79,7 @@ sbatch <<-EOT
 
 echo; nvidia-smi; echo
 
-apptainer exec --nv --bind $WORK,$HOME,$HPCWORK $HOME/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
+apptainer exec --nv --bind $HOME,$HPCWORK,$WORK $HOME/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
 EOT
 
 echo "Job $JOB_ID"
