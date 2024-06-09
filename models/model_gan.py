@@ -293,17 +293,17 @@ step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt
             ax0 = fig.add_subplot(gs[row:row + 2, col])
             ax0.imshow(L_np, cmap='gray')
             ax0.set_title(f'Low Resolution {i + 1}', fontsize=11, family='Times New Roman')
-            ax0.axis('off')
+            ax0.axis('on')
 
             ax1 = fig.add_subplot(gs[row:row + 2, col + 1])
             ax1.imshow(L_np_bicubic, cmap='gray')
             ax1.set_title(f'Low Resolution Bicubic {i + 1}', fontsize=11, family='Times New Roman')
-            ax1.axis('off')
+            ax1.axis('on')
 
             ax2 = fig.add_subplot(gs[row:row + 2, col + 2])
             ax2.imshow(H_np, cmap='gray')
             ax2.set_title(f'High Resolution {i + 1}', fontsize=11, family='Times New Roman')
-            ax2.axis('off')
+            ax2.axis('on')
 
             # Plot the frequency spectra below the corresponding images
             ax3 = fig.add_subplot(gs[row + 2, col])
