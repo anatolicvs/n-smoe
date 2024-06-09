@@ -43,7 +43,8 @@ def define_Dataset(dataset_opt):
         from data.dataset_blindsr import DatasetBlindSR as D
 
     elif dataset_type in ['medical_sr']:
-        from data.dataset_mri import MedicalDatasetSR as D
+        # from data.dataset_mri import MedicalDatasetSR as D
+        from data.dataset_medical import MedicalDatasetSR as D
     # -------------------------------------------------
     # JPEG compression artifact reduction (deblocking)
     # -------------------------------------------------

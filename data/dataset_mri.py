@@ -121,104 +121,6 @@ class FastMRIRawDataSample(NamedTuple):
     metadata: Dict[str, Any]
 
 
-class CombinedSliceDataset(torch.utils.data.Dataset):
-    """
-    A container for combining slice datasets.
-    """
-
-    def __init__(
-        self,
-        roots: Sequence[Path],
-        challenges: Sequence[str],
-        transforms: Optional[Sequence[Optional[Callable]]] = None,
-        sample_rates: Optional[Sequence[Optional[float]]] = None,
-        volume_sample_rates: Optional[Sequence[Optional[float]]] = None,
-        use_dataset_cache: bool = False,
-        dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
-        num_cols: Optional[Tuple[int]] = None,
-        raw_sample_filter: Optional[Callable] = None,
-    ):
-        """
-        Args:
-            roots: Paths to the datasets.
-            challenges: "singlecoil" or "multicoil" depending on which
-                challenge to use.
-            transforms: Optional; A sequence of callable objects that
-                preprocesses the raw data into appropriate form. The transform
-                function should take 'kspace', 'target', 'attributes',
-                'filename', and 'slice' as inputs. 'target' may be null for
-                test data.
-            sample_rates: Optional; A sequence of floats between 0 and 1.
-                This controls what fraction of the slices should be loaded.
-                When creating subsampled datasets either set sample_rates
-                (sample by slices) or volume_sample_rates (sample by volumes)
-                but not both.
-            volume_sample_rates: Optional; A sequence of floats between 0 and 1.
-                This controls what fraction of the volumes should be loaded.
-                When creating subsampled datasets either set sample_rates
-                (sample by slices) or volume_sample_rates (sample by volumes)
-                but not both.
-            use_dataset_cache: Whether to cache dataset metadata. This is very
-                useful for large datasets like the brain data.
-            dataset_cache_file: Optional; A file in which to cache dataset
-                information for faster load times.
-            num_cols: Optional; If provided, only slices with the desired
-                number of columns will be considered.
-            raw_sample_filter: Optional; A callable object that takes an raw_sample
-                metadata as input and returns a boolean indicating whether the
-                raw_sample should be included in the dataset.
-        """
-        if sample_rates is not None and volume_sample_rates is not None:
-            raise ValueError(
-                "either set sample_rates (sample by slices) or volume_sample_rates (sample by volumes) but not both"
-            )
-        if transforms is None:
-            transforms = [None] * len(roots)
-        if sample_rates is None:
-            sample_rates = [None] * len(roots)
-        if volume_sample_rates is None:
-            volume_sample_rates = [None] * len(roots)
-        if not (
-            len(roots)
-            == len(transforms)
-            == len(challenges)
-            == len(sample_rates)
-            == len(volume_sample_rates)
-        ):
-            raise ValueError(
-                "Lengths of roots, transforms, challenges, sample_rates do not match"
-            )
-
-        self.datasets = []
-        self.raw_samples: List[FastMRIRawDataSample] = []
-        for i in range(len(roots)):
-            self.datasets.append(
-                SliceDataset(
-                    root=roots[i],
-                    transform=transforms[i],
-                    challenge=challenges[i],
-                    sample_rate=sample_rates[i],
-                    volume_sample_rate=volume_sample_rates[i],
-                    use_dataset_cache=use_dataset_cache,
-                    dataset_cache_file=dataset_cache_file,
-                    num_cols=num_cols,
-                    raw_sample_filter=raw_sample_filter,
-                )
-            )
-
-            self.raw_samples = self.raw_samples + self.datasets[-1].raw_samples
-
-    def __len__(self):
-        return sum(len(dataset) for dataset in self.datasets)
-
-    def __getitem__(self, i):
-        for dataset in self.datasets:
-            if i < len(dataset):
-                return dataset[i]
-            else:
-                i = i - len(dataset)
-
-
 class MedicalDatasetSR(torch.utils.data.Dataset):
     def __init__(self, opt):
         self.n_channels = opt['n_channels'] if opt['n_channels'] else 3
@@ -437,6 +339,106 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
 
         return {'L': img_L, 'L_p': img_L_p, 'H': img_H, 'L_path': str(fname), 'H_path': str(fname)}
+
+
+
+class CombinedSliceDataset(torch.utils.data.Dataset):
+    """
+    A container for combining slice datasets.
+    """
+
+    def __init__(
+        self,
+        roots: Sequence[Path],
+        challenges: Sequence[str],
+        transforms: Optional[Sequence[Optional[Callable]]] = None,
+        sample_rates: Optional[Sequence[Optional[float]]] = None,
+        volume_sample_rates: Optional[Sequence[Optional[float]]] = None,
+        use_dataset_cache: bool = False,
+        dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
+        num_cols: Optional[Tuple[int]] = None,
+        raw_sample_filter: Optional[Callable] = None,
+    ):
+        """
+        Args:
+            roots: Paths to the datasets.
+            challenges: "singlecoil" or "multicoil" depending on which
+                challenge to use.
+            transforms: Optional; A sequence of callable objects that
+                preprocesses the raw data into appropriate form. The transform
+                function should take 'kspace', 'target', 'attributes',
+                'filename', and 'slice' as inputs. 'target' may be null for
+                test data.
+            sample_rates: Optional; A sequence of floats between 0 and 1.
+                This controls what fraction of the slices should be loaded.
+                When creating subsampled datasets either set sample_rates
+                (sample by slices) or volume_sample_rates (sample by volumes)
+                but not both.
+            volume_sample_rates: Optional; A sequence of floats between 0 and 1.
+                This controls what fraction of the volumes should be loaded.
+                When creating subsampled datasets either set sample_rates
+                (sample by slices) or volume_sample_rates (sample by volumes)
+                but not both.
+            use_dataset_cache: Whether to cache dataset metadata. This is very
+                useful for large datasets like the brain data.
+            dataset_cache_file: Optional; A file in which to cache dataset
+                information for faster load times.
+            num_cols: Optional; If provided, only slices with the desired
+                number of columns will be considered.
+            raw_sample_filter: Optional; A callable object that takes an raw_sample
+                metadata as input and returns a boolean indicating whether the
+                raw_sample should be included in the dataset.
+        """
+        if sample_rates is not None and volume_sample_rates is not None:
+            raise ValueError(
+                "either set sample_rates (sample by slices) or volume_sample_rates (sample by volumes) but not both"
+            )
+        if transforms is None:
+            transforms = [None] * len(roots)
+        if sample_rates is None:
+            sample_rates = [None] * len(roots)
+        if volume_sample_rates is None:
+            volume_sample_rates = [None] * len(roots)
+        if not (
+            len(roots)
+            == len(transforms)
+            == len(challenges)
+            == len(sample_rates)
+            == len(volume_sample_rates)
+        ):
+            raise ValueError(
+                "Lengths of roots, transforms, challenges, sample_rates do not match"
+            )
+
+        self.datasets = []
+        self.raw_samples: List[FastMRIRawDataSample] = []
+        for i in range(len(roots)):
+            self.datasets.append(
+                SliceDataset(
+                    root=roots[i],
+                    transform=transforms[i],
+                    challenge=challenges[i],
+                    sample_rate=sample_rates[i],
+                    volume_sample_rate=volume_sample_rates[i],
+                    use_dataset_cache=use_dataset_cache,
+                    dataset_cache_file=dataset_cache_file,
+                    num_cols=num_cols,
+                    raw_sample_filter=raw_sample_filter,
+                )
+            )
+
+            self.raw_samples = self.raw_samples + self.datasets[-1].raw_samples
+
+    def __len__(self):
+        return sum(len(dataset) for dataset in self.datasets)
+
+    def __getitem__(self, i):
+        for dataset in self.datasets:
+            if i < len(dataset):
+                return dataset[i]
+            else:
+                i = i - len(dataset)
+
 
 
 class SliceDataset(torch.utils.data.Dataset):

@@ -249,7 +249,7 @@ def srmd_degradation(x, k, sf=3):
     return x
 
 
-def dpsr_degradation(x, k, sf=3):
+def dpsr_degradation(x, k, sf=3,lq_patchsize=64):
 
     ''' bicubic downsampling + blur
 
@@ -270,9 +270,14 @@ def dpsr_degradation(x, k, sf=3):
           year={2019}
         }
     '''
-    x = bicubic_degradation(x, sf=sf)
-    x = ndimage.filters.convolve(x, np.expand_dims(k, axis=2), mode='wrap')
-    return x
+    hq = x.copy()
+
+    lq = bicubic_degradation(x, sf=sf)
+    lq = ndimage.filters.convolve(lq, np.expand_dims(k, axis=2), mode='wrap')
+
+    lq, hq = random_crop(lq, hq, sf, lq_patchsize)
+
+    return lq, hq
 
 
 def classical_degradation(x, k, sf=3):
