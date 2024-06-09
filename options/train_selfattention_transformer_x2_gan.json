@@ -61,7 +61,7 @@
     
       , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 2
+      , "resnet_num_layers" : 4
       , "use_first_pool": true
     
       , "num_octaves" : 10
@@ -70,7 +70,7 @@
       ,  "d_token" : 128
       ,  "d_dot": 128
       , "d_mlp": 128
-      , "downscale" : 1
+      , "downscale" : 2
    
       , "init_type": "default"         
     }
