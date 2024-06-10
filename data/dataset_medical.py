@@ -149,11 +149,15 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
     def __getitem__(self, index):
         sample = self.raw_samples[index]
         img = self.load_image_data(sample.fname, sample.slice_ind)
+        
         if img is None:
             return None
         
         img = self.preprocess(img)
-        
+
+        if img is None:
+            return None
+                
         return self.apply_degradation(img, sample.fname)
 
     def load_image_data(self, fname, slice_ind):

@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_gan_v13_x2_mri_rgb_disc_discriminator_unet_schd_MultiStepLR" 
+    "task": "sa_trans_moe_sr_gan_v19_x2_mri_rgb_disc_discriminator_unet_schd_MultiStepLR" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -28,11 +28,13 @@
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/work/pb035507/dataset/rgb/train_0"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
         //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+        , "use_dataset_cache": true
+        , "dataset_cache_file" : "/work/pb035507/dataset/medical/dataset_cache_training.pkl"
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
-        , "dataloader_num_workers": 64
-        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_num_workers": 32
+        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
         "name": "test_dataset"            // just name
@@ -41,6 +43,8 @@
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
         , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
         , "dataroot_L": null              // path of L testing dataset
+        , "use_dataset_cache": true
+        , "dataset_cache_file" : "/work/pb035507/dataset/medical/dataset_cache_testing.pkl"
         , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 32
         , "dataloader_batch_size": 1 
@@ -54,23 +58,23 @@
       , "sharpening_factor": 1
 
       , "dropout": 0.0
-      , "patch_size": 8
+      , "patch_size": 4
       
       , "avg_pool": false
       , "resizer_num_layers":2
     
-      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+      , "dino_model" : "dino_vits8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 4
+      , "resnet_num_layers" : 2
       , "use_first_pool": true
     
       , "num_octaves" : 10
       , "num_layers": 2
-      , "num_heads" : 4
+      , "num_heads" : 16
       ,  "d_token" : 128
       ,  "d_dot": 128
       , "d_mlp": 128
-      , "downscale" : 2
+      , "downscale" : 4
    
       , "init_type": "default"         
     }
@@ -118,7 +122,7 @@
         , "G_scheduler_step_size_down": 30000
         , "G_scheduler_mode": "triangular"
         , "G_scheduler_cycle_momentum": false
-        , "G_scheduler_milestones": [10000, 20000, 30000, 40000, 50000]
+        , "G_scheduler_milestones": [1000, 2000, 3000, 4000, 5000]
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
@@ -128,7 +132,7 @@
         , "D_scheduler_step_size_down": 30000
         , "D_scheduler_mode": "triangular"
         , "D_scheduler_cycle_momentum": false
-        , "D_scheduler_milestones": [10000, 20000, 30000, 40000, 50000]
+        , "D_scheduler_milestones": [1000, 2000, 3000, 4000, 5000]
         , "D_scheduler_gamma": 0.5
         , "D_optimizer_reuse": false
     
