@@ -95,12 +95,13 @@ class MullerResizer(nn.Module):
         return net
 
 class PatchEmbed(nn.Module):
-    def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
+    def __init__(self, kernel_size=4, stride= 4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
-        self.patch_size = patch_size
+        
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=kernel_size, stride=stride)
         self.norm = norm_layer(embed_dim) if norm_layer else None
 
     def forward(self, x):
@@ -567,6 +568,7 @@ class EncoderConfig:
     resizer_num_layers: int
     backbone_cfg: BackboneDinoCfg 
     transformer_cfg : SelfAttentionTransformerCfg
+    embed_dim: int
 
 
 class Encoder(Backbone[EncoderConfig]):
@@ -584,17 +586,24 @@ class Encoder(Backbone[EncoderConfig]):
 
         self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
         
-        self.high_resolution_skip = nn.Sequential(
-            nn.Conv2d(d_in, d_out, 7, 1, 3),
-            nn.ReLU(),
-        )
-
+        self.embed =  PatchEmbed(in_chans=d_out, embed_dim=cfg.embed_dim)
+        
         self.to_gaussians = nn.Sequential(
-            nn.ReLU(),
-            nn.Linear(d_out, d_in * d_out),
-            nn.LayerNorm(d_in * d_out),
+            nn.Linear(cfg.embed_dim, d_in * d_out),
             nn.ReLU()  
         )
+
+        # self.high_resolution_skip = nn.Sequential(
+        #     nn.Conv2d(d_in, d_out, 4, 1, 3),
+        #     nn.ReLU(),
+        # )
+
+        # self.to_gaussians = nn.Sequential(
+        #     nn.ReLU(),
+        #     nn.Linear(d_out, d_in * d_out),
+        #     nn.LayerNorm(d_in * d_out),
+        #     nn.ReLU()  
+        # )
 
         self.resizer = MullerResizer(
             base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=cfg.resizer_num_layers,
@@ -615,10 +624,12 @@ class Encoder(Backbone[EncoderConfig]):
         features = self.backbone({'image': x})
         features = self.transformer(features)
         
-        skip = self.high_resolution_skip(x)
-        features = features + skip
+        # skip = self.high_resolution_skip(x)
+        # features = features + skip
 
-        features = rearrange(features, "b c h w -> b (h w) c")
+        features = self.embed(features)
+
+        # features = rearrange(features, "b c h w -> b (h w) c")
 
         gaussians = self.to_gaussians(features)
         gaussians = gaussians.sigmoid()

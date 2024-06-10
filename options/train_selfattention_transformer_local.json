@@ -6,7 +6,7 @@
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 14
+    , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -20,37 +20,41 @@
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
-    , "datasets": {
-      "train": {
-          "name": "train_dataset"           // just name
-        , "dataset_type": "medical_sr"          // "mri_sr" | blindsr
-        , "lq_patchsize": 32
-        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-        , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train"]// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train, "/mnt/e/Medical/mri/data_for_train/"
-        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-        , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_shuffle": true
-        , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
+      , "datasets": {
+        "train": {
+            "name": "train_dataset"           // just name
+          , "dataset_type": "medical_sr"          // "mri_sr" | blindsr
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train"]// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train, "/mnt/e/Medical/mri/data_for_train/"
+          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_training.pkl"
+          , "dataroot_L": null              // path of L training dataset
+          , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_shuffle": true
+          , "dataloader_num_workers": 4
+          , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        }
+        , "test": {
+          "name": "test_dataset"            // just name
+          , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing.pkl"
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 4
+          , "dataloader_batch_size": 1 
+        }
       }
-      , "test": {
-        "name": "test_dataset"            // just name
-        , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 32
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-        , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
-        , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 8
-        , "dataloader_batch_size": 1 
-      }
-    }
   
     , "netG": {
       "net_type": "selfattention_transformer"
-      , "kernel": 16
-      , "num_mixtures": 16
+      , "kernel": 9
+      , "num_mixtures": 9
       , "sharpening_factor": 1
 
       
@@ -64,14 +68,14 @@
       , "resnet_model": "resnet50"
       , "resnet_num_layers" : 2
       , "use_first_pool": true
-    
-      , "num_octaves" : 16
+      , "embed_dim": 64
+      , "num_octaves" : 10
       , "num_layers": 2
       , "num_heads" : 4
-      ,  "d_token" : 128
+      ,  "d_token" : 64
       ,  "d_dot": 128
       , "d_mlp": 128
-      , "downscale" : 1
+      , "downscale" : 2
    
       , "init_type": "default"         
     }

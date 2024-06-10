@@ -154,10 +154,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             return None
         
         img = self.preprocess(img)
-
-        if img is None:
-            return None
-                
+        
         return self.apply_degradation(img, sample.fname)
 
     def load_image_data(self, fname, slice_ind):
@@ -210,11 +207,13 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
 
         img_H = self.center_crop(img_H, self.h_size)
 
+        img_H = img_H.astype(np.float32)
+
         normalized_diff = np.ptp(img_H)
         if normalized_diff == 0:
             return None
         
-        img_H = (img_H - np.min(img_H)) / (normalized_diff + np.finfo(img_H.dtype).eps)
+        img_H = (img_H - np.min(img_H)) / (normalized_diff + np.finfo(np.float32).eps)
 
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
