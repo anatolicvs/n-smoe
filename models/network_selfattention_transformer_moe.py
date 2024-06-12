@@ -584,9 +584,10 @@ class Encoder(Backbone[EncoderConfig]):
         else:
             self.backbone = None
 
-        self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
-        
+
         self.embed =  PatchEmbed(in_chans=d_out, embed_dim=cfg.embed_dim)
+
+        self.transformer = SelfAttentionTransformer(cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
         
         self.to_gaussians = nn.Sequential(
             nn.Linear(cfg.embed_dim, d_in * d_out),
@@ -622,17 +623,18 @@ class Encoder(Backbone[EncoderConfig]):
         x = self._interpolate(x, self.scale_factor)
         
         features = self.backbone({'image': x})
+        
         features = self.transformer(features)
         
         # skip = self.high_resolution_skip(x)
         # features = features + skip
 
-        features = self.embed(features)
-
         # features = rearrange(features, "b c h w -> b (h w) c")
 
+        features = self.embed(features)
+
         gaussians = self.to_gaussians(features)
-        gaussians = gaussians.sigmoid()
+       
         gaussians = rearrange(gaussians, "b n c -> b c n")
         gaussians = torch.mean(gaussians, dim=2, keepdim=True)
         gaussians = rearrange(gaussians, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
@@ -949,7 +951,8 @@ if __name__ == "__main__":
     #             d_mlp=128,
     #             downscale=4))
 
-    encoder_cfg = EncoderConfig(               
+    encoder_cfg = EncoderConfig(     
+        embed_dim=64,          
         dropout=0.1,                                       
         scale_factor=2,                  
         avg_pool=False,                  
