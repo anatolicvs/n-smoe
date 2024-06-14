@@ -74,67 +74,6 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
-def conv_nd(dims, *args, **kwargs):
-    if dims == 1:
-        return nn.Conv1d(*args, **kwargs)
-    elif dims == 2:
-        return nn.Conv2d(*args, **kwargs)
-    elif dims == 3:
-        return nn.Conv3d(*args, **kwargs)
-    raise ValueError(f"unsupported dimensions: {dims}")
-
-def count_flops_attn(model, _x, y):
-    b, c, *spatial = y[0].shape
-    num_spatial = int(np.prod(spatial))
-    matmul_ops = 2 * b * (num_spatial ** 2) * c
-    model.total_ops += torch.DoubleTensor([matmul_ops])
-
-class QKVAttention(nn.Module):
-    def __init__(self, n_heads):
-        super().__init__()
-        self.n_heads = n_heads
-
-    def forward(self, qkv):
-        bs, width, length = qkv.shape
-        assert width % (3 * self.n_heads) == 0
-        ch = width // (3 * self.n_heads)
-        q, k, v = qkv.chunk(3, dim=1)
-        scale = 1 / math.sqrt(math.sqrt(ch))
-        weight = torch.einsum(
-            "bct,bcs->bts",
-            (q * scale).view(bs * self.n_heads, ch, length),
-            (k * scale).view(bs * self.n_heads, ch, length),
-        )
-        weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
-        a = torch.einsum("bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length))
-        return a.reshape(bs, -1, length)
-
-    @staticmethod
-    def count_flops(model, _x, y):
-        return count_flops_attn(model, _x, y)
-
-class AttentionPool2d(nn.Module):
-    def __init__(self, spacial_dim, embed_dim, num_heads_channels, output_dim=None):
-        super().__init__()
-        self.positional_embedding = nn.Parameter(
-            torch.randn(embed_dim, spacial_dim ** 2 + 1) / embed_dim ** 0.5
-        )
-        self.qkv_proj = conv_nd(1, embed_dim, 3 * embed_dim, 1)
-        self.c_proj = conv_nd(1, embed_dim, output_dim or embed_dim, 1)
-        self.num_heads = embed_dim // num_heads_channels
-        self.attention = QKVAttention(self.num_heads)
-
-    def forward(self, x):
-        b, c, *_spatial = x.shape
-        x = x.reshape(b, c, -1)
-        x = torch.cat([x.mean(dim=-1, keepdim=True), x], dim=-1)
-        x = x + self.positional_embedding[None, :, :].to(x.dtype)
-        x = self.qkv_proj(x)
-        x = self.attention(x)
-        x = self.c_proj(x)
-        return x[:, :, 0]
-
-
 class PatchEmbed(nn.Module):
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
@@ -274,14 +213,13 @@ class Backbone(nn.Module, Generic[T]):
     def d_out(self) -> int:
         raise NotImplementedError
 
+
 @dataclass
 class BackboneResnetCfg:
     name: Literal["resnet"]
     model: Literal["resnet18", "resnet34", "resnet50", "resnet101", "resnet152", "dino_resnet50"]
     num_layers: int
     use_first_pool: bool
-    # d_in: int
-    # d_out: int
 
 class BackboneResnet(Backbone[BackboneResnetCfg]):
     def __init__(self, cfg: BackboneResnetCfg,d_in:int,d_out:int):
@@ -327,8 +265,6 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
 class BackboneDinoCfg:
     name: Literal["dino"]
     model: Literal["dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"]
-    # d_in : int
-    # d_out: int
     backbone_cfg: BackboneResnetCfg 
 
 class BackboneDino(Backbone[BackboneDinoCfg]):
@@ -337,8 +273,19 @@ class BackboneDino(Backbone[BackboneDinoCfg]):
         self.dino = torch.hub.load("facebookresearch/dino:main", cfg.model)
         self._configure_dino_patch_embedding(d_in)
         self.resnet_backbone = BackboneResnet(cfg.backbone_cfg, d_in, d_out)
-        self.global_token_mlp = self._create_mlp(768, d_out)
-        self.local_token_mlp = self._create_mlp(768, d_out)
+        dino_dim = self.get_dino_feature_dim()
+        self.global_token_mlp = self._create_mlp(dino_dim, d_out)
+        self.local_token_mlp = self._create_mlp(dino_dim, d_out)
+
+    def get_dino_feature_dim(self):
+        feature_dims = {
+            "dino_vits16": 384,
+            "dino_vits8": 384,
+            "dino_vitb16": 768,
+            "dino_vitb8": 768
+        }
+        model_key = self.cfg.model.split(':')[-1]
+        return feature_dims.get(model_key, 768)
 
     def _configure_dino_patch_embedding(self, d_in: int):
         old_conv = self.dino.patch_embed.proj
@@ -572,7 +519,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return y_hat
 
 
-# if __name__ == "__main__":
+if __name__ == "__main__":
 
     # dino_cfg = BackboneDinoCfg(name="dino", model="dino_vitb8", d_out=512,d_in=3, backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", num_layers=1, use_first_pool=True))
     # backbone_dino = BackboneDino(dino_cfg)
@@ -584,16 +531,17 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     # print("Output shape:", output.shape)
 
     # dummy_inputs = [torch.randn(1, 1, 128, 128), torch.randn(1, 1, 256, 256)]
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # def extract_blocks(img_tensor, block_size, overlap):
-    #     blocks = []
-    #     step = block_size - overlap
-    #     for i in range(0, img_tensor.shape[1] - block_size + 1, step):
-    #         for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-    #             block = img_tensor[:, i:i+block_size, j:j+block_size]
-    #             blocks.append(block)
-    #     return torch.stack(blocks)
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
+    
     # def load_image(image_path):
     #     image = Image.open(image_path)
     #     transform = transforms.ToTensor()
@@ -602,55 +550,55 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     # image_path = '/home/ozkan/works/n-smoe/utils/test.png'
     # image_tensor = load_image(image_path)
     
-    # image_tensor = torch.randn(1, 128, 128).cuda()
+    image_tensor = torch.randn(1, 128, 128).cuda()
 
-    # blocks = extract_blocks(image_tensor, 32, 16)
-    # image_tensor = image_tensor.unsqueeze(0)
+    blocks = extract_blocks(image_tensor, 32, 16)
+    image_tensor = image_tensor.unsqueeze(0)
 
-    # encoder_cfg = EncoderConfig(
-    #     embed_dim=64,
-    #     depth=16,
-    #     heads=16,
-    #     dim_head=64,
-    #     mlp_dim=64,
-    #     dropout=0.01,
-    #     patch_size=8,
-    #     avg_pool=False,
-    #     scale_factor=2,
-    #     resizer_num_layers=2,
-    #     backbone_cfg = BackboneDinoCfg(
-    #             name="dino", 
-    #             model="dino_vitb8", 
-    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
-    #                                            num_layers=1, use_first_pool=True))
-    # )
-    # decoder_cfg = MoEConfig(
-    #     num_mixtures=9,
-    #     kernel=9,
-    #     sharpening_factor=1.0
-    # )
+    encoder_cfg = EncoderConfig(
+        embed_dim=64,
+        depth=16,
+        heads=16,
+        dim_head=64,
+        mlp_dim=64,
+        dropout=0.01,
+        patch_size=8,
+        avg_pool=False,
+        scale_factor=2,
+        resizer_num_layers=2,
+        backbone_cfg = BackboneDinoCfg(
+                name="dino", 
+                model="dino_vitb8", 
+                backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
+                                               num_layers=1, use_first_pool=True))
+    )
+    decoder_cfg = MoEConfig(
+        num_mixtures=9,
+        kernel=9,
+        sharpening_factor=1.0
+    )
 
 
-    # autoenocer_cfg = AutoencoderConfig(
-    #     EncoderConfig=encoder_cfg,
-    #     DecoderConfig=decoder_cfg,
-    #     d_in=1,
-    #     d_out=63,
-    #     phw=32,
-    #     overlap=16
-    # )
+    autoenocer_cfg = AutoencoderConfig(
+        EncoderConfig=encoder_cfg,
+        DecoderConfig=decoder_cfg,
+        d_in=1,
+        d_out=63,
+        phw=32,
+        overlap=16
+    )
 
-    # model = Autoencoder(
-    #     cfg=autoenocer_cfg
-    # )
+    model = Autoencoder(
+        cfg=autoenocer_cfg
+    )
 
-    # params = sum(p.numel() for p in model.parameters())
-    # print(f"Total number of parameters: {params}")
+    params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {params}")
 
-    # model = model.to(device)
+    model = model.to(device)
 
-    # output = model(blocks, image_tensor.shape)
-    # print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+    output = model(blocks, image_tensor.shape)
+    print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 
     # model = Encoder(
     #     cfg=encoder_cfg

@@ -89,29 +89,6 @@ def define_G(opt):
                    act_mode=opt_net['act_mode'],
                    upsample_mode=opt_net['upsample_mode'])
 
-
-    elif net_type == 'usmoe':
-        from models.network_usmoe import Autoencoder as net 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
-        netG = net(
-                    in_channels=opt_net["n_channels"],
-                    latent_dim=z,
-                    kernel=opt_net["kernel"],
-                    num_mixtures=opt_net["num_mixtures"],
-                    phw=opt_net["phw"],
-                    stride=opt_net["stride"],
-                    layers=opt_net["layers"],
-                    dropout=opt_net["dropout"],
-                    model_channels=opt_net["model_channels"],
-                    num_res_blocks=opt_net["num_res_blocks"],
-                    attention_resolutions=opt_net["attention_resolutions"],
-                    channel_mult=opt_net["channel_mult"],
-                    num_heads=opt_net["num_heads"],
-                    scale_factor=opt_net["scale"],
-                    use_checkpoint=opt_net["use_checkpoint"],
-                    pool=opt_net["pool"],
-                )
-
     elif net_type == 'conv_smoe':
         from models.network_convsmoe import Autoencoder as net
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
@@ -130,30 +107,44 @@ def define_G(opt):
                     avg_pool=opt_net["avg_pool"],
                 )
 
-    elif net_type == 'umoe_muller':
-        from models.network_umoe import Autoencoder as net
+    elif net_type == 'unet_moex':
+        from models.network_unetmoex import AttentionBlock, AttentionBlockConfig, EncoderConfig, Encoder,MoEConfig, AutoencoderConfig, Autoencoder
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
-        netG = net(
-            in_channels=opt_net["n_channels"],
-            latent_dim=z,
-            num_mixtures=opt_net["num_mixtures"],
-            scale_factor=opt_net["scale"],
-            stride=opt_net["stride"],
-            phw=opt_net["phw"],
-            dropout=opt_net["dropout"],
+        
+        encoder_cfg = EncoderConfig(
             model_channels=opt_net["model_channels"],
             num_res_blocks=opt_net["num_res_blocks"],
             attention_resolutions=opt_net["attention_resolutions"],
-            channel_mult=opt_net["channel_mult"],
-            conv_resample=opt_net["conv_resample"],
-            use_fp16=opt_net["use_fp16"],
-            num_head_channels=opt_net["num_head_channels"],
+            dropout=opt_net["dropout"],
+            num_groups=opt_net["num_groups"],
+            scale_factor=opt_net["scale"],
             num_heads=opt_net["num_heads"],
+            num_head_channels=opt_net["num_head_channels"],
+            use_new_attention_order=opt_net["use_new_attention_order"],
             use_checkpoint=opt_net["use_checkpoint"],
-            pool=opt_net["pool"],
-            num_layers=opt_net["num_layers"]
-    )
-        
+            resblock_updown=opt_net["resblock_updown"],
+            channel_mult=opt_net["channel_mult"],
+            resample_2d=opt_net["resample_2d"],
+            pool=opt_net["pool"]
+        )
+
+        decoder_cfg = MoEConfig(
+            num_mixtures=opt_net["num_mixtures"],
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net['sharpening_factor']
+        )
+
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            d_in=opt_net["n_channels"],
+            d_out=z,
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"]
+        )
+
+        netG = Autoencoder(cfg=autoenocer_cfg)
+
     elif net_type == 'f_u_moe':
         from models.network_f_u_moe import Autoencoder as net
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]

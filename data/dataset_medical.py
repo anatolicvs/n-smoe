@@ -155,7 +155,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         
         img = self.preprocess(img)
 
-         if img is None:
+        if img is None:
             return None
         
         return self.apply_degradation(img, sample.fname)
