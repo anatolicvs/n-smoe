@@ -1,5 +1,5 @@
 {
-    "task": "sa_trans_moe_sr_plain_v2_x2_mri_rgb" 
+    "task": "sa_trans_moe_sr_plain_v8_x2_mri_rgb" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -15,10 +15,11 @@
         
     , "path": {
       "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netG": "/work/pb035507/superresolution/sa_trans_moe_sr_gan_v3_x2_mri_rgb_disc_unet/models/25000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
-      }
+      , "pretrained_netE": "/work/pb035507/superresolution/sa_trans_moe_sr_gan_v3_x2_mri_rgb_disc_unet/models/25000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_optimizerG": "/work/pb035507/superresolution/sa_trans_moe_sr_gan_v3_x2_mri_rgb_disc_unet/models/25000_optimizerG.pth"
+    }
   
       , "datasets": {
         "train": {
@@ -57,13 +58,13 @@
         , "num_mixtures": 9
         , "sharpening_factor": 1
   
-        , "dropout": 0.1
+        , "dropout": 0.0
         , "patch_size": 4
         
         , "avg_pool": false
         , "resizer_num_layers":2
       
-        , "dino_model" : "dino_vits8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+        , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
         , "resnet_model": "resnet50"
         , "resnet_num_layers" : 2
         , "use_first_pool": true
@@ -71,6 +72,7 @@
         , "num_octaves" : 10
         , "num_layers": 2
         , "num_heads" : 4
+        , "embed_dim": 64
         ,  "d_token" : 128
         ,  "d_dot": 128
         , "d_mlp": 128
@@ -88,7 +90,7 @@
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
-        , "G_scheduler_milestones": [20000, 40000, 60000, 80000, 100000, 200000]
+        , "G_scheduler_milestones": [2000, 4000, 6000, 8000, 10000, 20000]
         , "G_scheduler_gamma": 0.5
     
         , "G_regularizer_orthstep": null    // unused
