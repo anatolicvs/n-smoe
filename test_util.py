@@ -8,8 +8,9 @@
 import torch
 from torch import rand
 from models.network_unetmoex import ResBlock, ResBlockConfig
-from models.network_unetmoex import AttentionBlock, AttentionBlockConfig, EncoderConfig, Encoder
+from models.network_unetmoex import AttentionBlock, AttentionBlockConfig, EncoderConfig, Encoder,MoEConfig, AutoencoderConfig, Autoencoder
 
+torch.backends.cudnn.benchmark = True
 
 if __name__ == '__main__':
     # img = util.imread_uint('utils/test.png', 1)
@@ -55,31 +56,79 @@ if __name__ == '__main__':
     # output = attention_block(x)
     # print(output.shape)
 
-    config = EncoderConfig(
-        model_channels=16,
-        num_res_blocks=32,
-        attention_resolutions=[16, 8, 4],
-        dropout=0.0 ,
-        num_groups=16,
-        scale_factor=2,
-        num_heads=1,
-        num_head_channels=-1,
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
+    
+    image_tensor = torch.randn(1, 128, 128).cuda()
+
+    phw=32
+    overlap=16
+
+    blocks = extract_blocks(image_tensor, phw, overlap)
+    image_tensor = image_tensor.unsqueeze(0)
+
+    encoder_cfg = EncoderConfig(                         
+        model_channels=16,                 # Start with fewer channels to avoid too many parameters with small inputs
+        num_res_blocks=4,                  # Fewer residual blocks to prevent over-parameterization
+        attention_resolutions=[16, 8],     # Apply attention at higher resolutions only
+        dropout=0.2,                       # Increased dropout for more regularization
+        num_groups=8,                      # Maintain group normalization to stabilize training with small batch sizes
+        scale_factor=4,                    # Reduced scale factor to limit downsampling given the small input size
+        num_heads=4,                       # Fewer heads in attention mechanisms to balance model complexity
+        num_head_channels=16,              # Fewer channels per head to reduce complexity and focus on essential features
         use_new_attention_order=True,
-        use_checkpoint=True,
-        resblock_updown=True,
-        channel_mult=(1, 2, 4, 8, 16),
-        resample_2d= False,
-        pool= "adaptive",
+        use_checkpoint=True,              # Reduce memory usage since model is smaller
+        resblock_updown=True,             # Disable resblock upsampling and downsampling
+        channel_mult=(1, 2, 4, 8),          # Smaller channel multiplier as fewer stages of feature enhancement are needed
+        resample_2d=True,                 # Avoid resampling in 2D to preserve spatial dimensions
+        pool="attention"                   # Use attention pooling to focus on relevant features without spatial reduction
+    )
+    
+    # encoder = Encoder(encoder_cfg, d_in=3, d_out=72).cuda()
+    # input_tensor = rand(1, 3, 32, 32).cuda()
+
+    # print(encoder)
+
+    # params = sum(p.numel() for p in encoder.parameters())
+    # print(f"Total number of parameters: {params}")
+
+    # output = encoder(input_tensor)
+    # print(output.shape)
+
+
+    decoder_cfg = MoEConfig(
+        num_mixtures=9,
+        kernel=9,
+        sharpening_factor=1.0
     )
 
-    
-    encoder = Encoder(config, d_in=3, d_out=72).cuda()
-    input_tensor = rand(1, 3, 256, 256).cuda()
+    autoenocer_cfg = AutoencoderConfig(
+        EncoderConfig=encoder_cfg,
+        DecoderConfig=decoder_cfg,
+        d_in=1,
+        d_out=63,
+        phw=phw,
+        overlap=overlap
+    )
 
-    print(encoder)
+    model = Autoencoder(
+        cfg=autoenocer_cfg
+    )
 
-    params = sum(p.numel() for p in encoder.parameters())
+    print(model)
+
+    params = sum(p.numel() for p in model.parameters())
     print(f"Total number of parameters: {params}")
 
-    output = encoder(input_tensor)
-    print(output.shape)
+    model = model.to(device)
+
+    output = model(blocks, image_tensor.shape)
+    print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")

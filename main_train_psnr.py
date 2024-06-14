@@ -18,7 +18,7 @@ from utils_n.utils_dist import get_dist_info, init_dist
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
-def main(json_path='options/train_convsmoe_psnr.json'):
+def main(json_path='options/train_unet_moex_psnr.json'):
 
     '''
     # ----------------------------------------

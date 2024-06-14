@@ -88,35 +88,39 @@ class Downsample(nn.Module):
         return self.op(x)
 
 class AttentionPool2d(nn.Module):
-    """
-    Adapted from CLIP: https://github.com/openai/CLIP/blob/main/clip/model.py
-    """
-
-    def __init__(
-        self,
-        spacial_dim: int,
-        embed_dim: int,
-        num_heads_channels: int,
-        output_dim: int = None,
-    ):
+    def __init__(self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int = None):
         super().__init__()
-        self.positional_embedding = nn.Parameter(
-            torch.randn(embed_dim, spacial_dim ** 2 + 1) / embed_dim ** 0.5
-        )
-        self.qkv_proj = conv_nd(1, embed_dim, 3 * embed_dim, 1)
-        self.c_proj = conv_nd(1, embed_dim, output_dim or embed_dim, 1)
-        self.num_heads = embed_dim // num_heads_channels
-        self.attention = QKVAttention(self.num_heads)
+        self.positional_embedding = nn.Parameter(torch.randn(spacial_dim + 1, embed_dim) / embed_dim ** 0.5)
+        self.k_proj = nn.Linear(embed_dim, embed_dim)
+        self.q_proj = nn.Linear(embed_dim, embed_dim)
+        self.v_proj = nn.Linear(embed_dim, embed_dim)
+        self.c_proj = nn.Linear(embed_dim, output_dim or embed_dim)
+        self.num_heads = num_heads
 
     def forward(self, x):
-        b, c, *_spatial = x.shape
-        x = x.reshape(b, c, -1)  # NC(HW)
-        x = torch.cat([x.mean(dim=-1, keepdim=True), x], dim=-1)  # NC(HW+1)
-        x = x + self.positional_embedding[None, :, :].to(x.dtype)  # NC(HW+1)
-        x = self.qkv_proj(x)
-        x = self.attention(x)
-        x = self.c_proj(x)
-        return x[:, :, 0]
+        x = x.flatten(start_dim=2).permute(2, 0, 1)  # NCHW -> (HW)NC
+        x = torch.cat([x.mean(dim=0, keepdim=True), x], dim=0)  # (HW+1)NC
+        x = x + self.positional_embedding[:, None, :].to(x.dtype)  # (HW+1)NC
+        x, _ = F.multi_head_attention_forward(
+            query=x[:1], key=x, value=x,
+            embed_dim_to_check=x.shape[-1],
+            num_heads=self.num_heads,
+            q_proj_weight=self.q_proj.weight,
+            k_proj_weight=self.k_proj.weight,
+            v_proj_weight=self.v_proj.weight,
+            in_proj_weight=None,
+            in_proj_bias=torch.cat([self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
+            bias_k=None,
+            bias_v=None,
+            add_zero_attn=False,
+            dropout_p=0,
+            out_proj_weight=self.c_proj.weight,
+            out_proj_bias=self.c_proj.bias,
+            use_separate_proj_weight=True,
+            training=self.training,
+            need_weights=False
+        )
+        return x.squeeze(0)
 
 def count_flops_attn(model, _x, y):
     """
@@ -386,15 +390,14 @@ class MullerResizer(nn.Module):
 class EncoderConfig:
     model_channels: int
     num_res_blocks: int
-    attention_resolutions: Optional[list]
-    image_size: int = 64
+    attention_resolutions: Optional[list] = None
     dropout: float = 0
     channel_mult: tuple = (1, 2, 4, 8)
     conv_resample: bool = True
     dims: int = 2
     use_checkpoint: bool = False
     use_fp16: bool = False
-    num_heads: int = 1
+    num_heads: int = 4
     num_head_channels: int = -1
     num_heads_upsample: int = -1
     use_scale_shift_norm: bool = False
@@ -408,10 +411,11 @@ class EncoderConfig:
     resizer_avg_pool: bool = False
 
 class Encoder(Backbone[EncoderConfig]):
-    def __init__(self, cfg: EncoderConfig, d_in:int, d_out:int):
+    def __init__(self, cfg: EncoderConfig, phw:int, d_in:int, d_out:int):
         super().__init__(cfg)
         self.d_in = d_in
         self.latent = d_out
+        self.phw = phw
 
         if cfg.num_heads_upsample == -1:
             cfg.num_heads_upsample = cfg.num_heads
@@ -534,7 +538,10 @@ class Encoder(Backbone[EncoderConfig]):
                 normalization(ch, cfg.num_groups),
                 nn.SiLU(),
                 AttentionPool2d(
-                    (cfg.image_size // ds), ch, cfg.num_head_channels, self.d_in * self.latent
+                    int(((self.phw*(cfg.scale_factor/2))**2)//(ds*2)), 
+                    ch, 
+                    cfg.num_head_channels, 
+                    int(self.d_in * self.latent)
                 ),
             )
         elif cfg.pool == "spatial":
@@ -672,7 +679,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         super().__init__(cfg)
         self.phw = cfg.phw
         self.overlap = cfg.overlap
-        self.encoder = Encoder(cfg.EncoderConfig, d_in=cfg.d_in, d_out=cfg.d_out)
+        self.encoder = Encoder(cfg.EncoderConfig,cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out)
         self.decoder = MoE(cfg.DecoderConfig, d_in=cfg.d_in)
 
     @staticmethod
@@ -710,7 +717,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             used_mem = torch.cuda.memory_allocated(0)
             free_mem = tot_mem - used_mem
 
-            thresholds = [0.5, 0.3, 0.1]
+            thresholds = [0.3, 0.1]
             for percent in thresholds:
                 threshold = tot_mem * percent
                 if free_mem > threshold:
