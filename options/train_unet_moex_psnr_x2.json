@@ -1,5 +1,5 @@
 {
-    "task": "unet_moex_sr_plain_v1_x2_mri_rgb" 
+    "task": "unet_moex_sr_plain_v4_x2_mri_rgb" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
       , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
@@ -34,7 +34,7 @@
             , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
-            , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+            , "dataloader_batch_size": 64     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
             "name": "test_dataset"            // just name
@@ -58,11 +58,11 @@
       , "sharpening_factor": 1
 
       , "model_channels": 16
-      , "num_res_blocks": 4
-      , "attention_resolutions": [16, 8]
-      , "dropout": 0.2
+      , "num_res_blocks": 8
+      , "attention_resolutions": [16, 8, 4]
+      , "dropout": 0.1
       , "num_groups": 8
-      , "num_heads" : 16
+      , "num_heads" : 32
       , "num_head_channels": 64
       , "use_new_attention_order": true
       , "use_checkpoint": true

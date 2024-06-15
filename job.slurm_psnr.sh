@@ -31,14 +31,13 @@ while getopts ":m:o:" opt; do
 done
 
 TODAYS_DATE=$(date +%d%m%Y%H%M)
-
 JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
 
 NODES=1
 NTASKS=1
 CPUS_PER_TASK=64
 GPUS=1
-MEMORY="32G"
+MEMORY="64G"
 TIME="20:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
@@ -47,6 +46,7 @@ OUTPUT_DIR="/home/pb035507/slurm/output"
 ERROR_DIR="/home/pb035507/slurm/error"
 
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
+
 
 # PARTITION
 # c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
@@ -77,9 +77,11 @@ sbatch <<-EOT
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-echo; nvidia-smi; echo
-
+echo "Starting job at: $(date)"
+nvidia-smi
+echo "Attempting to bind SquashFS container..."
 apptainer exec --nv --bind $HOME,$HPCWORK,$WORK $HOME/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
+echo "Job completed at: $(date)"
 EOT
 
-echo "Job $JOB_ID"
+echo "Job submission complete. Monitor job with squeue or check output/error files."
