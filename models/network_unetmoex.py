@@ -225,12 +225,14 @@ class ResBlockConfig:
 
 class ResBlock(Backbone[ResBlockConfig]):
 
-    def __init__(self, cfg: ResBlockConfig):
+    def __init__(self, cfg: ResBlockConfig, activation: nn.Module = nn.GELU()):
         super().__init__(cfg=cfg)
         
+        self.activation = activation
+
         self.in_layers = nn.Sequential(
             normalization(cfg.channels, cfg.num_groups),
-            nn.SiLU(),
+            self.activation,
             conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1),
         )
 
@@ -247,7 +249,7 @@ class ResBlock(Backbone[ResBlockConfig]):
 
         self.out_layers = nn.Sequential(
             normalization(cfg.out_channels, cfg.num_groups),
-            nn.SiLU(),
+            self.activation,
             nn.Dropout(p=cfg.dropout),
             zero_module(
                 conv_nd(cfg.dims, cfg.out_channels, cfg.out_channels, 3, padding=1)
@@ -408,7 +410,8 @@ class EncoderConfig:
     resample_2d: bool = True
     scale_factor: int = 2
     resizer_num_layers: int = 2
-    resizer_avg_pool: bool = False
+    resizer_avg_pool: bool = False,
+    activation: str = "GELU"
 
 class Encoder(Backbone[EncoderConfig]):
     def __init__(self, cfg: EncoderConfig, phw:int, d_in:int, d_out:int):
@@ -422,6 +425,9 @@ class Encoder(Backbone[EncoderConfig]):
 
         self.dtype = torch.float16 if cfg.use_fp16 else torch.float32
         
+        if hasattr(nn, cfg.activation):
+            self.activation = getattr(nn, cfg.activation)()
+
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
@@ -497,7 +503,8 @@ class Encoder(Backbone[EncoderConfig]):
                 dims=cfg.dims,
                 use_checkpoint=cfg.use_checkpoint,
                 num_groups=cfg.num_groups,
-                resample_2d=cfg.resample_2d)
+                resample_2d=cfg.resample_2d),
+                self.activation
             ),
             AttentionBlock(
                 AttentionBlockConfig(
@@ -515,7 +522,8 @@ class Encoder(Backbone[EncoderConfig]):
                 dims=cfg.dims,
                 use_checkpoint=cfg.use_checkpoint,
                 num_groups=cfg.num_groups,
-                resample_2d=cfg.resample_2d)
+                resample_2d=cfg.resample_2d),
+                self.activation
             ),
         )
         self._feature_size += ch
@@ -527,7 +535,7 @@ class Encoder(Backbone[EncoderConfig]):
         if cfg.pool == "adaptive":
             self.out = nn.Sequential(
                 normalization(ch, cfg.num_groups),
-                nn.SiLU(),
+                self.activation,
                 nn.AdaptiveAvgPool2d((1, 1)),
                 zero_module(conv_nd(cfg.dims, ch, self.d_in * self.latent, 1)),
                 nn.Flatten(),
@@ -536,7 +544,7 @@ class Encoder(Backbone[EncoderConfig]):
             assert cfg.num_head_channels != -1
             self.out = nn.Sequential(
                 normalization(ch, cfg.num_groups),
-                nn.SiLU(),
+                self.activation,
                 AttentionPool2d(
                     int(((self.phw*(cfg.scale_factor/2))**2)//(ds*2)), 
                     ch, 
@@ -551,7 +559,7 @@ class Encoder(Backbone[EncoderConfig]):
             self.out = nn.Sequential(
                 nn.Linear(self._feature_size, 2048),
                 normalization(2048, cfg.num_groups),
-                nn.SiLU(),
+                self.activation,
                 nn.Linear(2048, self.d_in * self.latent),
             )
         else:

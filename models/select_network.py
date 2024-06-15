@@ -125,7 +125,8 @@ def define_G(opt):
             resblock_updown=opt_net["resblock_updown"],
             channel_mult=opt_net["channel_mult"],
             resample_2d=opt_net["resample_2d"],
-            pool=opt_net["pool"]
+            pool=opt_net["pool"],
+            activation=opt_net["activation"],
         )
 
         decoder_cfg = MoEConfig(
@@ -417,11 +418,7 @@ def define_G(opt):
                    no_checkpoint_ffn_blocks=opt_net['no_checkpoint_ffn_blocks'],
                    cpu_cache_length=opt_net['cpu_cache_length'])
 
-    # ----------------------------------------
-    # others
-    # ----------------------------------------
-    # TODO
-
+   
     else:
         raise NotImplementedError('netG [{:s}] is not found.'.format(net_type))
 
