@@ -328,8 +328,6 @@ class BackboneDino(Backbone[BackboneDinoCfg]):
 
 @dataclass
 class EncoderConfig:
-    # d_in: int 
-    # d_out: int
     embed_dim: int
     depth: int
     heads: int
@@ -550,7 +548,7 @@ if __name__ == "__main__":
     # image_path = '/home/ozkan/works/n-smoe/utils/test.png'
     # image_tensor = load_image(image_path)
     
-    image_tensor = torch.randn(1, 128, 128).cuda()
+    image_tensor = torch.randn(1, 64, 64)
 
     blocks = extract_blocks(image_tensor, 32, 16)
     image_tensor = image_tensor.unsqueeze(0)
@@ -595,7 +593,7 @@ if __name__ == "__main__":
     params = sum(p.numel() for p in model.parameters())
     print(f"Total number of parameters: {params}")
 
-    model = model.to(device)
+    # model = model.to(device)
 
     output = model(blocks, image_tensor.shape)
     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
