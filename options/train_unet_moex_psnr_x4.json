@@ -1,9 +1,9 @@
 {
-    "task": "unet_moex_sr_plain_v7_x2_mri_rgb" 
+    "task": "unet_moex_sr_plain_v7_x4_mri_rgb" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 2       // broadcast to "netG" if SISR
+    , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 14
