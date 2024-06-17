@@ -68,7 +68,8 @@ sbatch <<-EOT
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
-#SBATCH --mem=$MEMORY
+#SBATCH --mem-per-cpu=8G  
+#SBATCH --mem-per-gpu=90G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks=$NTASKS
 #SBATCH --mail-type=$MAIL_TYPE
