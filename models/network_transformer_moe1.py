@@ -208,9 +208,9 @@ class Transformer(nn.Module):
 class BackboneResnetCfg:
     name: Literal["resnet"]
     model: Literal["resnet18", "resnet34", "resnet50", "resnet101", "resnet152", "dino_resnet50"]
-    pretrained: bool = False
     num_layers: int
     use_first_pool: bool
+    pretrained: bool = False
 
 
 class BackboneResnet(Backbone[BackboneResnetCfg]):
@@ -496,7 +496,6 @@ class MoE(Backbone[MoEConfig]):
         y_hat = y_hat.view(-1, self.ch, height, width)
 
         return y_hat
-
 
 @dataclass
 class AutoencoderConfig:
