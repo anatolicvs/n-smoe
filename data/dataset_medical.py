@@ -5,6 +5,7 @@ import os
 import pickle
 import random
 import xml.etree.ElementTree as etree
+from multiprocessing import cpu_count
 from pathlib import Path
 from typing import Any, Dict, NamedTuple, Sequence
 
@@ -16,6 +17,7 @@ from scipy.io import loadmat
 
 import utils_n.utils_image as util
 from utils_n import utils_blindsr as blindsr
+
 
 def et_query(
     root: etree.Element,
@@ -71,7 +73,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         self.overlap = opt["overlap"] if "overlap" in opt else 4
         self.recons_key = "reconstruction_esc" if self.challenge == "singlecoil" else "reconstruction_rss"
         self.k = loadmat(opt['kernel_path']) if 'kernel_path' in opt else None
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=8)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=min(16, cpu_count() * 2))
         self.loop = asyncio.get_event_loop()
         self.raw_samples = self.loop.run_until_complete(self.async_load_samples())
 
