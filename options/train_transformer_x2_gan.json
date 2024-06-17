@@ -14,39 +14,43 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
-      , "pretrained_optimizerG": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_optimizerG.pth"  
+      "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      , "pretrained_netG": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_optimizerG": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/models/5000_optimizerG.pth"  
     }
   
-    , "datasets": {
+    ,"datasets": {
       "train": {
           "name": "train_dataset"           // just name
-        , "dataset_type": "mri_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-        , "lq_patchsize": 64
-        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_train"// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
-        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-        , "dataroot_L": null              // path of L training dataset
-        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_shuffle": true
-        , "dataloader_num_workers": 32
-        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/work/pb035507/dataset/rgb/train_0"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/work/pb035507/dataset/medical/dataset_cache_training.pkl"
+          , "dataroot_L": null              // path of L training dataset
+          , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_shuffle": true
+          , "dataloader_num_workers": 32
+          , "dataloader_batch_size": 64     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
-        "name": "test_dataset"            // just name
-        , "dataset_type": "mri_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 64
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-        , "dataroot_H": "/hpcwork/pb035507/dataset/mri/data_for_test"   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
-        , "dataroot_L": null              // path of L testing dataset
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 32
-        , "dataloader_batch_size": 1 
+          "name": "test_dataset"            // just name
+          , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/work/pb035507/dataset/medical/dataset_cache_testing.pkl"
+          , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 32
+          , "dataloader_batch_size": 1 
+          }
       }
-    }
   
     , "netG": {
       "net_type": "transformer_moe"
@@ -62,17 +66,19 @@
       , "mlp_dim": 64
       , "dropout": 0.01
       , "patch_size": 4
+      , "num_groups": 8
       
       , "avg_pool": false
       , "resizer_num_layers":2
 
-      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
-
+      , "dino_model" : "dino_vits8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 2
+      , "resnet_num_layers" : 1
       , "use_first_pool": true
+
+      , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
       
-      , "init_type": "default"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_type": "default"         
     }
   
     , "netD": {
