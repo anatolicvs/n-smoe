@@ -1,20 +1,20 @@
-import os
-import math
 import argparse
-import random
-import numpy as np
 import logging
+import math
+import os
+import random
+
+import numpy as np
+import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
-import torch
-
-from utils_n import utils_logger
-from utils_n import utils_image as util
-from utils_n import utils_option as option
-from utils_n.utils_dist import get_dist_info, init_dist
 
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
+from utils_n import utils_image as util
+from utils_n import utils_logger
+from utils_n import utils_option as option
+from utils_n.utils_dist import get_dist_info, init_dist
 
 def update_options_with_beeond(options_path, beeond_dir=None):
     with open(options_path, 'r') as file:
@@ -27,8 +27,7 @@ def update_options_with_beeond(options_path, beeond_dir=None):
     
     return options
 
-def main(json_path='options/train_selfattention_transformer_gan_local.json'):
-
+def main(json_path='options/train_transformer_x2_gan_local.json'):
    
     parser = argparse.ArgumentParser()
     parser.add_argument('--opt', type=str, default=json_path, help='Path to option JSON file.')

@@ -164,19 +164,23 @@ def define_G(opt):
             )
         
     elif net_type == 'transformer_moe':
-        from models.network_transformer_moe import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig,BackboneDinoCfg
+        from models.network_transformer_moe1 import Autoencoder, EncoderConfig, MoEConfig, BackboneResnetCfg,AutoencoderConfig,BackboneDinoCfg
         z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        
         encoder_cfg = EncoderConfig(
             embed_dim=opt_net["embed_dim"],
             depth=opt_net["depth"],
             heads=opt_net["heads"],
-            dim_head=64,
+            dim_head=opt_net["dim_head"],
             mlp_dim=opt_net["mlp_dim"],
             dropout=opt_net["dropout"],
             patch_size=opt_net["patch_size"],
+            num_groups=opt_net["num_groups"],
             avg_pool=opt_net["avg_pool"],
             scale_factor=opt_net["scale"],
             resizer_num_layers=opt_net["resizer_num_layers"],
+            activation=opt_net["activation"],
+
             backbone_cfg = BackboneDinoCfg(
                 name="dino", 
                 model= opt_net["dino_model"],
@@ -187,6 +191,7 @@ def define_G(opt):
             num_mixtures=opt_net["num_mixtures"],
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net['sharpening_factor'])
+        
         autoenocer_cfg = AutoencoderConfig(
             EncoderConfig=encoder_cfg,
             DecoderConfig=decoder_cfg,

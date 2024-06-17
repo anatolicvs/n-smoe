@@ -11,6 +11,9 @@ class SiLU(nn.Module):
 
 
 class GroupNorm32(nn.GroupNorm):
+    def __init__(self, num_groups, num_channels):
+        super().__init__(num_groups=num_groups, num_channels=num_channels)
+
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
 
@@ -86,7 +89,7 @@ def mean_flat(tensor):
     return tensor.mean(dim=list(range(2, len(tensor.shape))))
 
 
-def normalization(channels, groups=32):
+def normalization(groups,channels):
     """
     Make a standard normalization layer.
 

@@ -1,6 +1,6 @@
 import os
 import torch
-import torch.nn as nn
+import signal
 from utils_n.utils_bnorm import merge_bn, tidy_sequential
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
@@ -12,6 +12,8 @@ class ModelBase():
         self.device = torch.device('cuda' if opt['gpu_ids'] is not None else 'cpu')
         self.is_train = opt['is_train']        # training or not
         self.schedulers = []                   # schedulers
+
+        signal.signal(signal.SIGTERM, self.signal_handler)
 
     """
     # ----------------------------------------
@@ -62,7 +64,7 @@ class ModelBase():
             scheduler.step()
 
     def current_learning_rate(self):
-        return self.schedulers[0].get_last_lr()[0]
+        return self.schedulers[0].get_last_lr()[0] if self.schedulers else None
 
     def requires_grad(self, model, flag=True):
         for p in model.parameters():
@@ -218,3 +220,8 @@ class ModelBase():
     def merge_bnorm_test(self):
         merge_bn(self.netG)
         tidy_sequential(self.netG)
+
+    def signal_handler(self, signum, frame):
+        print(f"Received termination signal {signum}, saving model...")
+        self.save(f'signal_{signum}')
+        os._exit(0)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torchvision
-
+from torchvision.models import VGG19_Weights
 
 """
 # --------------------------------------------
@@ -21,9 +21,9 @@ class VGGFeatureExtractor(nn.Module):
                  device=torch.device('cpu')):
         super(VGGFeatureExtractor, self).__init__()
         if use_bn:
-            model = torchvision.models.vgg19_bn(pretrained=True)
+            model = torchvision.models.vgg19_bn(weights=VGG19_Weights.DEFAULT)
         else:
-            model = torchvision.models.vgg19(pretrained=True)
+            model = torchvision.models.vgg19(weights=VGG19_Weights.DEFAULT)
         self.use_input_norm = use_input_norm
         if self.use_input_norm:
             mean = torch.Tensor([0.485, 0.456, 0.406]).view(1, 3, 1, 1).to(device)
