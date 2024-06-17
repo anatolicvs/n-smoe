@@ -1,5 +1,5 @@
 {
-    "task": "unet_moex_sr_gan_v1_x2_mri_rgb" 
+    "task": "unet_moex_sr_gan_v7_x2_mri_rgb" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -15,9 +15,10 @@
         
     , "path": {
       "root": "/home/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/home/pb035507/superresolution/unet_moex_sr_plain_v1_x2_mri_rgb/models/10000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_netG": "/home/pb035507/superresolution/unet_moex_sr_gan_v7_x2_mri_rgb/models/5000_G.pth" // "/home/pb035507/superresolution/unet_moex_sr_plain_v1_x2_mri_rgb/models/10000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": "/home/pb035507/superresolution/unet_moex_sr_gan_v7_x2_mri_rgb/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": "/home/pb035507/superresolution/unet_moex_sr_gan_v7_x2_mri_rgb/models/5000_E.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_optimizerG": "/home/pb035507/superresolution/unet_moex_sr_gan_v7_x2_mri_rgb/models/5000_optimizerG.pth"
       }
   
       ,"datasets": {
@@ -64,17 +65,17 @@
     }
   
     , "netG": {
-      "net_type": "unet_moex"
-      , "kernel": 9
-      , "num_mixtures": 9
+        "net_type": "unet_moex"
+      , "kernel": 16
+      , "num_mixtures": 16
       , "sharpening_factor": 1
 
       , "model_channels": 16
-      , "num_res_blocks": 4
-      , "attention_resolutions": [16, 8]
+      , "num_res_blocks": 8
+      , "attention_resolutions": [16, 8, 4]
       , "dropout": 0.1
       , "num_groups": 8
-      , "num_heads" : 16
+      , "num_heads" : 32
       , "num_head_channels": 64
       , "use_new_attention_order": true
       , "use_checkpoint": true

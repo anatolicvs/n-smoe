@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# Description, usage, and options as before
-
 while getopts ":m:o:" opt; do
   case $opt in
     m)
@@ -47,7 +45,6 @@ sbatch <<-EOT
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
-#SBATCH --mem-per-cpu=8G  
 #SBATCH --mem-per-gpu=90G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks=$NTASKS

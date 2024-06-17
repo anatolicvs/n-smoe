@@ -9,8 +9,18 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 
-from utils_n.nn import (avg_pool_nd, checkpoint, conv_nd, normalization,
-                        zero_module)
+from utils_n.nn import (avg_pool_nd, checkpoint, conv_nd,
+                        zero_module, GroupNorm32)
+
+
+def normalization(channels,groups):
+    """
+    Make a standard normalization layer.
+
+    :param channels: number of input channels.
+    :return: an nn.Module for normalization.
+    """
+    return GroupNorm32(groups, channels)
 
 T = TypeVar("T")
 
