@@ -1,12 +1,12 @@
 {
-    "task": "transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet" 
+    "task": "transformer_moe_sr_gan_x4_v4_mri_rgb_gan_discriminator_unet" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
     , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 10
+    , "overlap": 14
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -15,10 +15,10 @@
         
     , "path": {
       "root": "/work/pb035507/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
-      , "pretrained_optimizerG": "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_optimizerG.pth"
+      , "pretrained_netG": null //"/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
+      , "pretrained_netD": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_D.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
+      , "pretrained_netE": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_G.pth" // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_optimizerG": null // "/hpcwork/pb035507/superresolution/transformer_moe_sr_gan_x4_v3_mri_rgb_gan_discriminator_unet/models/5000_optimizerG.pth"
       }
   
       , "datasets": {
@@ -51,25 +51,25 @@
     , "netG": {
       "net_type": "transformer_moe"
       
-      , "kernel": 9
-      , "num_mixtures": 9
+      , "kernel": 16
+      , "num_mixtures": 16
       , "sharpening_factor": 1
 
       , "embed_dim": 64
       , "depth": 4
-      , "heads": 4
+      , "heads": 8
       , "dim_head" : 64
-      , "mlp_dim": 64
-      , "dropout": 0.01
+      , "mlp_dim": 32
+      , "dropout": 0.1
       , "patch_size": 4
       
       , "avg_pool": false
       , "resizer_num_layers":2
 
-      , "dino_model" : "dino_vitb8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+      , "dino_model" : "dino_vits16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
 
       , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 2
+      , "resnet_num_layers" : 4
       , "use_first_pool": true
       
       , "init_type": "default"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
