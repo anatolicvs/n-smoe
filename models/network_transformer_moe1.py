@@ -212,7 +212,6 @@ class BackboneResnetCfg:
     use_first_pool: bool
     pretrained: bool = False
 
-
 class BackboneResnet(Backbone[BackboneResnetCfg]):
     def __init__(self, cfg: BackboneResnetCfg, d_in: int, d_out: int):
         super().__init__(cfg)
