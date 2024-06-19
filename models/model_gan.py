@@ -15,6 +15,7 @@ from scipy.ndimage import zoom
 from scipy.stats import entropy
 from scipy.signal import correlate
 from matplotlib.table import Table
+from scipy.fftpack import fftshift, fft2
 
 class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -267,16 +268,16 @@ step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt
         
         num_pairs = L_images.shape[0]
         fig = plt.figure(figsize=(24, num_pairs * 12))  
-        gs = GridSpec(num_pairs * 7, 6, figure=fig)  
+        gs = GridSpec(num_pairs * 8, 6, figure=fig)  # Adjust grid spec to allow for better layout
 
         for i in range(num_pairs):
             L_np_stochastic = L_images[i][0]
             H_np = H_images[i][0]
             L_np_bicubic = zoom(H_np, 0.5, order=3)  
 
-            L_freq_stochastic = np.fft.fftshift(np.fft.fft2(L_np_stochastic))
-            H_freq = np.fft.fftshift(np.fft.fft2(H_np))
-            L_freq_bicubic = np.fft.fftshift(np.fft.fft2(L_np_bicubic))
+            L_freq_stochastic = fftshift(fft2(L_np_stochastic))
+            H_freq = fftshift(fft2(H_np))
+            L_freq_bicubic = fftshift(fft2(L_np_bicubic))
 
             L_signal_stochastic_x = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=0)
             L_signal_stochastic_y = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=1)
@@ -286,18 +287,19 @@ step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt
             L_signal_bicubic_y = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=1)
 
             metrics = {}
-            for label, signal_x, signal_y in [('H', H_signal_x, H_signal_y),('L-Stochastic Deg', L_signal_stochastic_x, L_signal_stochastic_y), ('L-Bicubic Deg', L_signal_bicubic_x, L_signal_bicubic_y)]:
+            for label, signal_x, signal_y in [('High Res. Ground Truth', H_signal_x, H_signal_y), 
+                                            ('Low Res. Stochastic Deg', L_signal_stochastic_x, L_signal_stochastic_y), 
+                                            ('Low Res. Bicubic Deg.', L_signal_bicubic_x, L_signal_bicubic_y)]:
                 metrics[label] = {
                     'Energy X': np.sum(signal_x**2),
                     'Energy Y': np.sum(signal_y**2),
                     'Entropy X': entropy(signal_x, base=2),
                     'Entropy Y': entropy(signal_y, base=2),
-                    'Corr X with H': np.max(correlate(signal_x, H_signal_x)) if label != 'H' else '-',
-                    'Corr Y with H': np.max(correlate(signal_y, H_signal_y)) if label != 'H' else '-'
+                    'Corr X with H': np.max(correlate(signal_x, H_signal_x)) if label != 'High Res. Ground Truth' else '-',
+                    'Corr Y with H': np.max(correlate(signal_y, H_signal_y)) if label != 'High Res. Ground Truth' else '-'
                 }
 
-            
-            image_row = i * 7
+            image_row = i * 8
             spectra_row = image_row + 2
             table_row = spectra_row + 2
 
@@ -337,20 +339,28 @@ step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt
             ax8.plot(H_signal_y)
             ax8.set_title('High Res Y-Spectrum')
 
-            
-            ax_table = fig.add_subplot(gs[table_row, :])
+            ax_table = fig.add_subplot(gs[table_row:table_row + 2, :])
             table = Table(ax_table, bbox=[0, 0, 1, 1])
-            row_labels = ['Energy X', 'Energy Y', 'Entropy X', 'Entropy Y', 'Corr X with H', 'Corr Y with H']
-            cell_height = 1.0 / len(row_labels)
-            for j, row_label in enumerate(row_labels):
-                table.add_cell(j, -1, text=row_label, width=0.1, height=cell_height, loc='right', edgecolor='none')
-                for k, key in enumerate(metrics):
-                    value = metrics[key][row_label]
-                    formatted_value = value if isinstance(value, str) else f"{value:.2f}"
-                    table.add_cell(j, k, text=formatted_value, width=0.2, height=cell_height, loc='center')
+            row_labels = ['Metric', 'Energy X', 'Energy Y', 'Entropy X', 'Entropy Y', 'Corr X with H', 'Corr Y with H']
+            col_labels = ['Low Res. Stochastic Deg', 'Low Res. Bicubic Deg.', 'High Res. Ground Truth']
+            
+            cell_height = 0.1
+            cell_width = 0.25
+            
+            for i, row_label in enumerate(row_labels):
+                for j, col_label in enumerate([''] + col_labels):
+                    if i == 0:
+                        table.add_cell(i, j, text=col_label, width=cell_width, height=cell_height, loc='center', facecolor='gray')
+                    else:
+                        if j == 0:
+                            table.add_cell(i, j, text=row_label, width=cell_width, height=cell_height, loc='center', facecolor='gray')
+                        else:
+                            value = metrics[col_labels[j-1]][row_label]
+                            formatted_value = value if isinstance(value, str) else f"{value:.2e}"
+                            table.add_cell(i, j, text=formatted_value, width=cell_width, height=cell_height, loc='center')
 
             table.auto_set_font_size(False)
-            table.set_fontsize(10)
+            table.set_fontsize(8)
             table.scale(1, 2)
             ax_table.add_table(table)
             ax_table.axis('off')

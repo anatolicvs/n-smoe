@@ -1,14 +1,8 @@
 import math
-
-import einops
-import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-from timm.models.layers import to_2tuple, trunc_normal_
-
-
 
 class LFT(nn.Module):
     def __init__(self, args):

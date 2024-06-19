@@ -427,9 +427,9 @@ class Encoder(Backbone[EncoderConfig]):
     def forward(self, x):
         x = self._interpolate(x, self.scale_factor)
         
-        x = self.backbone({'image': x})
-        x = self.patch_embed(x)
-        x = self.transformer(x)
+        features = self.backbone({'image': x})
+        features = self.patch_embed(features)
+        features = self.transformer(features)
     
         gaussians = self.out(x)
         gaussians = rearrange(gaussians, 'b (c latent) -> b c latent', c=self.d_in, latent=self.latent)

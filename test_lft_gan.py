@@ -1,9 +1,9 @@
 import importlib
 from tqdm import tqdm
 import torch.backends.cudnn as cudnn
-from utils.utils_test import *
+from utils_n.utils_test import *
 from data.dataset_test_lft import MultiTestSetDataLoader
-from utils import utils_option as option
+from utils_n import utils_option as option
 from models.network_lft import LFT
 import matplotlib.pyplot as plt
 
@@ -146,6 +146,6 @@ def test(test_loader, device, net):
 
 
 if __name__ == '__main__':
-    from utils.option_test import args
+    from utils_n.option_test import args
 
     main(args)
