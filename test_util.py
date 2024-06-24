@@ -69,33 +69,32 @@ if __name__ == '__main__':
                 blocks.append(block)
         return torch.stack(blocks)
     
-    image_tensor = torch.randn(1, 128, 128).cuda()
+    image_tensor = torch.randn(1, 32, 32).cuda()
 
-    phw=32
-    overlap=16
+    phw=16
+    overlap=14
 
     blocks = extract_blocks(image_tensor, phw, overlap)
     image_tensor = image_tensor.unsqueeze(0)
 
     encoder_cfg = EncoderConfig(
-        embed_dim=64,
-        depth=16,
-        heads=16,
-        num_head_channels=16,
-        dim_head=64,
-        mlp_dim=64,
-        dropout=0.01,
+        embed_dim=32,
+        depth=4,
+        heads=4,
+        dim_head=32,
+        mlp_dim=32,
+        dropout=0.1,
         patch_size=8,
-        avg_pool=False,
         scale_factor=2,
         resizer_num_layers=2,
-        num_groups=64,
+        avg_pool=False,
+        num_groups=1,
         activation="GELU",
         backbone_cfg = BackboneDinoCfg(
                 name="dino", 
-                model="dino_vitb8", 
+                model="dino_vits8", 
                 backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
-                                               num_layers=1, use_first_pool=True))
+                                               num_layers=1, use_first_pool=False))
     )
     decoder_cfg = MoEConfig(
         num_mixtures=9,
@@ -116,6 +115,8 @@ if __name__ == '__main__':
     model = Autoencoder(
         cfg=autoenocer_cfg
     )
+
+    print(model)
 
     params = sum(p.numel() for p in model.parameters())
     print(f"Total number of parameters: {params}")

@@ -10,14 +10,6 @@ class SiLU(nn.Module):
         return x * th.sigmoid(x)
 
 
-class GroupNorm32(nn.GroupNorm):
-    def __init__(self, num_groups, num_channels):
-        super().__init__(num_groups=num_groups, num_channels=num_channels)
-
-    def forward(self, x):
-        return super().forward(x.float()).type(x.dtype)
-
-
 def conv_nd(dims, *args, **kwargs):
     """
     Create a 1D, 2D, or 3D convolution module.
@@ -89,15 +81,60 @@ def mean_flat(tensor):
     return tensor.mean(dim=list(range(2, len(tensor.shape))))
 
 
-def normalization(groups,channels):
+class GroupNorm32(nn.GroupNorm):
+    def __init__(self, num_groups, num_channels):
+        super().__init__(num_groups=num_groups, num_channels=num_channels)
+
+    def forward(self, x):
+        return super().forward(x.float()).type(x.dtype)
+
+class BatchNorm32(nn.BatchNorm2d):
+    def __init__(self, num_channels):
+        super().__init__(num_features=num_channels)
+
+    def forward(self, x):
+        return super().forward(x.float()).type(x.dtype)
+
+class LayerNorm32(nn.LayerNorm):
+    def __init__(self, num_channels, height, width):
+        normalized_shape = [num_channels, height, width]
+        super().__init__(normalized_shape=normalized_shape)
+
+    def forward(self, x):
+        return super().forward(x.float()).type(x.dtype)
+
+class InstanceNorm32(nn.InstanceNorm2d):
+    def __init__(self, num_channels):
+        super().__init__(num_features=num_channels)
+
+    def forward(self, x):
+        return super().forward(x.float()).type(x.dtype)
+
+def normalization(channels, height=None, width=None, groups=None, norm_type='instance'):
     """
     Make a standard normalization layer.
 
+    :param norm_type: type of normalization ('group', 'batch', 'layer', 'instance').
     :param channels: number of input channels.
+    :param height: height of the input (required for LayerNorm).
+    :param width: width of the input (required for LayerNorm).
+    :param groups: number of groups (required for GroupNorm).
     :return: an nn.Module for normalization.
     """
-    return GroupNorm32(groups, channels)
-
+    if norm_type == 'group':
+        if groups is None:
+            raise ValueError("Number of groups must be specified for GroupNorm")
+        return GroupNorm32(groups, channels)
+    elif norm_type == 'batch':
+        return BatchNorm32(channels)
+    elif norm_type == 'layer':
+        if height is None or width is None:
+            raise ValueError("Height and width must be specified for LayerNorm")
+        return LayerNorm32(channels, height, width)
+    elif norm_type == 'instance':
+        return InstanceNorm32(channels)
+    else:
+        raise ValueError(f"Unsupported normalization type: {norm_type}")
 
 def timestep_embedding(timesteps, dim, max_period=10000):
     """
