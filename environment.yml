@@ -1,4 +1,4 @@
-name: venv11
+name: venv
 channels:
   - conda-forge
   - pytorch

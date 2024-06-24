@@ -12,6 +12,10 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import numpy as np
 from scipy.ndimage import zoom
+from scipy.stats import entropy
+from scipy.signal import correlate
+from matplotlib.table import Table
+from scipy.fftpack import fftshift, fft2
 
 class ModelGAN(ModelBase):
     """Train with pixel-VGG-GAN loss"""
@@ -263,78 +267,107 @@ step_size_up=self.opt_train["D_scheduler_step_size_up"], step_size_down=self.opt
         H_images = self.H.cpu().numpy()
         
         num_pairs = L_images.shape[0]
-
-        fig = plt.figure(figsize=(24, num_pairs * 6))
-        gs = GridSpec(num_pairs * 4, 6, figure=fig)  # Adjusted to 4*num_pairs rows
+        fig = plt.figure(figsize=(24, num_pairs * 12))  
+        gs = GridSpec(num_pairs * 8, 6, figure=fig)  # Adjust grid spec to allow for better layout
 
         for i in range(num_pairs):
-            L_np = L_images[i][0]
+            L_np_stochastic = L_images[i][0]
             H_np = H_images[i][0]
+            L_np_bicubic = zoom(H_np, 0.5, order=3)  
 
-            # Bicubic interpolation for the second low-resolution image
-            L_np_bicubic = zoom(H_np, 0.5, order=3)  # Assuming 2x upsampling
+            L_freq_stochastic = fftshift(fft2(L_np_stochastic))
+            H_freq = fftshift(fft2(H_np))
+            L_freq_bicubic = fftshift(fft2(L_np_bicubic))
 
-            L_freq = np.fft.fftshift(np.fft.fft2(L_np))
-            H_freq = np.fft.fftshift(np.fft.fft2(H_np))
-            L_freq_bicubic = np.fft.fftshift(np.fft.fft2(L_np_bicubic))
-            
-            L_freq_magnitude = np.log(np.abs(L_freq) + 1)
-            H_freq_magnitude = np.log(np.abs(H_freq) + 1)
-            L_freq_magnitude_bicubic = np.log(np.abs(L_freq_bicubic) + 1)
-            
-            L_signal = np.sum(L_freq_magnitude, axis=0)
-            H_signal = np.sum(H_freq_magnitude, axis=0)
-            L_signal_bicubic = np.sum(L_freq_magnitude_bicubic, axis=0)
+            L_signal_stochastic_x = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=0)
+            L_signal_stochastic_y = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=1)
+            H_signal_x = np.sum(np.log(np.abs(H_freq) + 1), axis=0)
+            H_signal_y = np.sum(np.log(np.abs(H_freq) + 1), axis=1)
+            L_signal_bicubic_x = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=0)
+            L_signal_bicubic_y = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=1)
 
-            # Plot the images and spectra for the first column
-            col = i % 2 * 3
-            row = (i // 2) * 4
-            
-            ax0 = fig.add_subplot(gs[row:row + 2, col])
-            ax0.imshow(L_np, cmap='gray')
-            ax0.set_title(f'Low Resolution {i + 1}', fontsize=11, family='Times New Roman')
-            ax0.axis('on')
+            metrics = {}
+            for label, signal_x, signal_y in [('High Res. Ground Truth', H_signal_x, H_signal_y), 
+                                            ('Low Res. Stochastic Deg', L_signal_stochastic_x, L_signal_stochastic_y), 
+                                            ('Low Res. Bicubic Deg.', L_signal_bicubic_x, L_signal_bicubic_y)]:
+                metrics[label] = {
+                    'Energy X': np.sum(signal_x**2),
+                    'Energy Y': np.sum(signal_y**2),
+                    'Entropy X': entropy(signal_x, base=2),
+                    'Entropy Y': entropy(signal_y, base=2),
+                    'Corr X with H': np.max(correlate(signal_x, H_signal_x)) if label != 'High Res. Ground Truth' else '-',
+                    'Corr Y with H': np.max(correlate(signal_y, H_signal_y)) if label != 'High Res. Ground Truth' else '-'
+                }
 
-            ax1 = fig.add_subplot(gs[row:row + 2, col + 1])
+            image_row = i * 8
+            spectra_row = image_row + 2
+            table_row = spectra_row + 2
+
+            ax0 = fig.add_subplot(gs[image_row:image_row+2, 0])
+            ax0.imshow(L_np_stochastic, cmap='gray')
+            ax0.set_title('Low Res. Stochastic Deg')
+
+            ax1 = fig.add_subplot(gs[image_row:image_row+2, 1])
             ax1.imshow(L_np_bicubic, cmap='gray')
-            ax1.set_title(f'Low Resolution Bicubic {i + 1}', fontsize=11, family='Times New Roman')
-            ax1.axis('on')
+            ax1.set_title('Low Res. Bicubic Deg.')
 
-            ax2 = fig.add_subplot(gs[row:row + 2, col + 2])
+            ax2 = fig.add_subplot(gs[image_row:image_row+2, 2])
             ax2.imshow(H_np, cmap='gray')
-            ax2.set_title(f'High Resolution {i + 1}', fontsize=11, family='Times New Roman')
-            ax2.axis('on')
+            ax2.set_title('High Res. Ground Truth')
 
-            # Plot the frequency spectra below the corresponding images
-            ax3 = fig.add_subplot(gs[row + 2, col])
-            ax3.plot(L_signal)
-            ax3.set_title(f'Low Resolution Spectrum {i + 1}', fontsize=11, family='Times New Roman')
-            ax3.set_xlim([0, len(L_signal)])
-            ax3.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
-            ax3.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
-            ax3.tick_params(axis='both', which='major', labelsize=11)
-            ax3.grid(True)
+            ax3 = fig.add_subplot(gs[spectra_row, 0])
+            ax3.plot(L_signal_stochastic_x)
+            ax3.set_title('Low Stochastic Deg. X-Spectrum')
 
-            ax4 = fig.add_subplot(gs[row + 2, col + 1])
-            ax4.plot(L_signal_bicubic)
-            ax4.set_title(f'Low Resolution Bicubic Spectrum {i + 1}', fontsize=11, family='Times New Roman')
-            ax4.set_xlim([0, len(L_signal_bicubic)])
-            ax4.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
-            ax4.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
-            ax4.tick_params(axis='both', which='major', labelsize=11)
-            ax4.grid(True)
+            ax4 = fig.add_subplot(gs[spectra_row, 1])
+            ax4.plot(L_signal_bicubic_x)
+            ax4.set_title('Low Res Bicubic Deg. X-Spectrum')
 
-            ax5 = fig.add_subplot(gs[row + 2, col + 2])
-            ax5.plot(H_signal)
-            ax5.set_title(f'High Resolution Spectrum {i + 1}', fontsize=11, family='Times New Roman')
-            ax5.set_xlim([0, len(H_signal)])
-            ax5.set_xlabel('Frequency', fontsize=11, family='Times New Roman')
-            ax5.set_ylabel('Magnitude', fontsize=11, family='Times New Roman')
-            ax5.tick_params(axis='both', which='major', labelsize=11)
-            ax5.grid(True)
+            ax5 = fig.add_subplot(gs[spectra_row, 2])
+            ax5.plot(H_signal_x)
+            ax5.set_title('High Res X-Spectrum')
+
+            ax6 = fig.add_subplot(gs[spectra_row+1, 0])
+            ax6.plot(L_signal_stochastic_y)
+            ax6.set_title('Low Res Stochastic Deg. Y-Spectrum')
+
+            ax7 = fig.add_subplot(gs[spectra_row+1, 1])
+            ax7.plot(L_signal_bicubic_y)
+            ax7.set_title('Low Res Bicubic Deg. Y-Spectrum')
+
+            ax8 = fig.add_subplot(gs[spectra_row+1, 2])
+            ax8.plot(H_signal_y)
+            ax8.set_title('High Res Y-Spectrum')
+
+            ax_table = fig.add_subplot(gs[table_row:table_row + 2, :])
+            table = Table(ax_table, bbox=[0, 0, 1, 1])
+            row_labels = ['Metric', 'Energy X', 'Energy Y', 'Entropy X', 'Entropy Y', 'Corr X with H', 'Corr Y with H']
+            col_labels = ['Low Res. Stochastic Deg', 'Low Res. Bicubic Deg.', 'High Res. Ground Truth']
+            
+            cell_height = 0.1
+            cell_width = 0.25
+            
+            for i, row_label in enumerate(row_labels):
+                for j, col_label in enumerate([''] + col_labels):
+                    if i == 0:
+                        table.add_cell(i, j, text=col_label, width=cell_width, height=cell_height, loc='center', facecolor='gray')
+                    else:
+                        if j == 0:
+                            table.add_cell(i, j, text=row_label, width=cell_width, height=cell_height, loc='center', facecolor='gray')
+                        else:
+                            value = metrics[col_labels[j-1]][row_label]
+                            formatted_value = value if isinstance(value, str) else f"{value:.2e}"
+                            table.add_cell(i, j, text=formatted_value, width=cell_width, height=cell_height, loc='center')
+
+            table.auto_set_font_size(False)
+            table.set_fontsize(8)
+            table.scale(1, 2)
+            ax_table.add_table(table)
+            ax_table.axis('off')
 
         plt.tight_layout()
         plt.show()
+
 
     # ----------------------------------------
     # feed L to netG and get E

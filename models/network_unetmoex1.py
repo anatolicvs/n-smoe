@@ -30,7 +30,7 @@ class Backbone(nn.Module, Generic[T]):
         super().__init__()
         self.cfg = cfg
 
-    def forward(self, context: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         raise NotImplementedError
 
     @property
@@ -103,7 +103,7 @@ class Downsample(nn.Module):
 
 class AttentionPool2d(nn.Module):
     def __init__(
-        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int = None
+        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int
     ):
         super().__init__()
         self.positional_embedding = nn.Parameter(
@@ -680,6 +680,7 @@ class Encoder(Backbone[EncoderConfig]):
             gaussians = rearrange(
                 gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
             )
+
             return gaussians
         else:
             h = h.type(x.dtype)
@@ -702,9 +703,15 @@ class Encoder(Backbone[EncoderConfig]):
 
 @dataclass
 class MoEConfig:
-    num_mixtures: int = 4
     kernel: int = 4
     sharpening_factor: float = 1.0
+
+
+@dataclass
+class Gaussians:
+    mu: torch.Tensor
+    cov_matrix: torch.Tensor
+    w: torch.Tensor
 
 
 class MoE(Backbone[MoEConfig]):
@@ -717,48 +724,108 @@ class MoE(Backbone[MoEConfig]):
 
         self.ch = d_in
         self.kernel = cfg.kernel
-        self.num_mixtures = cfg.num_mixtures
-        self.α = cfg.sharpening_factor
+        self.alpha = cfg.sharpening_factor
 
-    def grid(self, height, width):
-        xx = torch.linspace(0.0, 1.0, width)
-        yy = torch.linspace(0.0, 1.0, height)
-        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
-        grid = torch.stack((grid_x, grid_y), 2).float()
-        return grid.reshape(height * width, 2)
+    # @staticmethod
+    # def ang_to_rot_mat(
+    #     theta: torch.Tensor,
+    #     ) -> torch.Tensor:
+    #         theta = torch.unbind(theta, dim=-1)[0]
 
-    def forward(self, height, width, params):
-        μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
-        μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
-        μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
-        Σ = params[
-            :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
-        ].reshape(-1, self.kernel, 2, 2)
-        w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
+    #         cos_theta = torch.cos(theta)
+    #         sin_theta = torch.sin(theta)
 
-        Σ = torch.tril(Σ)
-        Σ = torch.mul(Σ, self.α)
+    #         R = torch.stack(
+    #             (
+    #                 cos_theta,
+    #                 -sin_theta,
+    #                 sin_theta,
+    #                 cos_theta
+    #             ),
+    #             -1,
+    #         )
+    #         return rearrange(R, "... (i j) -> ... i j", i=2, j=2)
 
-        grid = self.grid(height, width).to(params.device)
-        μ = μ.unsqueeze(dim=2)
-        grid_expand_dim = torch.unsqueeze(torch.unsqueeze(grid, dim=0), dim=0)
-        x = torch.tile(grid_expand_dim, (μ.shape[0], μ.shape[1], 1, 1))
-        x_sub_μ = torch.unsqueeze(x.float() - μ.float(), dim=-1)
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-8):
+        scale_mat = torch.diag_embed(scale + epsilon)
+        R = self.ang_to_rot_mat(theta)
+        return R @ scale_mat @ scale_mat.transpose(-2, -1) @ R.transpose(-2, -1)
 
-        e = torch.exp(
-            torch.negative(
-                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
-            )
+    def ang_to_rot_mat(self, theta: torch.Tensor):
+        cos_theta = torch.cos(theta).unsqueeze(-1)
+        sin_theta = torch.sin(theta).unsqueeze(-1)
+        R = torch.cat([cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1)
+        return R.view(*theta.shape, 2, 2)
+
+    def extract_params(self, p, k, alpha):
+        mu_x = p[:, :, :k].reshape(-1, p.shape[1], k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, p.shape[1], k, 1)
+        mu = torch.cat((mu_x, mu_y), -1).view(-1, p.shape[1], k, 2)
+        scale_idx = 3 * k
+        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, p.shape[1], k, 2)
+        rot_idx = scale_idx + 2 * k
+        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+        cov_matrix = self.cov_mat_2d(scale, theta)
+        cov_matrix = torch.mul(cov_matrix, alpha)
+        w = p[:, :, 2 * k : 3 * k].reshape(-1, p.shape[1], k)
+        return Gaussians(mu, cov_matrix, w)
+
+    def grid(self, height, width, channels):
+        y = torch.linspace(-1, 1, height)
+        x = torch.linspace(-1, 1, width)
+        grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), dim=-1)
+        return grid.unsqueeze(0).expand(channels, -1, -1, -1)
+
+    def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
+
+        gaussians = self.extract_params(p, self.kernel, self.alpha)
+
+        grid = self.grid(height, width, gaussians.mu.shape[1]).to(p.device)
+
+        grid_expand = grid.unsqueeze(0).expand(gaussians.mu.shape[0], -1, -1, -1, -1)
+
+        # Calculate displacement from Gaussian means: (x - μ)
+        x_sub_mu = grid_expand.unsqueeze(4) - gaussians.mu.unsqueeze(2).unsqueeze(2)
+        x_sub_mu = x_sub_mu.view(
+            gaussians.mu.shape[0],
+            gaussians.mu.shape[1],
+            height,
+            width,
+            self.kernel,
+            2,
+            1,
         )
 
-        g = torch.sum(e, dim=1, keepdim=True)
-        g_max = torch.max(torch.tensor(10e-8), g)
-        e_norm = torch.divide(e, g_max)
+        # Invert covariance matrices: Σ⁻¹
+        cov_matrix_inv = torch.linalg.inv(gaussians.cov_matrix)
 
-        y_hat = torch.sum(e_norm * torch.unsqueeze(w, dim=-1), dim=1)
+        # Prepare Σ⁻¹ for batch-wise operations
+        cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
+        cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
+            -1, -1, height, width, -1, -1, -1
+        )
+
+        # Apply Gaussian transformation: Σ⁻¹(x - μ)
+        intermediate = torch.matmul(cov_matrix_inv_expanded, x_sub_mu)
+
+        # Compute Gaussian exponent: -½(x - μ)ᵀΣ⁻¹(x - μ)
+        exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
+            -1
+        ).squeeze(-1)
+
+        # Calculate Gaussian values using the exponent: e^(exponent)
+        e = torch.exp(exponent)
+
+        # Normalize and weight the Gaussian values
+        g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4, keepdim=True)
+        g_max = torch.clamp(g, min=1e-8)
+        e_norm = e / g_max
+
+        # Aggregate weighted Gaussian values for final output
+        y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4)
+
         y_hat = torch.clamp(y_hat, min=0, max=1)
-
-        y_hat = y_hat.view(-1, self.ch, height, width)
 
         return y_hat
 
@@ -820,7 +887,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             used_mem = torch.cuda.memory_allocated(0)
             free_mem = tot_mem - used_mem
 
-            thresholds = [0.3, 0.1]
+            thresholds = [0.5, 0.3, 0.1]
             for percent in thresholds:
                 threshold = tot_mem * percent
                 if free_mem > threshold:

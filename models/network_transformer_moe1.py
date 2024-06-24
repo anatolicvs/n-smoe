@@ -212,7 +212,6 @@ class BackboneResnetCfg:
     use_first_pool: bool
     pretrained: bool = False
 
-
 class BackboneResnet(Backbone[BackboneResnetCfg]):
     def __init__(self, cfg: BackboneResnetCfg, d_in: int, d_out: int):
         super().__init__(cfg)
@@ -402,10 +401,12 @@ class Encoder(Backbone[EncoderConfig]):
         self.transformer = Transformer(cfg.embed_dim, cfg.depth, cfg.heads, cfg.dim_head, cfg.mlp_dim, cfg.dropout)
         
         self.out = nn.Sequential(
-            normalization(cfg.num_groups, int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
+            # normalization(cfg.num_groups, int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
+            normalization(channels=int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
             activation,
             AttentionPool2d(
                 cfg.embed_dim,
+                # int((phw * cfg.scale_factor)),
                 int(((phw * cfg.scale_factor)//cfg.patch_size))**2,
                 cfg.heads,
                 int(self.d_in * self.latent)
@@ -428,11 +429,11 @@ class Encoder(Backbone[EncoderConfig]):
     def forward(self, x):
         x = self._interpolate(x, self.scale_factor)
         
-        x = self.backbone({'image': x})
-        x = self.patch_embed(x)
-        x = self.transformer(x)
+        features = self.backbone({'image': x})
+        features = self.patch_embed(features)
+        features = self.transformer(features)
     
-        gaussians = self.out(x)
+        gaussians = self.out(features)
         gaussians = rearrange(gaussians, 'b (c latent) -> b c latent', c=self.d_in, latent=self.latent)
         return gaussians 
     
@@ -466,9 +467,11 @@ class MoE(Backbone[MoEConfig]):
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
         μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
+        
         Σ = params[
             :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
         ].reshape(-1, self.kernel, 2, 2)
+
         w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
 
         Σ = torch.tril(Σ)
@@ -552,14 +555,52 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         recon_images /= count_matrix.clamp(min=1)
         return recon_images
      
-     def forward(self, x, shape):
-        if len(x.shape) == 5:
-            x = x.view(-1, *x.size()[2:])
-        encoded = self.encoder(x)
-        B, C, H, W = shape
-        sf = self.encoder.scale_factor
-        scaled_phw = self.phw * sf 
- 
-        decoded = self.decoder(scaled_phw, scaled_phw, encoded)
-        y_hat = self.reconstruct(decoded, (B, C, H * sf, W * sf), scaled_phw, self.overlap*sf)
-        return y_hat
+     @staticmethod
+     def mem_lim():
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+        if dev == "cuda":
+            torch.cuda.set_device(0)
+            tot_mem = torch.cuda.get_device_properties(0).total_memory
+            used_mem = torch.cuda.memory_allocated(0)
+            free_mem = tot_mem - used_mem
+
+            thresholds = [0.3, 0.1]
+            for percent in thresholds:
+                threshold = tot_mem * percent
+                if free_mem > threshold:
+                    return threshold
+
+            min_threshold = max(1 * 2**30, tot_mem * 0.05)
+            return min_threshold
+        else:
+            return 1 * 2**30
+
+     def forward(self, x, s):
+        if x.ndim == 5:
+            x = x.reshape(-1, *x.shape[2:])
+
+        es = x.element_size()
+        ml = self.mem_lim()
+        bm = x.shape[1:].numel() * es
+        mx_bs = ml // bm
+        n = max(1, min(x.shape[0] // 24, mx_bs))
+        cs = (x.shape[0] + n - 1) // n
+
+        b = torch.split(x, cs)
+
+        enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+
+        B, C, H, W = s
+        sp = self.phw * self.encoder.scale_factor
+
+        dec = torch.cat(
+            [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
+        )
+
+        y = self.reconstruct(
+            dec,
+            (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
+            sp,
+            self.overlap * self.encoder.scale_factor,
+        )
+        return y

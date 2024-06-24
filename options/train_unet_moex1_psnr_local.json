@@ -1,5 +1,5 @@
 {
-    "task": "unet_moex_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -52,9 +52,8 @@
       }
   
     , "netG": {
-      "net_type": "unet_moex"
+      "net_type": "unet_moex1"
       , "kernel": 16
-      , "num_mixtures": 16
       , "sharpening_factor": 1
 
       , "model_channels": 16

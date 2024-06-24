@@ -7,37 +7,37 @@
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
   , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
   , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
-
+  , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" 
   , "merge_bn": true              // if no BN exists, set false
   , "merge_bn_startpoint": 400000  // merge BN after N iterations
 
   , "path": {
-    "root": "/work/pb035507/superresolution/"  // "denoising" | "superresolution"  , hpc:/work/pb035507/superresolution/
-    , "pretrained_netG": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_G.pth"  // path of pretrained model
-    , "pretrained_netD": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_D.pth"  // path of pretrained model
-    , "pretrained_netE": "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_E.pth"  // path of pretrained model
+    "root": "superresolution" // "/work/pb035507/superresolution/"  // "denoising" | "superresolution"  , hpc:/work/pb035507/superresolution/
+    , "pretrained_netG": null // "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_G.pth"  // path of pretrained model
+    , "pretrained_netD": null // "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_D.pth"  // path of pretrained model
+    , "pretrained_netE": null // "/work/pb035507/superresolution/lft_gan_discriminator_unet_muller_resizer_v4_angx5_scalex4/models/130000_E.pth"  // path of pretrained model
     }
 
   , "datasets": {
     "train": {
       "name": "train_dataset"           // just name
       , "dataset_type": "sr-lf"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-      , "dataroot_H": "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset local:/mnt/d/LF/data_for_train, hpc:/work/pb035507/dataset/LF/data_for_train
+      , "dataroot_H": "/mnt/d/LF/data_for_train" // "/work/pb035507/dataset/LF/data_for_train"// path of H training dataset local:/mnt/d/LF/data_for_train, hpc:/work/pb035507/dataset/LF/data_for_train
       , "data_name": "ALL"
       , "dataroot_L": null              // path of L training dataset
       , "H_size": 660                    // patch size 40 | 64 | 96 | 128 | 192
       , "dataloader_shuffle": true
-      , "dataloader_num_workers": 8
-      , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+      , "dataloader_num_workers": 16
+      , "dataloader_batch_size": 8    // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
       "name": "test_dataset"            // just name
       , "dataset_type": "sr-lf"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-      , "dataroot_H": "/work/pb035507/dataset/LF/data_for_test"   // path of H testing dataset local:/mnt/d/LF/data_for_test, hpc:/work/pb035507/dataset/LF/data_for_test
+      , "dataroot_H": "/mnt/d/LF/data_for_test" // "/work/pb035507/dataset/LF/data_for_test"   // path of H testing dataset local:/mnt/d/LF/data_for_test, hpc:/work/pb035507/dataset/LF/data_for_test
       , "dataroot_L": null              // path of L testing dataset
       , "data_name": "ALL"              // "All" | "EPFL" | "HCI" | "INRIA" | "ST" | "UZH" | "LFSD" | "EPFL_HCI" | "EPFL_HCI_INRIA" | "EPFL_HCI_INRIA_ST" | "EPFL_HCI_INRIA_ST_UZH" | "EPFL_HCI_INRIA_ST_UZH_LFSD"
       , "H_size": 660                   // patch size 40 | 64 | 96 | 128 | 192
-      , "dataloader_num_workers": 8
+      , "dataloader_num_workers": 16
       , "dataloader_batch_size": 1 
     }
   }
@@ -45,73 +45,69 @@
   , "netG": {
     "net_type": "lft_gan"
     , "channels": 64
-    , "init_type": "kaiming_normal"         // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-    , "init_bn_type": "uniform"         // "uniform" | "constant"
-    , "init_gain": 0.2
+    , "init_type": "default" 
     , "num_heads": 8
     , "dropout": 0
-    , "resizer_num_layers": 4
     , "altblock_layer_num": 2
+    , "avg_pool" : false
+    , "resizer_num_layers": 2
   }
 
   , "netD": {
-    "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
-    , "base_nc": 64  
-    , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
-    , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
-    , "norm_type": 3  // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', instancespectral'
-    , "init_type": "kaiming_normal" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-    , "init_bn_type": "uniform" // "uniform" | "constant"
+    "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
+    , "in_nc": 3
+    , "base_nc": 64
+    , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
+    , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
+
+    , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+    , "init_bn_type": "uniform"      // "uniform" | "constant"
     , "init_gain": 0.2
   }
 
   , "train": {
-    "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim" | "ms-ssim"
-  , "G_lossfn_weight": 1e-2
+    "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+    , "G_lossfn_weight": 1
 
-  , "F_lossfn_type": "l1"  // "l1" | "l2"
-  , "F_lossfn_weight": 1
-  , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
-  , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
-  , "F_use_input_norm": true
-  , "F_use_range_norm": false
+    , "F_lossfn_type": "l1"  // "l1" | "l2"
+    , "F_lossfn_weight": 1
+    , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
+    , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+    , "F_use_input_norm": true
+    , "F_use_range_norm": false
 
-  , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
-  , "D_lossfn_weight": 5e-3
+    , "gan_type": "gan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+    , "D_lossfn_weight": 0.1
 
-  , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+    , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
 
-  , "G_scheduler_T_max": 2000000
-  , "D_scheduler_T_max": 2000000
-  , "G_scheduler_eta_min": 1e-7
-  , "D_scheduler_eta_min": 1e-7
-  , "D_init_iters": 0
+    , "D_init_iters": 0
 
-  , "G_optimizer_type": "adam"
-  , "G_optimizer_lr": 2e-4
-  , "G_optimizer_wd": 0
-  , "G_clip_value": 1.0
-  , "D_optimizer_type": "adam"
-  , "D_optimizer_lr": 2e-4
-  , "D_optimizer_wd": 0
-  , "D_clip_value": 1.0
-  , "G_scheduler_type": "MultiStepLR"
-  , "G_scheduler_milestones": [200000, 800000, 1200000, 2000000]
-  , "G_scheduler_gamma": 0.5
-  , "G_optimizer_reuse": false
+    , "G_optimizer_type": "adam"
+    , "G_optimizer_lr": 1e-4  // learning rate
+    , "G_optimizer_wd": 0
 
-  , "D_scheduler_type": "MultiStepLR"
-  , "D_scheduler_milestones": [200000, 800000, 1200000, 2000000]
-  , "D_scheduler_gamma": 0.5
-  , "D_optimizer_reuse": false
+    , "D_optimizer_type": "adam"
+    , "D_optimizer_lr": 1e-4  // learning rate
+    , "D_optimizer_wd": 0
 
-  , "G_param_strict": true
-  , "D_param_strict": true
-  , "E_param_strict": true
+    , "G_scheduler_type": "MultiStepLR"
+    , "G_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
+    , "G_scheduler_gamma": 0.5
+    , "G_optimizer_reuse": true
 
-  , "checkpoint_test": 5000
-  , "checkpoint_save": 5000
-  , "checkpoint_print": 200
+    , "D_scheduler_type": "MultiStepLR"
+    , "D_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
+    , "D_scheduler_gamma": 0.5
+    , "D_optimizer_reuse": false
+
+    , "G_param_strict": true
+    , "D_param_strict": true
+    , "E_param_strict": true
+
+    , "checkpoint_test": 5000  // skip testing
+    , "checkpoint_save": 5000
+    , "checkpoint_print": 200
   }
 }
 

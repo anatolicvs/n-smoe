@@ -13,8 +13,7 @@ from torch import Tensor
 import cuda_block_ops
 from torch.autograd import Function
 
-# import torchvision.transforms as transforms
-# from PIL import Image
+
 
 class BatchedViews(TypedDict):
     image: torch.Tensor
@@ -447,7 +446,6 @@ class SelfAttentionTransformer(nn.Module):
 
         return features
 
-
 @dataclass
 class BackboneResnetCfg:
     name: Literal["resnet"]
@@ -569,7 +567,6 @@ class EncoderConfig:
     transformer_cfg : SelfAttentionTransformerCfg
     embed_dim: int
 
-
 class Encoder(Backbone[EncoderConfig]):
     def __init__(self, cfg: EncoderConfig, d_in:int, d_out:int):
         super().__init__(cfg)
@@ -593,18 +590,6 @@ class Encoder(Backbone[EncoderConfig]):
             nn.ReLU()  
         )
 
-        # self.high_resolution_skip = nn.Sequential(
-        #     nn.Conv2d(d_in, d_out, 4, 1, 3),
-        #     nn.ReLU(),
-        # )
-
-        # self.to_gaussians = nn.Sequential(
-        #     nn.ReLU(),
-        #     nn.Linear(d_out, d_in * d_out),
-        #     nn.LayerNorm(d_in * d_out),
-        #     nn.ReLU()  
-        # )
-
         self.resizer = MullerResizer(
             base_resize_method='bicubic', kernel_size=5, stddev=1.0, num_layers=cfg.resizer_num_layers,
             dtype=torch.float32, avg_pool=cfg.avg_pool
@@ -622,11 +607,11 @@ class Encoder(Backbone[EncoderConfig]):
         x = self._interpolate(x, self.scale_factor)
         
         features = self.backbone({'image': x})
+
+        features = self.embed(features)
         
         features = self.transformer(features)
         
-        features = self.embed(features)
-
         gaussians = self.to_gaussians(features)
        
         gaussians = rearrange(gaussians, "b n c -> b c n")
