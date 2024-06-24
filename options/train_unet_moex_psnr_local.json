@@ -60,7 +60,7 @@
       , "model_channels": 16
       , "num_res_blocks": 4
       , "attention_resolutions": [16, 8]
-      , "dropout": 0.2
+      , "dropout": 0.1
       , "num_groups": 8
       , "num_heads" : 32
       , "num_head_channels": 64
@@ -68,7 +68,8 @@
       , "use_checkpoint": true
       , "resblock_updown": true
       , "channel_mult": [1, 2, 4, 8]
-      , "resample_2d" : true
+      , "resample_2d" : false
+
       , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
       , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
       ,"resizer_num_layers": 2

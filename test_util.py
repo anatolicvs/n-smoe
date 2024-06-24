@@ -1,4 +1,3 @@
-
 # from utils_n import utils_image as util
 # from utils_n.utils_blindsr import degradation_bsrgan, upsample_and_clip
 # import cv2
@@ -7,18 +6,27 @@
 
 import torch
 from torch import rand
+
 # from models.network_transformer_moe1 import BackboneDinoCfg, EncoderConfig, AutoencoderConfig, Autoencoder, BackboneResnetCfg
 # from models.network_transformer_moe1 import MoEConfig
 from models.network_unetmoex1 import ResBlock, ResBlockConfig
-from models.network_unetmoex1 import AttentionBlock, AttentionBlockConfig, EncoderConfig, Encoder,MoEConfig, AutoencoderConfig, Autoencoder
+from models.network_unetmoex1 import (
+    AttentionBlock,
+    AttentionBlockConfig,
+    EncoderConfig,
+    Encoder,
+    MoEConfig,
+    AutoencoderConfig,
+    Autoencoder,
+)
 
 torch.backends.cudnn.benchmark = True
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     # img = util.imread_uint('utils/test.png', 1)
     # img = util.uint2single(img)
     # sf = 4
-    
+
     # for i in range(10000):
     #     try:
     #         img_lq, img_hq = degradation_bsrgan(img, sf=sf, lq_patchsize=72)
@@ -48,7 +56,6 @@ if __name__ == '__main__':
     # res_block = ResBlock(config)
     # print(res_block)
 
-
     # config = AttentionBlockConfig(channels=64, num_heads=8, num_head_channels=8, use_checkpoint=True, use_new_attention_order=True)
     # attention_block = AttentionBlock(cfg=config)
 
@@ -60,25 +67,25 @@ if __name__ == '__main__':
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    device = 'cuda'
+    device = "cuda"
 
     def extract_blocks(img_tensor, block_size, overlap):
         blocks = []
         step = block_size - overlap
         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                block = img_tensor[:, i : i + block_size, j : j + block_size]
                 blocks.append(block)
         return torch.stack(blocks)
-    
+
     ch = 3
     w = 512
     h = 512
 
     image_tensor = torch.randn(ch, w, h).to(device=device)
 
-    phw=16
-    overlap=12
+    phw = 16
+    overlap = 14
 
     blocks = extract_blocks(image_tensor, phw, overlap)
     image_tensor = image_tensor.unsqueeze(0)
@@ -97,9 +104,9 @@ if __name__ == '__main__':
     #     num_groups=1,
     #     activation="GELU",
     #     backbone_cfg = BackboneDinoCfg(
-    #             name="dino", 
-    #             model="dino_vits8", 
-    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50", 
+    #             name="dino",
+    #             model="dino_vits8",
+    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50",
     #                                            num_layers=1, use_first_pool=False))
     # )
     # decoder_cfg = MoEConfig(
@@ -107,7 +114,6 @@ if __name__ == '__main__':
     #     kernel=9,
     #     sharpening_factor=1.0
     # )
-
 
     # autoenocer_cfg = AutoencoderConfig(
     #     EncoderConfig=encoder_cfg,
@@ -132,23 +138,28 @@ if __name__ == '__main__':
     # output = model(blocks, image_tensor.shape)
     # print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 
-    encoder_cfg = EncoderConfig(                         
-        model_channels=16,                 # Start with fewer channels to avoid too many parameters with small inputs
-        num_res_blocks=4,                  # Fewer residual blocks to prevent over-parameterization
-        attention_resolutions=[16, 8],     # Apply attention at higher resolutions only
-        dropout=0.2,                       # Increased dropout for more regularization
-        num_groups=8,                      # Maintain group normalization to stabilize training with small batch sizes
-        scale_factor=1,                    # Reduced scale factor to limit downsampling given the small input size
-        num_heads=4,                       # Fewer heads in attention mechanisms to balance model complexity
-        num_head_channels=16,              # Fewer channels per head to reduce complexity and focus on essential features
+    encoder_cfg = EncoderConfig(
+        model_channels=16,  # Start with fewer channels to avoid too many parameters with small inputs
+        num_res_blocks=4,  # Fewer residual blocks to prevent over-parameterization
+        attention_resolutions=[16, 8],  # Apply attention at higher resolutions only
+        dropout=0.2,  # Increased dropout for more regularization
+        num_groups=8,  # Maintain group normalization to stabilize training with small batch sizes
+        scale_factor=1,  # Reduced scale factor to limit downsampling given the small input size
+        num_heads=4,  # Fewer heads in attention mechanisms to balance model complexity
+        num_head_channels=16,  # Fewer channels per head to reduce complexity and focus on essential features
         use_new_attention_order=True,
-        use_checkpoint=True,              # Reduce memory usage since model is smaller
-        resblock_updown=True,             # Disable resblock upsampling and downsampling
-        channel_mult=(1, 2, 4, 8),          # Smaller channel multiplier as fewer stages of feature enhancement are needed
-        resample_2d=True,                 # Avoid resampling in 2D to preserve spatial dimensions
-        pool="attention"                   # Use attention pooling to focus on relevant features without spatial reduction
+        use_checkpoint=True,  # Reduce memory usage since model is smaller
+        resblock_updown=True,  # Disable resblock upsampling and downsampling
+        channel_mult=(
+            1,
+            2,
+            4,
+            8,
+        ),  # Smaller channel multiplier as fewer stages of feature enhancement are needed
+        resample_2d=True,  # Avoid resampling in 2D to preserve spatial dimensions
+        pool="attention",  # Use attention pooling to focus on relevant features without spatial reduction
     )
-    
+
     # encoder = Encoder(encoder_cfg, d_in=3, d_out=72).cuda()
     # input_tensor = rand(1, 3, 32, 32).cuda()
 
@@ -160,15 +171,10 @@ if __name__ == '__main__':
     # output = encoder(input_tensor)
     # print(output.shape)
 
-
     kernel = 9
     sf = 1.0
-    decoder_cfg = MoEConfig(
-        kernel=kernel,
-        sharpening_factor=sf
-    )
+    decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
 
-    
     z = 2 * kernel + 4 * kernel + kernel
 
     autoenocer_cfg = AutoencoderConfig(
@@ -177,12 +183,10 @@ if __name__ == '__main__':
         d_in=ch,
         d_out=z,
         phw=phw,
-        overlap=overlap
+        overlap=overlap,
     )
 
-    model = Autoencoder(
-        cfg=autoenocer_cfg
-    )
+    model = Autoencoder(cfg=autoenocer_cfg)
 
     # print(model)
 

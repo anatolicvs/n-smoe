@@ -21,7 +21,9 @@ def normalization(channels, groups):
     """
     return GroupNorm32(groups, channels)
 
+
 T = TypeVar("T")
+
 
 class Backbone(nn.Module, Generic[T]):
     def __init__(self, cfg: T):
@@ -101,7 +103,8 @@ class Downsample(nn.Module):
 
 class AttentionPool2d(nn.Module):
     def __init__(
-        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int):
+        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int
+    ):
         super().__init__()
         self.positional_embedding = nn.Parameter(
             torch.randn(spacial_dim + 1, embed_dim) / embed_dim**0.5
@@ -703,11 +706,13 @@ class MoEConfig:
     kernel: int = 4
     sharpening_factor: float = 1.0
 
+
 @dataclass
 class Gaussians:
     mu: torch.Tensor
     cov_matrix: torch.Tensor
     w: torch.Tensor
+
 
 class MoE(Backbone[MoEConfig]):
     def __init__(
@@ -726,10 +731,10 @@ class MoE(Backbone[MoEConfig]):
     #     theta: torch.Tensor,
     #     ) -> torch.Tensor:
     #         theta = torch.unbind(theta, dim=-1)[0]
-            
+
     #         cos_theta = torch.cos(theta)
     #         sin_theta = torch.sin(theta)
-            
+
     #         R = torch.stack(
     #             (
     #                 cos_theta,
@@ -741,7 +746,7 @@ class MoE(Backbone[MoEConfig]):
     #         )
     #         return rearrange(R, "... (i j) -> ... i j", i=2, j=2)
 
-    def cov_mat_2d(self, scale : torch.Tensor, theta :torch.Tensor, epsilon=1e-8):
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-8):
         scale_mat = torch.diag_embed(scale + epsilon)
         R = self.ang_to_rot_mat(theta)
         return R @ scale_mat @ scale_mat.transpose(-2, -1) @ R.transpose(-2, -1)
@@ -749,73 +754,80 @@ class MoE(Backbone[MoEConfig]):
     def ang_to_rot_mat(self, theta: torch.Tensor):
         cos_theta = torch.cos(theta).unsqueeze(-1)
         sin_theta = torch.sin(theta).unsqueeze(-1)
-        R = torch.cat([cos_theta, 
-                       -sin_theta, 
-                       sin_theta, 
-                       cos_theta], dim=-1)
+        R = torch.cat([cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1)
         return R.view(*theta.shape, 2, 2)
 
     def extract_params(self, p, k, alpha):
         mu_x = p[:, :, :k].reshape(-1, 3, k, 1)
-        mu_y = p[:, :, k:2*k].reshape(-1, 3, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, 3, k, 1)
         mu = torch.cat((mu_x, mu_y), -1).view(-1, 3, k, 2)
         scale_idx = 3 * k
-        scale = p[:, :, scale_idx:scale_idx + 2*k].reshape(-1, 3, k, 2)
+        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, 3, k, 2)
         rot_idx = scale_idx + 2 * k
-        theta = p[:, :, rot_idx:rot_idx + k].reshape(-1, 3, k)
+        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, 3, k)
         cov_matrix = self.cov_mat_2d(scale, theta)
         cov_matrix = torch.mul(cov_matrix, alpha)
-        w = p[:, :, 2*k:3*k].reshape(-1, 3, k)
+        w = p[:, :, 2 * k : 3 * k].reshape(-1, 3, k)
         return Gaussians(mu, cov_matrix, w)
 
-    def grid(self,height, width, channels):
+    def grid(self, height, width, channels):
         y = torch.linspace(-1, 1, height)
         x = torch.linspace(-1, 1, width)
-        grid_y, grid_x = torch.meshgrid(y, x, indexing='ij')
+        grid_y, grid_x = torch.meshgrid(y, x, indexing="ij")
         grid = torch.stack((grid_x, grid_y), dim=-1)
         return grid.unsqueeze(0).expand(channels, -1, -1, -1)
 
-       
-    def forward(self, height:int, width:int, p:torch.Tensor) -> torch.Tensor:
-        
+    def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
+
         gaussians = self.extract_params(p, self.kernel, self.alpha)
-        
+
         grid = self.grid(height, width, gaussians.mu.shape[1]).to(p.device)
-        
+
         grid_expand = grid.unsqueeze(0).expand(gaussians.mu.shape[0], -1, -1, -1, -1)
 
         # Calculate displacement from Gaussian means: (x - μ)
         x_sub_mu = grid_expand.unsqueeze(4) - gaussians.mu.unsqueeze(2).unsqueeze(2)
-        x_sub_mu = x_sub_mu.view(gaussians.mu.shape[0], gaussians.mu.shape[1], height, width, self.kernel, 2, 1)
-        
+        x_sub_mu = x_sub_mu.view(
+            gaussians.mu.shape[0],
+            gaussians.mu.shape[1],
+            height,
+            width,
+            self.kernel,
+            2,
+            1,
+        )
+
         # Invert covariance matrices: Σ⁻¹
         cov_matrix_inv = torch.linalg.inv(gaussians.cov_matrix)
 
         # Prepare Σ⁻¹ for batch-wise operations
         cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
-        cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(-1, -1, height, width, -1, -1, -1)
-        
+        cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
+            -1, -1, height, width, -1, -1, -1
+        )
+
         # Apply Gaussian transformation: Σ⁻¹(x - μ)
         intermediate = torch.matmul(cov_matrix_inv_expanded, x_sub_mu)
-        
+
         # Compute Gaussian exponent: -½(x - μ)ᵀΣ⁻¹(x - μ)
-        exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(-1).squeeze(-1)
-        
+        exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
+            -1
+        ).squeeze(-1)
+
         # Calculate Gaussian values using the exponent: e^(exponent)
         e = torch.exp(exponent)
-        
+
         # Normalize and weight the Gaussian values
         g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4, keepdim=True)
         g_max = torch.clamp(g, min=1e-8)
         e_norm = e / g_max
-        
+
         # Aggregate weighted Gaussian values for final output
         y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4)
-        
+
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
         return y_hat
-
 
 
 @dataclass
@@ -894,7 +906,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         ml = self.mem_lim()
         bm = x.shape[1:].numel() * es
         mx_bs = ml // bm
-        n = max(1, min(x.shape[0] // 256, mx_bs))
+        n = max(1, min(x.shape[0] // 1024, mx_bs))
         cs = (x.shape[0] + n - 1) // n
 
         b = torch.split(x, cs)
