@@ -805,21 +805,24 @@ class MoE(Backbone[MoEConfig]):
         )
 
         # Regularize the covariance matrix
-        delta = 0.01  # Regularization parameter
+        # delta = 0.01  # Regularization parameter
 
-        regularized_cov_matrix = self.regularize_cov_matrix(gaussians.cov_matrix, delta)
+        # regularized_cov_matrix = self.regularize_cov_matrix(gaussians.cov_matrix, delta)
 
         # Invert the regularized covariance matrix
-        cov_matrix_inv = torch.linalg.inv(regularized_cov_matrix)
+        # cov_matrix_inv = torch.linalg.inv(regularized_cov_matrix)
 
-        print(cov_matrix_inv)
+        # cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
+        # cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
+        #     -1, -1, height, width, -1, -1, -1
+        # )
 
-        cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
-        cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
+        cov_matrix_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(2)
+        cov_matrix_expanded = cov_matrix_expanded.expand(
             -1, -1, height, width, -1, -1, -1
         )
 
-        intermediate = torch.matmul(cov_matrix_inv_expanded, x_sub_mu)
+        intermediate = torch.matmul(cov_matrix_expanded, x_sub_mu)
         exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
             -1
         ).squeeze(-1)
