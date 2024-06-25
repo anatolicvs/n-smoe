@@ -777,15 +777,22 @@ class MoE(Backbone[MoEConfig]):
         grid = torch.stack((grid_x, grid_y), dim=-1)
         return grid.unsqueeze(0).expand(channels, -1, -1, -1)
 
+    def regularize_cov_matrix(self, cov_matrix, delta):
+        d = cov_matrix.size(-1)
+        trace_sigma = torch.einsum("bijmn->bijm", cov_matrix)
+        identity_matrix = torch.eye(d, device=cov_matrix.device).repeat(
+            cov_matrix.shape[0], cov_matrix.shape[1], cov_matrix.shape[2], 1, 1
+        )
+        sigma_reg = (1 - delta) * cov_matrix + (
+            delta * (trace_sigma / d).unsqueeze(-1) * identity_matrix
+        )
+        return sigma_reg
+
     def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
-
         gaussians = self.extract_params(p, self.kernel, self.alpha)
-
         grid = self.grid(height, width, gaussians.mu.shape[1]).to(p.device)
-
         grid_expand = grid.unsqueeze(0).expand(gaussians.mu.shape[0], -1, -1, -1, -1)
 
-        # Calculate displacement from Gaussian means: (x - μ)
         x_sub_mu = grid_expand.unsqueeze(4) - gaussians.mu.unsqueeze(2).unsqueeze(2)
         x_sub_mu = x_sub_mu.view(
             gaussians.mu.shape[0],
@@ -797,34 +804,30 @@ class MoE(Backbone[MoEConfig]):
             1,
         )
 
-        # Invert covariance matrices: Σ⁻¹
-        cov_matrix_inv = torch.linalg.inv(gaussians.cov_matrix)
+        # Regularize the covariance matrix
+        delta = 0.01  # Regularization parameter
 
-        # Prepare Σ⁻¹ for batch-wise operations
+        regularized_cov_matrix = self.regularize_cov_matrix(gaussians.cov_matrix, delta)
+
+        # Invert the regularized covariance matrix
+        cov_matrix_inv = torch.linalg.inv(regularized_cov_matrix)
+
+        print(cov_matrix_inv)
+
         cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
         cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
             -1, -1, height, width, -1, -1, -1
         )
 
-        # Apply Gaussian transformation: Σ⁻¹(x - μ)
         intermediate = torch.matmul(cov_matrix_inv_expanded, x_sub_mu)
-
-        # Compute Gaussian exponent: -½(x - μ)ᵀΣ⁻¹(x - μ)
         exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
             -1
         ).squeeze(-1)
-
-        # Calculate Gaussian values using the exponent: e^(exponent)
         e = torch.exp(exponent)
-
-        # Normalize and weight the Gaussian values
         g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4, keepdim=True)
         g_max = torch.clamp(g, min=1e-8)
         e_norm = e / g_max
-
-        # Aggregate weighted Gaussian values for final output
         y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4)
-
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
         return y_hat
