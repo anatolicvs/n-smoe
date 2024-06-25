@@ -78,7 +78,7 @@ if __name__ == "__main__":
                 blocks.append(block)
         return torch.stack(blocks)
 
-    ch = 3
+    ch = 1
     w = 512
     h = 512
 

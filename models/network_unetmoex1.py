@@ -758,16 +758,16 @@ class MoE(Backbone[MoEConfig]):
         return R.view(*theta.shape, 2, 2)
 
     def extract_params(self, p, k, alpha):
-        mu_x = p[:, :, :k].reshape(-1, 3, k, 1)
-        mu_y = p[:, :, k : 2 * k].reshape(-1, 3, k, 1)
-        mu = torch.cat((mu_x, mu_y), -1).view(-1, 3, k, 2)
+        mu_x = p[:, :, :k].reshape(-1, p.shape[1], k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, p.shape[1], k, 1)
+        mu = torch.cat((mu_x, mu_y), -1).view(-1, p.shape[1], k, 2)
         scale_idx = 3 * k
-        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, 3, k, 2)
+        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, p.shape[1], k, 2)
         rot_idx = scale_idx + 2 * k
-        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, 3, k)
+        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
         cov_matrix = self.cov_mat_2d(scale, theta)
         cov_matrix = torch.mul(cov_matrix, alpha)
-        w = p[:, :, 2 * k : 3 * k].reshape(-1, 3, k)
+        w = p[:, :, 2 * k : 3 * k].reshape(-1, p.shape[1], k)
         return Gaussians(mu, cov_matrix, w)
 
     def grid(self, height, width, channels):
