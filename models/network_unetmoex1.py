@@ -749,7 +749,12 @@ class MoE(Backbone[MoEConfig]):
     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-8):
         scale_mat = torch.diag_embed(scale + epsilon)
         R = self.ang_to_rot_mat(theta)
-        return R @ scale_mat @ scale_mat.transpose(-2, -1) @ R.transpose(-2, -1)
+        Sigma = R @ scale_mat @ R.transpose(-2, -1)
+        eigvals, eigvecs = torch.linalg.eigh(Sigma)
+        Sigma_inv = (
+            eigvecs @ torch.diag_embed(1.0 / eigvals) @ eigvecs.transpose(-2, -1)
+        )
+        return Sigma_inv
 
     def ang_to_rot_mat(self, theta: torch.Tensor):
         cos_theta = torch.cos(theta).unsqueeze(-1)
@@ -789,7 +794,10 @@ class MoE(Backbone[MoEConfig]):
         return sigma_reg
 
     def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
+
         gaussians = self.extract_params(p, self.kernel, self.alpha)
+
+        # Generate a grid of coordinates and expand it to match Gaussian parameters
         grid = self.grid(height, width, gaussians.mu.shape[1]).to(p.device)
         grid_expand = grid.unsqueeze(0).expand(gaussians.mu.shape[0], -1, -1, -1, -1)
 
@@ -804,33 +812,32 @@ class MoE(Backbone[MoEConfig]):
             1,
         )
 
-        # Regularize the covariance matrix
-        # delta = 0.01  # Regularization parameter
+        Sigma_inv_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(3)
+        # New dimensions of Sigma_inv_expanded will be [1071, 3, 1, 1, 9, 2, 2]
 
-        # regularized_cov_matrix = self.regularize_cov_matrix(gaussians.cov_matrix, delta)
-
-        # Invert the regularized covariance matrix
-        # cov_matrix_inv = torch.linalg.inv(regularized_cov_matrix)
-
-        # cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
-        # cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
-        #     -1, -1, height, width, -1, -1, -1
-        # )
-
-        cov_matrix_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(2)
-        cov_matrix_expanded = cov_matrix_expanded.expand(
+        # Now expand to incorporate spatial dimensions (height, width)
+        Sigma_inv_expanded = Sigma_inv_expanded.expand(
             -1, -1, height, width, -1, -1, -1
         )
 
-        intermediate = torch.matmul(cov_matrix_expanded, x_sub_mu)
-        exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
+        M_dist = torch.matmul(Sigma_inv_expanded, x_sub_mu)
+
+        exp_terms = -0.5 * x_sub_mu.transpose(-2, -1).matmul(M_dist).squeeze(
             -1
         ).squeeze(-1)
-        e = torch.exp(exponent)
-        g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4, keepdim=True)
+
+        # Calculate Gaussian densities
+        e = torch.exp(exp_terms)
+
+        # Weight the Gaussian densities by their respective mixture weights and sum them
+        g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(3), dim=4, keepdim=True)
+
+        # Normalize the weighted Gaussian densities to avoid numerical issues
         g_max = torch.clamp(g, min=1e-8)
         e_norm = e / g_max
-        y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4)
+
+        y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(3), dim=4)
+
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
         return y_hat

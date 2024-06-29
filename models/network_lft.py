@@ -291,6 +291,7 @@ class MullerResizer(nn.Module):
             resized_residual = self._base_resizer(residual_image, target_size)
             scaled_residual = weight * resized_residual + bias
             net += F.relu(scaled_residual.clamp(min=0, max=1))
+            # net += torch.tanh(scaled_residual.clamp(min=-3, max=3))  # Clamping to prevent extreme values
             inputs = blurred
         return net
 
