@@ -145,9 +145,9 @@ if __name__ == "__main__":
                 blocks.append(block)
         return torch.stack(blocks)
 
-    ch = 1
-    w = 512
-    h = 512
+    ch = 3
+    w = 256
+    h = 245
 
     image_tensor = torch.randn(ch, w, h).to(device=device)
 
