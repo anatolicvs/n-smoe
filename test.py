@@ -4,12 +4,13 @@
 # import numpy as np
 # import traceback
 
+import unittest
 import torch
 from torch import rand
 
 # from models.network_transformer_moe1 import BackboneDinoCfg, EncoderConfig, AutoencoderConfig, Autoencoder, BackboneResnetCfg
 # from models.network_transformer_moe1 import MoEConfig
-from models.network_unetmoex1 import ResBlock, ResBlockConfig
+from models.network_unetmoex1 import Gaussians, MoE, ResBlock, ResBlockConfig
 from models.network_unetmoex1 import (
     AttentionBlock,
     AttentionBlockConfig,
@@ -21,6 +22,72 @@ from models.network_unetmoex1 import (
 )
 
 torch.backends.cudnn.benchmark = True
+
+
+class TestMoE(unittest.TestCase):
+
+    def setUp(self):
+        # Initialize MoE with typical configuration and input dimensions
+        cfg = MoEConfig(kernel=4, sharpening_factor=1.0)
+        self.model = MoE(cfg, d_in=3)  # Assuming RGB input for d_in
+
+    def test_rotation_matrix(self):
+        # Test rotation matrix calculations for basic angles
+        theta = torch.tensor(
+            [0, torch.pi / 4, torch.pi / 2, torch.pi], dtype=torch.float32
+        )
+        expected_results = [
+            torch.tensor([[1, 0], [0, 1]]),  # 0 radians
+            torch.tensor([[0.7071, -0.7071], [0.7071, 0.7071]]),  # pi/4 radians
+            torch.tensor([[0, -1], [1, 0]]),  # pi/2 radians
+            torch.tensor([[-1, 0], [0, -1]]),  # pi radians
+        ]
+        for t, expected in zip(theta, expected_results):
+            result = self.model.ang_to_rot_mat(t.unsqueeze(0))
+            self.assertTrue(
+                torch.allclose(result, expected, atol=1e-4),
+                f"Rotation matrix for {t.item()} radians",
+            )
+
+    def test_covariance_matrix_construction(self):
+        # Test covariance matrix construction correctness
+        scales = torch.tensor([[1, 2]], dtype=torch.float32)
+        theta = torch.tensor([0], dtype=torch.float32)
+        expected = torch.tensor([[[1, 0], [0, 4]]], dtype=torch.float32)
+        result = self.model.cov_mat_2d(scales, theta)
+        self.assertTrue(
+            torch.allclose(result, expected),
+            "Covariance matrix does not match expected output.",
+        )
+
+    def test_parameter_extraction(self):
+        # Test parameter extraction functionality
+        p = torch.randn(
+            1, 3, 20
+        )  # Simulate input parameters for a model configured with 3 channels and 4 kernels
+        gaussians = self.model.extract_params(p, self.model.kernel, self.model.alpha)
+        self.assertIsInstance(
+            gaussians, Gaussians, "Extraction does not return a Gaussians dataclass."
+        )
+        self.assertEqual(gaussians.mu.shape, (1, 3, 4, 2), "Mu shape is incorrect.")
+        self.assertEqual(
+            gaussians.cov_matrix.shape,
+            (1, 3, 4, 2, 2),
+            "Covariance matrix shape is incorrect.",
+        )
+        self.assertEqual(gaussians.w.shape, (1, 3, 4), "Weights shape is incorrect.")
+
+    def test_model_integration(self):
+        # Test end-to-end model functionality
+        input_tensor = torch.randn(
+            1, 3, 100, 100
+        )  # Batch size of 1, 3 channels, 100x100 spatial dimensions
+        height, width = 100, 100
+        output = self.model(height, width, input_tensor)
+        self.assertEqual(
+            output.shape, (1, 3, height, width), "Output dimensions are incorrect."
+        )
+
 
 if __name__ == "__main__":
     # img = util.imread_uint('utils/test.png', 1)
@@ -103,17 +170,15 @@ if __name__ == "__main__":
     #     avg_pool=False,
     #     num_groups=1,
     #     activation="GELU",
-    #     backbone_cfg = BackboneDinoCfg(
-    #             name="dino",
-    #             model="dino_vits8",
-    #             backbone_cfg=BackboneResnetCfg(name="resnet", model="resnet50",
-    #                                            num_layers=1, use_first_pool=False))
+    #     backbone_cfg=BackboneDinoCfg(
+    #         name="dino",
+    #         model="dino_vits8",
+    #         backbone_cfg=BackboneResnetCfg(
+    #             name="resnet", model="resnet50", num_layers=1, use_first_pool=False
+    #         ),
+    #     ),
     # )
-    # decoder_cfg = MoEConfig(
-    #     num_mixtures=9,
-    #     kernel=9,
-    #     sharpening_factor=1.0
-    # )
+    # decoder_cfg = MoEConfig(num_mixtures=9, kernel=9, sharpening_factor=1.0)
 
     # autoenocer_cfg = AutoencoderConfig(
     #     EncoderConfig=encoder_cfg,
@@ -121,12 +186,10 @@ if __name__ == "__main__":
     #     d_in=1,
     #     d_out=63,
     #     phw=phw,
-    #     overlap=overlap
+    #     overlap=overlap,
     # )
 
-    # model = Autoencoder(
-    #     cfg=autoenocer_cfg
-    # )
+    # model = Autoencoder(cfg=autoenocer_cfg)
 
     # print(model)
 
@@ -197,3 +260,4 @@ if __name__ == "__main__":
     with torch.no_grad():
         output = model(blocks, image_tensor.shape)
         print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+    # unittest.main()

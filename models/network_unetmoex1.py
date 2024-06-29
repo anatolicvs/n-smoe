@@ -804,7 +804,9 @@ class MoE(Backbone[MoEConfig]):
             1,
         )
 
-        sigma_inv = torch.linalg.inv(self.regularize_cov_matrix(gaussians.cov_matrix, delta=1e-06))  
+        sigma_inv = torch.linalg.inv(
+            self.regularize_cov_matrix(gaussians.cov_matrix, delta=1e-06)
+        )
 
         # condition_number = torch.linalg.cond(gaussians.cov_matrix)
         # print("Condition Number:", condition_number)
@@ -812,9 +814,7 @@ class MoE(Backbone[MoEConfig]):
         a_i = torch.linalg.cholesky(sigma_inv, upper=False)
 
         a_i_expanded = a_i.unsqueeze(2).unsqueeze(2)
-        a_i_expanded = a_i_expanded.expand(
-            -1, -1, height, width, -1, -1, -1
-        )
+        a_i_expanded = a_i_expanded.expand(-1, -1, height, width, -1, -1, -1)
 
         intermediate = torch.matmul(a_i_expanded, x_sub_mu)
 
