@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v3_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -54,19 +54,19 @@
   
     , "netG": {
       "net_type": "unet_moex1"
-      , "kernel": 9
+      , "kernel": 16
       , "sharpening_factor": 1
 
       , "model_channels": 64
       , "num_res_blocks": 8
       , "attention_resolutions": [16, 8, 4]
-      , "dropout": 0.1
+      , "dropout": 0.2
       , "num_groups": 8
       , "num_heads" : 32
       , "num_head_channels": 32
       , "use_new_attention_order": true
       , "use_checkpoint": true
-      , "resblock_updown": true
+      , "resblock_updown": false
       , "channel_mult": [1, 2, 4, 8]
       , "resample_2d" : false
 

@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v2_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
