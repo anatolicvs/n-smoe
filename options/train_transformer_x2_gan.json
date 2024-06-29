@@ -27,9 +27,9 @@
           , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
           , "lq_patchsize": 64
           , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-          , "dataroot_H": ["/work/pb035507/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/work/pb035507/dataset/rgb/train_0"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+          , "dataroot_H": ["/work/pb035507/dataset/rgb/train_0"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
           //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-          , "use_dataset_cache": true
+          , "use_dataset_cache": false
           , "dataset_cache_file" : "/work/pb035507/dataset/medical/dataset_cache_training.pkl"
           , "dataroot_L": null              // path of L training dataset
           , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192

@@ -70,15 +70,18 @@ def main(args):
 def plot_images_with_original_size(LR, HR, Reconstructed, psnr_value, ssim_value):
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
    
-    axes[0].imshow(LR, cmap='gray')
+    _min = np.array(Reconstructed).min()
+    _max = np.array(Reconstructed).max()
+
+    axes[0].imshow(LR, cmap='gray', vmin=_min, vmax=_max)
     axes[0].set_title("Low Resolution")
     axes[0].axis('on')
     
-    axes[1].imshow(HR, cmap='gray')
+    axes[1].imshow(HR, cmap='gray', vmin=_min, vmax=_max)
     axes[1].set_title("High Resolution")
     axes[1].axis('on')
     
-    axes[2].imshow(Reconstructed, cmap='gray')
+    axes[2].imshow(Reconstructed, cmap='gray', vmin=_min, vmax=_max)
     axes[2].set_title(f"Reconstructed\nPSNR: {psnr_value:.2f}, SSIM: {ssim_value:.4f}")
     axes[2].axis('on')
 
@@ -102,8 +105,8 @@ def plot_images_with_original_size(LR, HR, Reconstructed, psnr_value, ssim_value
 def test(test_loader, device, net):
     psnr_iter_test = []
     ssim_iter_test = []
-    for idx_iter, (Lr_SAI_y, Hr_SAI_y, Lr_SAI_cb, Hr_SAI_cb, Lr_SAI_cr, Hr_SAI_cr) in tqdm(enumerate(test_loader), total=len(test_loader), ncols=70):
-        
+    # for idx_iter, (Lr_SAI_y, Hr_SAI_y, Lr_SAI_cb, Hr_SAI_cb, Lr_SAI_cr, Hr_SAI_cr) in tqdm(enumerate(test_loader), total=len(test_loader), ncols=70):
+    for idx_iter, (Lr_SAI_y, Hr_SAI_y) in tqdm(enumerate(test_loader), total=len(test_loader), ncols=70):
         
         Lr_SAI_y = Lr_SAI_y.squeeze().to(device)  # numU, numV, h*ang_res, w*angRes
         Hr_SAI_y = Hr_SAI_y.squeeze()

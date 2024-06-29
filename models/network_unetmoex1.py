@@ -804,32 +804,26 @@ class MoE(Backbone[MoEConfig]):
             1,
         )
 
-        # Regularize the covariance matrix
-        # delta = 0.01  # Regularization parameter
+        cov_matrix_inv = torch.linalg.inv(gaussians.cov_matrix)
 
-        # regularized_cov_matrix = self.regularize_cov_matrix(gaussians.cov_matrix, delta)
-
-        # Invert the regularized covariance matrix
-        # cov_matrix_inv = torch.linalg.inv(regularized_cov_matrix)
-
-        # cov_matrix_inv_expanded = cov_matrix_inv.unsqueeze(2).unsqueeze(2)
-        # cov_matrix_inv_expanded = cov_matrix_inv_expanded.expand(
-        #     -1, -1, height, width, -1, -1, -1
-        # )
-
-        cov_matrix_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(2)
-        cov_matrix_expanded = cov_matrix_expanded.expand(
-            -1, -1, height, width, -1, -1, -1
+        cov_matrix_inv_expanded = (
+            cov_matrix_inv.unsqueeze(2)
+            .unsqueeze(2)
+            .expand(-1, -1, height, width, -1, -1, -1)
         )
 
-        intermediate = torch.matmul(cov_matrix_expanded, x_sub_mu)
+        intermediate = torch.matmul(cov_matrix_inv_expanded, x_sub_mu)
+
         exponent = -0.5 * x_sub_mu.transpose(-2, -1).matmul(intermediate).squeeze(
             -1
         ).squeeze(-1)
+
         e = torch.exp(exponent)
+
         g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4, keepdim=True)
         g_max = torch.clamp(g, min=1e-8)
         e_norm = e / g_max
+
         y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(2), dim=4)
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
