@@ -746,15 +746,23 @@ class MoE(Backbone[MoEConfig]):
     #         )
     #         return rearrange(R, "... (i j) -> ... i j", i=2, j=2)
 
-    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-8):
-        scale_mat = torch.diag_embed(scale + epsilon)
+    # def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-8):
+    #     scale_mat = torch.diag_embed(scale + epsilon)
+    #     R = self.ang_to_rot_mat(theta)
+    #     Sigma = R @ scale_mat @ R.transpose(-2, -1)
+    #     eigvals, eigvecs = torch.linalg.eigh(Sigma)
+    #     Sigma_inv = (
+    #         eigvecs @ torch.diag_embed(1.0 / eigvals) @ eigvecs.transpose(-2, -1)
+    #     )
+    #     return Sigma_inv
+
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-6):
         R = self.ang_to_rot_mat(theta)
-        Sigma = R @ scale_mat @ R.transpose(-2, -1)
-        eigvals, eigvecs = torch.linalg.eigh(Sigma)
-        Sigma_inv = (
-            eigvecs @ torch.diag_embed(1.0 / eigvals) @ eigvecs.transpose(-2, -1)
+        scale_mat = torch.diag_embed(scale) + epsilon * torch.eye(
+            scale.size(-1), device=scale.device
         )
-        return Sigma_inv
+        Sigma = R @ scale_mat @ R.transpose(-2, -1)
+        return Sigma
 
     def ang_to_rot_mat(self, theta: torch.Tensor):
         cos_theta = torch.cos(theta).unsqueeze(-1)
@@ -782,16 +790,16 @@ class MoE(Backbone[MoEConfig]):
         grid = torch.stack((grid_x, grid_y), dim=-1)
         return grid.unsqueeze(0).expand(channels, -1, -1, -1)
 
-    def regularize_cov_matrix(self, cov_matrix, delta):
-        d = cov_matrix.size(-1)
-        trace_sigma = torch.einsum("bijmn->bijm", cov_matrix)
-        identity_matrix = torch.eye(d, device=cov_matrix.device).repeat(
-            cov_matrix.shape[0], cov_matrix.shape[1], cov_matrix.shape[2], 1, 1
-        )
-        sigma_reg = (1 - delta) * cov_matrix + (
-            delta * (trace_sigma / d).unsqueeze(-1) * identity_matrix
-        )
-        return sigma_reg
+    # def regularize_cov_matrix(self, cov_matrix, delta):
+    #     d = cov_matrix.size(-1)
+    #     trace_sigma = torch.einsum("bijmn->bijm", cov_matrix)
+    #     identity_matrix = torch.eye(d, device=cov_matrix.device).repeat(
+    #         cov_matrix.shape[0], cov_matrix.shape[1], cov_matrix.shape[2], 1, 1
+    #     )
+    #     sigma_reg = (1 - delta) * cov_matrix + (
+    #         delta * (trace_sigma / d).unsqueeze(-1) * identity_matrix
+    #     )
+    #     return sigma_reg
 
     def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
 
@@ -812,7 +820,11 @@ class MoE(Backbone[MoEConfig]):
             1,
         )
 
-        Sigma_inv_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(3)
+        Sigma_inv = torch.linalg.pinv(gaussians.cov_matrix)
+
+        Sigma_inv_expanded = Sigma_inv.unsqueeze(2).unsqueeze(3)
+
+        # Sigma_inv_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(3)
         # New dimensions of Sigma_inv_expanded will be [1071, 3, 1, 1, 9, 2, 2]
 
         # Now expand to incorporate spatial dimensions (height, width)
