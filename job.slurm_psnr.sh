@@ -44,7 +44,7 @@ MAIL_USER="aytac@linux.com"
 
 OUTPUT_DIR="/home/pb035507/slurm/output"
 ERROR_DIR="/home/pb035507/slurm/error"
-
+WORKDIR="/hpcwork/p0021791"
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
 
 
@@ -80,7 +80,7 @@ sbatch <<-EOT
 echo "Starting job at: $(date)"
 nvidia-smi
 echo "Attempting to bind SquashFS container..."
-apptainer exec --nv --bind $HOME,$HPCWORK,$WORK $HOME/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
+apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif python -u $PWD/main_train_psnr.py --opt=$OPTION_PATH
 echo "Job completed at: $(date)"
 EOT
 
