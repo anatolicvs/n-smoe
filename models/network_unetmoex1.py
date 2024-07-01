@@ -710,11 +710,11 @@ class MoEConfig:
 @dataclass
 class Gaussians:
     mu: torch.Tensor
-    cov_matrix: torch.Tensor
+    sigma: torch.Tensor
     w: torch.Tensor
 
 
-class MoE(Backbone[MoEConfig]):
+class MoE_(Backbone[MoEConfig]):
     def __init__(
         self,
         cfg: MoEConfig,
@@ -756,7 +756,15 @@ class MoE(Backbone[MoEConfig]):
     #     )
     #     return Sigma_inv
 
-    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-6):
+    # def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-6):
+    #     R = self.ang_to_rot_mat(theta)
+    #     scale_mat = torch.diag_embed(scale) + epsilon * torch.eye(
+    #         scale.size(-1), device=scale.device
+    #     )
+    #     Sigma = R @ scale_mat @ R.transpose(-2, -1)
+    #     return Sigma
+
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
         R = self.ang_to_rot_mat(theta)
         scale_mat = torch.diag_embed(scale) + epsilon * torch.eye(
             scale.size(-1), device=scale.device
@@ -801,35 +809,29 @@ class MoE(Backbone[MoEConfig]):
     #     )
     #     return sigma_reg
 
+    def stable_exp(self, exp_terms):
+        c = exp_terms.max(dim=-1, keepdim=True).values  # Maintain the last dim
+        stable_exps = torch.exp(exp_terms - c)  # Subtract max for stability
+        sum_exps = stable_exps.sum(dim=-1, keepdim=True)  # Sum while keeping dim
+        return sum_exps * torch.exp(c)
+
     def forward(self, height: int, width: int, p: torch.Tensor) -> torch.Tensor:
+        gauss = self.extract_params(p, self.kernel, self.alpha)
 
-        gaussians = self.extract_params(p, self.kernel, self.alpha)
+        grid = self.grid(height, width, gauss.mu.shape[1]).to(p.device)
+        grid_expand = grid.unsqueeze(0).expand(gauss.mu.shape[0], -1, -1, -1, -1)
 
-        # Generate a grid of coordinates and expand it to match Gaussian parameters
-        grid = self.grid(height, width, gaussians.mu.shape[1]).to(p.device)
-        grid_expand = grid.unsqueeze(0).expand(gaussians.mu.shape[0], -1, -1, -1, -1)
-
-        x_sub_mu = grid_expand.unsqueeze(4) - gaussians.mu.unsqueeze(2).unsqueeze(2)
+        # Compute distance from each grid point to each Gaussian mean (x - mu)
+        x_sub_mu = grid_expand.unsqueeze(4) - gauss.mu.unsqueeze(2).unsqueeze(2)
         x_sub_mu = x_sub_mu.view(
-            gaussians.mu.shape[0],
-            gaussians.mu.shape[1],
-            height,
-            width,
-            self.kernel,
-            2,
-            1,
+            gauss.mu.shape[0], gauss.mu.shape[1], height, width, self.kernel, 2, 1
         )
 
-        Sigma_inv = torch.linalg.pinv(gaussians.cov_matrix)
-
-        Sigma_inv_expanded = Sigma_inv.unsqueeze(2).unsqueeze(3)
-
-        # Sigma_inv_expanded = gaussians.cov_matrix.unsqueeze(2).unsqueeze(3)
-        # New dimensions of Sigma_inv_expanded will be [1071, 3, 1, 1, 9, 2, 2]
-
-        # Now expand to incorporate spatial dimensions (height, width)
-        Sigma_inv_expanded = Sigma_inv_expanded.expand(
-            -1, -1, height, width, -1, -1, -1
+        Sigma_inv = torch.linalg.pinv(gauss.cov_matrix)
+        Sigma_inv_expanded = (
+            Sigma_inv.unsqueeze(2)
+            .unsqueeze(3)
+            .expand(-1, -1, height, width, -1, -1, -1)
         )
 
         M_dist = torch.matmul(Sigma_inv_expanded, x_sub_mu)
@@ -838,18 +840,109 @@ class MoE(Backbone[MoEConfig]):
             -1
         ).squeeze(-1)
 
-        # Calculate Gaussian densities
+        e = self.stable_exp(exp_terms)
+        g = torch.sum(e, dim=1, keepdim=True)
+        g_max = torch.max(torch.tensor(10e-8), g)
+        e_norm = torch.divide(e, g_max)
+
+        gauss_w_expanded = gauss.w.unsqueeze(2).unsqueeze(3)
+        y_hat = torch.sum(e_norm * gauss_w_expanded, dim=4)
+        # y_hat = torch.sum(e_norm * torch.unsqueeze(gauss.w, dim=-1), dim=1)
+
+        y_hat = torch.clamp(y_hat, min=0, max=1)
+
+        return y_hat
+
+
+class MoE(Backbone[MoEConfig]):
+    def __init__(self, cfg: MoEConfig):
+        super(MoE, self).__init__(cfg)
+        self.kernel = cfg.kernel
+        self.alpha = cfg.sharpening_factor
+
+    def grid(self, height, width):
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+        grid = torch.stack((grid_x, grid_y), -1).float()
+        return grid
+
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+        mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+        mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+        sigma_start = 2 * k
+        sigma_end = sigma_start + k * 2 * 2
+        sigma = p[:, :, sigma_start:sigma_end].reshape(-1, ch, k, 2, 2)
+
+        sigma = torch.tril(sigma)
+        sigma = torch.mul(sigma, self.alpha)
+
+        w_start = sigma_end
+        w_end = w_start + k
+        w = p[:, :, w_start:w_end].reshape(-1, ch, k)
+
+        return Gaussians(mu, sigma, w)
+
+    def forward(self, height, width, params):
+        batch_size, num_channels, _ = params.shape
+        gauss = self.extract_parameters(params, self.kernel, num_channels)
+
+        grid = self.grid(height, width).to(params.device)
+        grid_expanded = (
+            grid.unsqueeze(0)
+            .unsqueeze(0)
+            .unsqueeze(2)
+            .expand(batch_size, num_channels, self.kernel, height, width, 2)
+        )
+
+        mu_expanded = (
+            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
+        )
+        x_sub_mu = grid_expanded - mu_expanded
+
+        Sigma_expanded = (
+            gauss.sigma.unsqueeze(3)
+            .unsqueeze(4)
+            .expand(-1, -1, -1, height, width, -1, -1)
+        )
+
+        x_sub_mu_t = x_sub_mu.unsqueeze(-1)
+
+        # region exp_terms v1
+        # x_sub_mu_t = x_sub_mu.unsqueeze(-1)
+        # exp_terms = -0.5 * torch.einsum(
+        #     "bnkhwji,bnkhwij,bnkhwlj,bnkhwmi->bnkhw",
+        #     x_sub_mu_t,
+        #     Sigma_expanded,
+        #     Sigma_expanded,
+        #     x_sub_mu_t,
+        # ).squeeze(-1)
+        # endregion
+
+        exp_terms = -0.5 * torch.einsum(
+            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+            x_sub_mu_t,
+            Sigma_expanded,
+            x_sub_mu_t,
+        ).squeeze(-1)
+
         e = torch.exp(exp_terms)
 
-        # Weight the Gaussian densities by their respective mixture weights and sum them
-        g = torch.sum(e * gaussians.w.unsqueeze(2).unsqueeze(3), dim=4, keepdim=True)
+        # region
+        # g = torch.sum(e, dim=2, keepdim=True)
+        # g_max = torch.max(torch.tensor(10e-8, device=params.device), g)
+        # e_norm = torch.divide(e, g_max)
+        # endregion
 
-        # Normalize the weighted Gaussian densities to avoid numerical issues
-        g_max = torch.clamp(g, min=1e-8)
-        e_norm = e / g_max
+        max_e = torch.max(e, dim=2, keepdim=True)[0]
+        log_sum_exp_e = max_e + torch.log(
+            torch.sum(torch.exp(e - max_e), dim=2, keepdim=True)
+        )
+        e_norm = torch.exp(e - log_sum_exp_e)
 
-        y_hat = torch.sum(e_norm * gaussians.w.unsqueeze(2).unsqueeze(3), dim=4)
-
+        y_hat = torch.sum(e_norm * gauss.w.unsqueeze(-1).unsqueeze(-1), dim=2)
         y_hat = torch.clamp(y_hat, min=0, max=1)
 
         return y_hat
@@ -873,7 +966,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.encoder = Encoder(
             cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
         )
-        self.decoder = MoE(cfg.DecoderConfig, d_in=cfg.d_in)
+        self.decoder = MoE(cfg.DecoderConfig)
 
     @staticmethod
     def reconstruct(blocks, original_dims, block_size, overlap):
