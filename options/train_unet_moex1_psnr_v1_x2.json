@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v3_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -20,7 +20,6 @@
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
-    
       ,"datasets": {
         "train": {
             "name": "train_dataset"           // just name
@@ -35,7 +34,7 @@
             , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
-            , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+            , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
             "name": "test_dataset"            // just name
