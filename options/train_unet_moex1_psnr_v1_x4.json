@@ -1,7 +1,7 @@
 {
     "task": "unet_unet_moex1_sr_plain_v1_x4_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
-    , "gpu_ids": [0]
+    , "gpu_ids": [1]
     
     , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat

@@ -14,7 +14,7 @@ from utils_n import utils_logger
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
-
+import torch.distributed as dist
 from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
@@ -29,18 +29,19 @@ def main(json_path='options/train_unet_moex_psnr.json'):
     parser = argparse.ArgumentParser()
     parser.add_argument('--opt', type=str, default=json_path, help='Path to option JSON file.')
     parser.add_argument('--launcher', default='pytorch', help='job launcher')
-    parser.add_argument('--local_rank', type=int, default=0)
-    parser.add_argument('--dist', default=False)
+    parser.add_argument('--local_rank', '--local-rank', type=int, default=int(os.environ.get("LOCAL_RANK", 0)))
+    parser.add_argument('--dist', default=True)
 
     opt = option.parse(parser.parse_args().opt, is_train=True)
     opt['dist'] = parser.parse_args().dist
-
+    
     # ----------------------------------------
     # distributed settings
     # ----------------------------------------
+    
     if opt['dist']:
         init_dist('pytorch')
-    opt['rank'], opt['world_size'] = get_dist_info()
+        opt['rank'], opt['world_size'] = get_dist_info()
 
     if opt['rank'] == 0:
         util.mkdirs((path for key, path in opt['path'].items() if 'pretrained' not in key))
@@ -113,11 +114,12 @@ def main(json_path='options/train_unet_moex_psnr.json'):
                 train_loader = DataLoader(train_set,
                                           batch_size=dataset_opt['dataloader_batch_size']//opt['num_gpu'],
                                           shuffle=False,
-                                          num_workers=dataset_opt['dataloader_num_workers']//opt['num_gpu'],
+                                          num_workers= dataset_opt['dataloader_num_workers']//opt['num_gpu'],
                                           drop_last=True,
                                           pin_memory=True,
                                           sampler=train_sampler,
-                                          collate_fn=util.custom_collate)
+                                          collate_fn=util.custom_collate,
+                                          persistent_workers=False)
             else:
                 train_loader = DataLoader(train_set,
                                           batch_size=dataset_opt['dataloader_batch_size'],

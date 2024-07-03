@@ -5,14 +5,18 @@ import subprocess
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+import re
 
-
-# ----------------------------------
-# init
-# ----------------------------------
+# # ----------------------------------
+# # init
+# # ----------------------------------
 def init_dist(launcher, backend='nccl', **kwargs):
     if mp.get_start_method(allow_none=True) is None:
-        mp.set_start_method('spawn')
+        try:
+            mp.set_start_method('fork', force=True)
+            # print("spawned")
+        except RuntimeError:
+            pass
     if launcher == 'pytorch':
         _init_dist_pytorch(backend, **kwargs)
     elif launcher == 'slurm':
@@ -22,7 +26,8 @@ def init_dist(launcher, backend='nccl', **kwargs):
 
 
 def _init_dist_pytorch(backend, **kwargs):
-    rank = int(os.environ['RANK'])
+    rank = int(os.environ.get("LOCAL_RANK"))
+    print(f"rank: {rank}")
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(rank % num_gpus)
     dist.init_process_group(backend=backend, **kwargs)
@@ -57,8 +62,6 @@ def _init_dist_slurm(backend, port=None):
     os.environ['LOCAL_RANK'] = str(proc_id % num_gpus)
     os.environ['RANK'] = str(proc_id)
     dist.init_process_group(backend=backend)
-
-
 
 # ----------------------------------
 # get rank and world_size

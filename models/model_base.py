@@ -9,7 +9,7 @@ class ModelBase():
     def __init__(self, opt):
         self.opt = opt                         # opt
         self.save_dir = opt['path']['models']  # save models
-        self.device = torch.device('cuda' if opt['gpu_ids'] is not None else 'cpu')
+        self.device = torch.device(f'cuda:{opt["rank"]}' if torch.cuda.is_available() else 'cpu')
         self.is_train = opt['is_train']        # training or not
         self.schedulers = []                   # schedulers
 
@@ -96,18 +96,36 @@ class ModelBase():
             network = network.module
         return network
 
+    # def model_to_device(self, network):
+    #     """Model to device. It also warps models with DistributedDataParallel
+    #     or DataParallel.
+    #     Args:
+    #         network (nn.Module)
+    #     """
+    #     network = network.to(self.device)
+    #     if self.opt['dist']:
+    #         # find_unused_parameters = self.opt.get('find_unused_parameters', True)
+    #         use_static_graph = self.opt.get('use_static_graph', False)
+            
+    #         # local_rank = int(os.environ["LOCAL_RANK"])
+    #         network = torch.nn.parallel.DistributedDataParallel(network,
+    #                                               device_ids=[torch.cuda.current_device()],
+    #                                               output_device=torch.cuda.current_device())
+    #         # network = DistributedDataParallel(network, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
+            
+    #         if use_static_graph:
+    #             print('Using static graph. Make sure that "unused parameters" will not change during training loop.')
+    #             network._set_static_graph()
+    #     else:
+    #         network = DataParallel(network)
+    #     return network
+    
     def model_to_device(self, network):
-        """Model to device. It also warps models with DistributedDataParallel
-        or DataParallel.
-        Args:
-            network (nn.Module)
-        """
         network = network.to(self.device)
         if self.opt['dist']:
-            find_unused_parameters = self.opt.get('find_unused_parameters', True)
-            use_static_graph = self.opt.get('use_static_graph', False)
-            network = DistributedDataParallel(network, device_ids=[torch.cuda.current_device()], find_unused_parameters=find_unused_parameters)
-            if use_static_graph:
+            local_rank = int(os.environ["LOCAL_RANK"])
+            network = DistributedDataParallel(network, device_ids=[local_rank], output_device=local_rank)
+            if self.opt.get('use_static_graph', False):
                 print('Using static graph. Make sure that "unused parameters" will not change during training loop.')
                 network._set_static_graph()
         else:

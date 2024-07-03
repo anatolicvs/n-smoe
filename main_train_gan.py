@@ -41,7 +41,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     )
     parser.add_argument("--launcher", default="pytorch", help="job launcher")
     parser.add_argument("--local_rank", type=int, default=0)
-    parser.add_argument("--dist", default=False)
+    parser.add_argument("--dist", default=True)
     parser.add_argument(
         "--use_beeond", type=str, default="false", help="Whether to use BeeOND or not."
     )
