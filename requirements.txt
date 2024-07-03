@@ -68,3 +68,7 @@ cupy-cuda12x
 ruamel.yaml
 nerfview
 viser
+icecream
+dahuffman
+vector-quantize-pytorch
+git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch

@@ -215,10 +215,10 @@ if __name__ == "__main__":
         use_checkpoint=True,  # Reduce memory usage since model is smaller
         resblock_updown=True,  # Disable resblock upsampling and downsampling
         channel_mult=(
-            1,
             2,
             4,
             8,
+            16,
         ),  # Smaller channel multiplier as fewer stages of feature enhancement are needed
         resample_2d=True,  # Avoid resampling in 2D to preserve spatial dimensions
         pool="attention",  # Use attention pooling to focus on relevant features without spatial reduction
@@ -252,10 +252,10 @@ if __name__ == "__main__":
 
     model = Autoencoder(cfg=autoenocer_cfg)
 
-    # print(model)
+    print(model)
 
-    # params = sum(p.numel() for p in model.parameters())
-    # print(f"Total number of parameters: {params}")
+    params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {params}")
 
     model = model.to(device)
     with torch.no_grad():
