@@ -25,6 +25,7 @@ e3nn
 lpips
 colorspacious
 tqdm
+tyro
 
 # Pre-release versions of torch, torchvision, and torchaudio from the nightly build
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
@@ -65,3 +66,9 @@ gsplat
 segmentation-models-pytorch
 cupy-cuda12x
 ruamel.yaml
+nerfview
+viser
+icecream
+dahuffman
+vector-quantize-pytorch
+git+https://github.com/NVlabs/tiny-cuda-nn/#subdirectory=bindings/torch
