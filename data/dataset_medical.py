@@ -160,14 +160,14 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             )
             rec = ["encoding", "reconSpace", "matrixSize"]
             recon_size = (
-                int(et_query(et_root, rec + ["x"])),
-                int(et_query(et_root, rec + ["y"])),
-                int(et_query(et_root, rec + ["z"])),
+                int(self.et_query(et_root, rec + ["x"])),
+                int(self.et_query(et_root, rec + ["y"])),
+                int(self.et_query(et_root, rec + ["z"])),
             )
 
             lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
-            enc_limits_center = int(et_query(et_root, lims + ["center"]))
-            enc_limits_max = int(et_query(et_root, lims + ["maximum"])) + 1
+            enc_limits_center = int(self.et_query(et_root, lims + ["center"]))
+            enc_limits_max = int(self.et_query(et_root, lims + ["maximum"])) + 1
 
             padding_left = enc_size[1] // 2 - enc_limits_center
             padding_right = padding_left + enc_limits_max
