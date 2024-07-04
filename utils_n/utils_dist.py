@@ -5,29 +5,26 @@ import subprocess
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
-import re
+import pickle
+
 
 # # ----------------------------------
 # # init
 # # ----------------------------------
-def init_dist(launcher, backend='nccl', **kwargs):
+def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
     if mp.get_start_method(allow_none=True) is None:
-        try:
-            mp.set_start_method('fork', force=True)
-            # print("spawned")
-        except RuntimeError:
-            pass
-    if launcher == 'pytorch':
+        mp.set_start_method("spawn")
+    if launcher == "pytorch":
         _init_dist_pytorch(backend, **kwargs)
-    elif launcher == 'slurm':
+    elif launcher == "slurm":
         _init_dist_slurm(backend, **kwargs)
     else:
-        raise ValueError(f'Invalid launcher type: {launcher}')
+        raise ValueError(f"Invalid launcher type: {launcher}")
 
 
 def _init_dist_pytorch(backend, **kwargs):
     rank = int(os.environ.get("LOCAL_RANK"))
-    print(f"rank: {rank}")
+
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(rank % num_gpus)
     dist.init_process_group(backend=backend, **kwargs)
@@ -42,26 +39,26 @@ def _init_dist_slurm(backend, port=None):
         backend (str): Backend of torch.distributed.
         port (int, optional): Master port. Defaults to None.
     """
-    proc_id = int(os.environ['SLURM_PROCID'])
-    ntasks = int(os.environ['SLURM_NTASKS'])
-    node_list = os.environ['SLURM_NODELIST']
+    proc_id = int(os.environ["SLURM_PROCID"])
+    ntasks = int(os.environ["SLURM_NTASKS"])
+    node_list = os.environ["SLURM_NODELIST"]
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(proc_id % num_gpus)
-    addr = subprocess.getoutput(
-        f'scontrol show hostname {node_list} | head -n1')
+    addr = subprocess.getoutput(f"scontrol show hostname {node_list} | head -n1")
     # specify master port
     if port is not None:
-        os.environ['MASTER_PORT'] = str(port)
-    elif 'MASTER_PORT' in os.environ:
+        os.environ["MASTER_PORT"] = str(port)
+    elif "MASTER_PORT" in os.environ:
         pass  # use MASTER_PORT in the environment variable
     else:
         # 29500 is torch.distributed default port
-        os.environ['MASTER_PORT'] = '29500'
-    os.environ['MASTER_ADDR'] = addr
-    os.environ['WORLD_SIZE'] = str(ntasks)
-    os.environ['LOCAL_RANK'] = str(proc_id % num_gpus)
-    os.environ['RANK'] = str(proc_id)
+        os.environ["MASTER_PORT"] = "29500"
+    os.environ["MASTER_ADDR"] = addr
+    os.environ["WORLD_SIZE"] = str(ntasks)
+    os.environ["LOCAL_RANK"] = str(proc_id % num_gpus)
+    os.environ["RANK"] = str(proc_id)
     dist.init_process_group(backend=backend)
+
 
 # ----------------------------------
 # get rank and world_size
@@ -111,10 +108,6 @@ def master_only(func):
     return wrapper
 
 
-
-
-
-
 # ----------------------------------
 # operation across ranks
 # ----------------------------------
@@ -133,7 +126,7 @@ def reduce_sum(tensor):
 
 def gather_grad(params):
     world_size = get_world_size()
-    
+
     if world_size == 1:
         return
 
@@ -151,20 +144,20 @@ def all_gather(data):
 
     buffer = pickle.dumps(data)
     storage = torch.ByteStorage.from_buffer(buffer)
-    tensor = torch.ByteTensor(storage).to('cuda')
+    tensor = torch.ByteTensor(storage).to("cuda")
 
-    local_size = torch.IntTensor([tensor.numel()]).to('cuda')
-    size_list = [torch.IntTensor([0]).to('cuda') for _ in range(world_size)]
+    local_size = torch.IntTensor([tensor.numel()]).to("cuda")
+    size_list = [torch.IntTensor([0]).to("cuda") for _ in range(world_size)]
     dist.all_gather(size_list, local_size)
     size_list = [int(size.item()) for size in size_list]
     max_size = max(size_list)
 
     tensor_list = []
     for _ in size_list:
-        tensor_list.append(torch.ByteTensor(size=(max_size,)).to('cuda'))
+        tensor_list.append(torch.ByteTensor(size=(max_size,)).to("cuda"))
 
     if local_size != max_size:
-        padding = torch.ByteTensor(size=(max_size - local_size,)).to('cuda')
+        padding = torch.ByteTensor(size=(max_size - local_size,)).to("cuda")
         tensor = torch.cat((tensor, padding), 0)
 
     dist.all_gather(tensor_list, tensor)
@@ -201,4 +194,3 @@ def reduce_loss_dict(loss_dict):
         reduced_losses = {k: v for k, v in zip(keys, losses)}
 
     return reduced_losses
-
