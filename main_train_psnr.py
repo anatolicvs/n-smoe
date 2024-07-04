@@ -19,7 +19,7 @@ from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 
 
-def main(json_path="options/train_unet_moex_psnr.json"):
+def main(json_path="options/train_unet_moex1_psnr_local.json"):
 
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -40,6 +40,8 @@ def main(json_path="options/train_unet_moex_psnr.json"):
     if opt["dist"]:
         init_dist("pytorch")
         opt["rank"], opt["world_size"] = get_dist_info()
+    else:
+        opt["rank"], opt["world_size"] = 0, 1
 
     if opt["rank"] == 0:
         util.mkdirs(
