@@ -133,8 +133,8 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
             )
             if opt["rank"] == 0:
                 logger.info(
-                    "Number of test images : {:,d}, iters: {:,d}".format(
-                        len(test_set), test_size
+                    "Number of test images in [{:s}]: {:,d}, iters: {:,d}".format(
+                        dataset_opt["name"], len(test_set), test_size
                     )
                 )
             if opt["dist"]:
@@ -178,6 +178,10 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
             train_sampler.set_epoch(epoch)
 
         for i, train_data in enumerate(train_loader):
+
+            if train_data is None:
+                logger.warning(f"train_data is None at iteration {i} in epoch {epoch}")
+                continue
 
             current_step += 1
 
