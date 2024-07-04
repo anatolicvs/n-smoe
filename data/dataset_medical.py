@@ -51,7 +51,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
             else "reconstruction_rss"
         )
         self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
-
+        self.raw_samples = self.load_samples()
         # self.executor = concurrent.futures.ThreadPoolExecutor(
         #     max_workers=min(16, cpu_count() * 2)
         # )
