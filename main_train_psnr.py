@@ -127,6 +127,15 @@ def main(json_path="options/train_unet_moex_psnr.json"):
 
         elif phase == "test":
             test_set = define_Dataset(dataset_opt)
+            test_size = int(
+                math.ceil(len(test_set) / dataset_opt["dataloader_batch_size"])
+            )
+            if opt["rank"] == 0:
+                logger.info(
+                    "Number of test images in [{:s}]: {:,d}, iters: {:,d}".format(
+                        dataset_opt["name"], len(test_set), test_size
+                    )
+                )
             if opt["dist"]:
                 test_sampler = DistributedSampler(
                     test_set,
