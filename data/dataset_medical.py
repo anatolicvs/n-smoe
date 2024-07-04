@@ -154,9 +154,9 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
 
             enc = ["encoding", "encodedSpace", "matrixSize"]
             enc_size = (
-                int(et_query(et_root, enc + ["x"])),
-                int(et_query(et_root, enc + ["y"])),
-                int(et_query(et_root, enc + ["z"])),
+                int(self.et_query(et_root, enc + ["x"])),
+                int(self.et_query(et_root, enc + ["y"])),
+                int(self.et_query(et_root, enc + ["z"])),
             )
             rec = ["encoding", "reconSpace", "matrixSize"]
             recon_size = (
