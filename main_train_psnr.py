@@ -31,7 +31,9 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
         type=int,
         default=int(os.environ.get("LOCAL_RANK", 0)),
     )
-    parser.add_argument("--dist", action="store_true", help="Use distributed training")
+    parser.add_argument(
+        "--dist", default=False, action="store_true", help="Use distributed training"
+    )
 
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
