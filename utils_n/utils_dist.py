@@ -8,12 +8,9 @@ import torch.multiprocessing as mp
 import pickle
 
 
-# # ----------------------------------
-# # init
-# # ----------------------------------
 def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
     if mp.get_start_method(allow_none=True) is None:
-        mp.set_start_method("spawn")
+        mp.set_start_method("spawn", force=True)
     if launcher == "pytorch":
         _init_dist_pytorch(backend, **kwargs)
     elif launcher == "slurm":
@@ -23,11 +20,10 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
 
 
 def _init_dist_pytorch(backend, **kwargs):
-    rank = int(os.environ.get("LOCAL_RANK"))
-
+    rank = int(os.environ.get("LOCAL_RANK", 0))
     num_gpus = torch.cuda.device_count()
     torch.cuda.set_device(rank % num_gpus)
-    dist.init_process_group(backend=backend, **kwargs)
+    dist.init_process_group(backend=backend, init_method="env://", **kwargs)
 
 
 def _init_dist_slurm(backend, port=None):

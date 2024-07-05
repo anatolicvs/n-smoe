@@ -211,6 +211,50 @@ def define_G(opt):
 
         netG = Autoencoder(cfg=autoenocer_cfg)
 
+    elif net_type == "unet_moex2":
+        from models.network_unetmoex2 import (
+            EncoderConfig,
+            MoEConfig,
+            AutoencoderConfig,
+            Autoencoder,
+        )
+
+        z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + opt_net["kernel"]
+
+        encoder_cfg = EncoderConfig(
+            model_channels=opt_net["model_channels"],
+            num_res_blocks=opt_net["num_res_blocks"],
+            attention_resolutions=opt_net["attention_resolutions"],
+            dropout=opt_net["dropout"],
+            num_groups=opt_net["num_groups"],
+            scale_factor=opt_net["scale"],
+            num_heads=opt_net["num_heads"],
+            num_head_channels=opt_net["num_head_channels"],
+            use_new_attention_order=opt_net["use_new_attention_order"],
+            use_checkpoint=opt_net["use_checkpoint"],
+            resblock_updown=opt_net["resblock_updown"],
+            channel_mult=opt_net["channel_mult"],
+            resample_2d=opt_net["resample_2d"],
+            pool=opt_net["pool"],
+            activation=opt_net["activation"],
+        )
+
+        decoder_cfg = MoEConfig(
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net["sharpening_factor"],
+        )
+
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            d_in=opt_net["n_channels"],
+            d_out=z,
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"],
+        )
+
+        netG = Autoencoder(cfg=autoenocer_cfg)
+
     elif net_type == "f_u_moe":
         from models.network_f_u_moe import Autoencoder as net
 
@@ -776,6 +820,4 @@ def init_weights(
         )
         net.apply(fn)
     else:
-        print(
-            "Pass this initialization! Initialization was done during network definition!"
-        )
+        print("Initialization was done during network definition!")

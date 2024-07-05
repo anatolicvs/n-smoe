@@ -12,7 +12,7 @@ import torch
 # from models.network_transformer_moe1 import BackboneDinoCfg, EncoderConfig, AutoencoderConfig, Autoencoder, BackboneResnetCfg
 # from models.network_transformer_moe1 import MoEConfig
 # from models.network_unetmoex import Gaussians, MoE, ResBlock, ResBlockConfig
-from models.network_unetmoex1 import (
+from models.network_unetmoex2 import (
     AttentionBlock,
     AttentionBlockConfig,
     EncoderConfig,
@@ -146,9 +146,9 @@ if __name__ == "__main__":
                 blocks.append(block)
         return torch.stack(blocks)
 
-    ch = 1
+    ch = 3
     w = 256
-    h = 245
+    h = 256
 
     image_tensor = torch.randn(ch, w, h).to(device=device)
 
@@ -208,17 +208,17 @@ if __name__ == "__main__":
         attention_resolutions=[16, 8],  # Apply attention at higher resolutions only
         dropout=0.2,  # Increased dropout for more regularization
         num_groups=8,  # Maintain group normalization to stabilize training with small batch sizes
-        scale_factor=1,  # Reduced scale factor to limit downsampling given the small input size
+        scale_factor=8,  # Reduced scale factor to limit downsampling given the small input size
         num_heads=4,  # Fewer heads in attention mechanisms to balance model complexity
         num_head_channels=16,  # Fewer channels per head to reduce complexity and focus on essential features
         use_new_attention_order=True,
         use_checkpoint=True,  # Reduce memory usage since model is smaller
         resblock_updown=True,  # Disable resblock upsampling and downsampling
         channel_mult=(
+            1,
             2,
             4,
             8,
-            16,
         ),  # Smaller channel multiplier as fewer stages of feature enhancement are needed
         resample_2d=True,  # Avoid resampling in 2D to preserve spatial dimensions
         pool="attention",  # Use attention pooling to focus on relevant features without spatial reduction
@@ -250,14 +250,13 @@ if __name__ == "__main__":
         overlap=overlap,
     )
 
-    model = Autoencoder(cfg=autoenocer_cfg)
+    model = Autoencoder(cfg=autoenocer_cfg).cuda()
 
     print(model)
 
     params = sum(p.numel() for p in model.parameters())
     print(f"Total number of parameters: {params}")
 
-    model = model.to(device)
     with torch.no_grad():
         output = model(blocks, image_tensor.shape)
         print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")

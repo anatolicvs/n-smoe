@@ -8,9 +8,12 @@ class ModelBase:
     def __init__(self, opt):
         self.opt = opt
         self.save_dir = opt["path"]["models"]
-        self.device = torch.device(
-            f'cuda:{opt["rank"]}' if torch.cuda.is_available() else "cpu"
-        )
+        if opt["dist"]:
+            rank = opt["rank"]
+            torch.cuda.set_device(rank)
+            self.device = torch.device(f"cuda:{rank}")
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.is_train = opt["is_train"]
         self.schedulers = []
 
@@ -75,13 +78,12 @@ class ModelBase:
     def model_to_device(self, network):
         network = network.to(self.device)
         if self.opt["dist"]:
-            local_rank = int(os.environ["LOCAL_RANK"])
             network = DistributedDataParallel(
-                network, device_ids=[local_rank], output_device=local_rank
+                network, device_ids=[self.opt["rank"]], output_device=self.opt["rank"]
             )
             if self.opt.get("use_static_graph", False):
                 print(
-                    'Using static graph. Make sure that "unused parameters" will not change during training loop.'
+                    'Using static graph. Make sure that "unused parameters" will not change during the training loop.'
                 )
                 network._set_static_graph()
         else:
@@ -90,7 +92,7 @@ class ModelBase:
 
     def describe_network(self, network):
         network = self.get_bare_model(network)
-        msg = "\n"
+        msg = f"Networks on Device: {next(network.parameters()).device} \n"
         msg += "Networks name: {}".format(network.__class__.__name__) + "\n"
         msg += (
             "Params number: {}".format(
