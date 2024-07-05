@@ -1,7 +1,7 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v8_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
-    , "gpu_ids": [0,1,2, 3]
+    , "gpu_ids": [0, 1, 2, 3]
     
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
@@ -14,10 +14,10 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/hpcwork/p0021791/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+        "root": "/hpcwork/p0021791/superresolution"  
+      , "pretrained_netG": null
+      , "pretrained_netD": null 
+      , "pretrained_netE": null 
       }
   
       ,"datasets": {
@@ -34,7 +34,7 @@
             , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
-            , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+            , "dataloader_batch_size": 96     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
             "name": "test_dataset"            // just name
@@ -66,7 +66,7 @@
       , "use_new_attention_order": true
       , "use_checkpoint": true
       , "resblock_updown": false
-      , "channel_mult": [2, 4, 8, 16]
+      , "channel_mult": [1, 2, 4, 8]
       , "resample_2d" : false
 
       , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
@@ -79,11 +79,11 @@
 
     , "train": {
         "is_moe": true
-        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+        , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-5            // learning rate
+        , "G_optimizer_lr": 1e-4            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough

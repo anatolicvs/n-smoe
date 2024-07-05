@@ -27,7 +27,7 @@ NTASKS=1
 CPUS_PER_TASK=32
 GPUS=4
 MEMORY="32G"
-TIME="30:00:00"
+TIME="32:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -68,8 +68,11 @@ sbatch <<-EOT
 echo "Starting job at: \$(date)"
 nvidia-smi
 
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+
 apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist True
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
 
 echo "Job completed at: $(date)"
 EOT
