@@ -177,7 +177,8 @@ class ModelGAN(ModelBase):
         # ------------------------------------
         # 3) D_loss
         # ------------------------------------
-        self.D_lossfn = GANLoss(self.opt_train["gan_type"], 1.0, 0.0).to(self.device)
+        self.D_lossfn = GANLoss(
+            self.opt_train["gan_type"], 1.0, 0.0).to(self.device)
         self.D_lossfn_weight = self.opt_train["D_lossfn_weight"]
 
         self.D_update_ratio = (
@@ -351,8 +352,10 @@ class ModelGAN(ModelBase):
             )
             H_signal_x = np.sum(np.log(np.abs(H_freq) + 1), axis=0)
             H_signal_y = np.sum(np.log(np.abs(H_freq) + 1), axis=1)
-            L_signal_bicubic_x = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=0)
-            L_signal_bicubic_y = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=1)
+            L_signal_bicubic_x = np.sum(
+                np.log(np.abs(L_freq_bicubic) + 1), axis=0)
+            L_signal_bicubic_y = np.sum(
+                np.log(np.abs(L_freq_bicubic) + 1), axis=1)
 
             metrics = {}
             for label, signal_x, signal_y in [
@@ -386,15 +389,15 @@ class ModelGAN(ModelBase):
             freq_spectra_row = spectra_row + 2
             table_row = freq_spectra_row + 2
 
-            ax0 = fig.add_subplot(gs[image_row : image_row + 2, 0])
+            ax0 = fig.add_subplot(gs[image_row: image_row + 2, 0])
             ax0.imshow(L_np_stochastic, cmap="gray")
             ax0.set_title("Low Res. Stochastic Deg")
 
-            ax1 = fig.add_subplot(gs[image_row : image_row + 2, 1])
+            ax1 = fig.add_subplot(gs[image_row: image_row + 2, 1])
             ax1.imshow(L_np_bicubic, cmap="gray")
             ax1.set_title("Low Res. Bicubic Deg.")
 
-            ax2 = fig.add_subplot(gs[image_row : image_row + 2, 2])
+            ax2 = fig.add_subplot(gs[image_row: image_row + 2, 2])
             ax2.imshow(H_np, cmap="gray")
             ax2.set_title("High Res. Ground Truth")
 
@@ -422,19 +425,22 @@ class ModelGAN(ModelBase):
             ax8.plot(H_signal_y)
             ax8.set_title("High Res Y-Spectrum")
 
-            ax9 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 0])
+            ax9 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 0])
             ax9.imshow(np.log(np.abs(L_freq_stochastic) + 1), cmap="gray")
             ax9.set_title("Low Res Stochastic Deg. 2D Spectrum")
 
-            ax10 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 1])
+            ax10 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 1])
             ax10.imshow(np.log(np.abs(L_freq_bicubic) + 1), cmap="gray")
             ax10.set_title("Low Res Bicubic Deg. 2D Spectrum")
 
-            ax11 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 2])
+            ax11 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 2])
             ax11.imshow(np.log(np.abs(H_freq) + 1), cmap="gray")
             ax11.set_title("High Res 2D Spectrum")
 
-            ax_table = fig.add_subplot(gs[table_row : table_row + 2, :])
+            ax_table = fig.add_subplot(gs[table_row: table_row + 2, :])
             table = Table(ax_table, bbox=[0, 0, 1, 1])
             row_labels = [
                 "Metric",
@@ -480,7 +486,8 @@ class ModelGAN(ModelBase):
                         else:
                             value = metrics[col_labels[j - 1]][row_label]
                             formatted_value = (
-                                value if isinstance(value, str) else f"{value:.2e}"
+                                value if isinstance(
+                                    value, str) else f"{value:.2e}"
                             )
                             table.add_cell(
                                 i,
@@ -662,7 +669,8 @@ class ModelGAN(ModelBase):
 
             if self.opt["train"]["gan_type"] in ["gan", "lsgan", "wgan", "softplusgan"]:
                 pred_g_fake = self.netD(self.E)
-                D_loss = self.D_lossfn_weight * self.D_lossfn(pred_g_fake, True)
+                D_loss = self.D_lossfn_weight * \
+                    self.D_lossfn(pred_g_fake, True)
             elif self.opt["train"]["gan_type"] == "ragan":
                 pred_d_real = self.netD(self.H).detach()
                 pred_g_fake = self.netD(self.E)
@@ -670,10 +678,12 @@ class ModelGAN(ModelBase):
                     self.D_lossfn_weight
                     * (
                         self.D_lossfn(
-                            pred_d_real - torch.mean(pred_g_fake, 0, True), False
+                            pred_d_real -
+                            torch.mean(pred_g_fake, 0, True), False
                         )
                         + self.D_lossfn(
-                            pred_g_fake - torch.mean(pred_d_real, 0, True), True
+                            pred_g_fake -
+                            torch.mean(pred_d_real, 0, True), True
                         )
                     )
                     / 2

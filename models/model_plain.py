@@ -40,9 +40,6 @@ class ModelPlain(ModelBase):
         self.define_scheduler()  # define scheduler
         self.log_dict = OrderedDict()  # log
 
-    # ----------------------------------------
-    # load pre-trained G model
-    # ----------------------------------------
     def load(self):
         load_path_G = self.opt["path"]["pretrained_netG"]
         if load_path_G is not None:
@@ -68,9 +65,6 @@ class ModelPlain(ModelBase):
                 self.update_E(0)
             self.netE.eval()
 
-    # ----------------------------------------
-    # load optimizer
-    # ----------------------------------------
     def load_optimizers(self):
         load_path_optimizerG = self.opt["path"]["pretrained_optimizerG"]
         if load_path_optimizerG is not None and self.opt_train["G_optimizer_reuse"]:
@@ -133,6 +127,25 @@ class ModelPlain(ModelBase):
                     self.opt_train["G_scheduler_gamma"],
                 )
             )
+
+        elif g_scheduler_type == "CyclicLR":
+            self.schedulers.append(
+                lr_scheduler.CyclicLR(
+                    self.G_optimizer,
+                    self.opt_train["G_optimizer_lr"],
+                    self.opt_train["G_scheduler_max_lr"],
+                    step_size_up=self.opt_train["G_scheduler_step_size_up"],
+                    step_size_down=self.opt_train["G_scheduler_step_size_down"],
+                    mode=self.opt_train["G_scheduler_mode"],
+                    gamma=1.0,
+                    cycle_momentum=self.opt_train["G_scheduler_cycle_momentum"],
+                    base_momentum=0.8,
+                    max_momentum=0.9,
+                    last_epoch=-1,
+                    verbose=False,
+                )
+            )
+
         elif g_scheduler_type == "CosineAnnealingLR":
             self.schedulers.append(
                 lr_scheduler.CosineAnnealingLR(
@@ -141,12 +154,20 @@ class ModelPlain(ModelBase):
                     eta_min=self.opt_train["G_scheduler_eta_min"],
                 )
             )
+        elif g_scheduler_type == "ReduceLROnPlateau":
+            self.schedulers.append(
+                lr_scheduler.ReduceLROnPlateau(
+                    self.G_optimizer,
+                    mode="min",
+                    patience=self.opt_train["G_scheduler_lr_patience"],
+                    factor=0.1,
+                    verbose=True,
+                    min_lr=self.opt_train["G_scheduler_lr_min"],
+                )
+            )
         else:
             raise NotImplementedError
 
-    # ----------------------------------------
-    # feed L/H data
-    # ----------------------------------------
     def feed_data(self, data, need_H=True):
         self.L = data["L"].to(self.device)
         if self.opt["train"]["is_moe"]:
@@ -154,9 +175,6 @@ class ModelPlain(ModelBase):
         if need_H:
             self.H = data["H"].to(self.device)
 
-    # ----------------------------------------
-    # feed L to netG
-    # ----------------------------------------
     def netG_forward(self):
         if self.opt["train"]["is_moe"]:
             self.E = self.netG(self.L_p, self.L.size())
@@ -326,8 +344,10 @@ class ModelPlain(ModelBase):
             )
             H_signal_x = np.sum(np.log(np.abs(H_freq) + 1), axis=0)
             H_signal_y = np.sum(np.log(np.abs(H_freq) + 1), axis=1)
-            L_signal_bicubic_x = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=0)
-            L_signal_bicubic_y = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=1)
+            L_signal_bicubic_x = np.sum(
+                np.log(np.abs(L_freq_bicubic) + 1), axis=0)
+            L_signal_bicubic_y = np.sum(
+                np.log(np.abs(L_freq_bicubic) + 1), axis=1)
 
             metrics = {}
             for label, signal_x, signal_y in [
@@ -361,15 +381,15 @@ class ModelPlain(ModelBase):
             freq_spectra_row = spectra_row + 2
             table_row = freq_spectra_row + 2
 
-            ax0 = fig.add_subplot(gs[image_row : image_row + 2, 0])
+            ax0 = fig.add_subplot(gs[image_row: image_row + 2, 0])
             ax0.imshow(L_np_stochastic, cmap="gray")
             ax0.set_title("Low Res. Stochastic Deg")
 
-            ax1 = fig.add_subplot(gs[image_row : image_row + 2, 1])
+            ax1 = fig.add_subplot(gs[image_row: image_row + 2, 1])
             ax1.imshow(L_np_bicubic, cmap="gray")
             ax1.set_title("Low Res. Bicubic Deg.")
 
-            ax2 = fig.add_subplot(gs[image_row : image_row + 2, 2])
+            ax2 = fig.add_subplot(gs[image_row: image_row + 2, 2])
             ax2.imshow(H_np, cmap="gray")
             ax2.set_title("High Res. Ground Truth")
 
@@ -397,19 +417,22 @@ class ModelPlain(ModelBase):
             ax8.plot(H_signal_y)
             ax8.set_title("High Res Y-Spectrum")
 
-            ax9 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 0])
+            ax9 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 0])
             ax9.imshow(np.log(np.abs(L_freq_stochastic) + 1), cmap="gray")
             ax9.set_title("Low Res Stochastic Deg. 2D Spectrum")
 
-            ax10 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 1])
+            ax10 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 1])
             ax10.imshow(np.log(np.abs(L_freq_bicubic) + 1), cmap="gray")
             ax10.set_title("Low Res Bicubic Deg. 2D Spectrum")
 
-            ax11 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 2])
+            ax11 = fig.add_subplot(
+                gs[freq_spectra_row: freq_spectra_row + 2, 2])
             ax11.imshow(np.log(np.abs(H_freq) + 1), cmap="gray")
             ax11.set_title("High Res 2D Spectrum")
 
-            ax_table = fig.add_subplot(gs[table_row : table_row + 2, :])
+            ax_table = fig.add_subplot(gs[table_row: table_row + 2, :])
             table = Table(ax_table, bbox=[0, 0, 1, 1])
             row_labels = [
                 "Metric",
@@ -455,7 +478,8 @@ class ModelPlain(ModelBase):
                         else:
                             value = metrics[col_labels[j - 1]][row_label]
                             formatted_value = (
-                                value if isinstance(value, str) else f"{value:.2e}"
+                                value if isinstance(
+                                    value, str) else f"{value:.2e}"
                             )
                             table.add_cell(
                                 i,

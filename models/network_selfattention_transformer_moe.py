@@ -1,4 +1,4 @@
-import functools
+
 from dataclasses import dataclass
 from functools import partial
 from typing import Generic, Literal, Optional, TypedDict, TypeVar
@@ -10,6 +10,9 @@ import torchvision
 from einops import einsum, rearrange, repeat
 from jaxtyping import Float, Int64
 from torch import Tensor
+from torchvision.models import (ResNet18_Weights, ResNet34_Weights,
+                                ResNet50_Weights, ResNet101_Weights,
+                                ResNet152_Weights)
 
 
 class BatchedViews(TypedDict):
@@ -490,11 +493,11 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
         super().__init__(cfg)
 
         model_weights = {
-            "resnet18": torchvision.models.ResNet18_Weights.IMAGENET1K_V1,
-            "resnet34": torchvision.models.ResNet34_Weights.IMAGENET1K_V1,
-            "resnet50": torchvision.models.ResNet50_Weights.IMAGENET1K_V1,
-            "resnet101": torchvision.models.ResNet101_Weights.IMAGENET1K_V1,
-            "resnet152": torchvision.models.ResNet152_Weights.IMAGENET1K_V1,
+            "resnet18": ResNet18_Weights.IMAGENET1K_V1,
+            "resnet34": ResNet34_Weights.IMAGENET1K_V1,
+            "resnet50": ResNet50_Weights.IMAGENET1K_V1,
+            "resnet101": ResNet101_Weights.IMAGENET1K_V1,
+            "resnet152": ResNet152_Weights.IMAGENET1K_V1,
         }
 
         self.model = getattr(torchvision.models, cfg.model)(
@@ -508,11 +511,15 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
         self.projections['layer0'] = nn.Conv2d(
             previous_output_channels, d_out, 1)
 
+        if isinstance(self.model.layer1[0], torchvision.models.resnet.BasicBlock):
+            def get_output_channels(layer): return layer.conv2.out_channels
+        else:
+            def get_output_channels(layer): return layer.conv3.out_channels
+
         layers = [self.model.layer1, self.model.layer2,
                   self.model.layer3, self.model.layer4]
-        for i, layer_group in enumerate(layers[:cfg.num_layers - 1]):
-            output_channels = layer_group[-1].conv3.out_channels if hasattr(
-                layer_group[-1], 'conv3') else layer_group[-1][-1].out_channels
+        for i, layer_group in enumerate(layers[:cfg.num_layers]):
+            output_channels = get_output_channels(layer_group[-1])
             self.projections[f'layer{i+1}'] = nn.Conv2d(
                 output_channels, d_out, 1)
 
@@ -618,6 +625,7 @@ class EncoderConfig:
     backbone_cfg: BackboneDinoCfg
     transformer_cfg: SelfAttentionTransformerCfg
     embed_dim: int
+    activation: str = "GELU"
 
 
 class Encoder(Backbone[EncoderConfig]):
@@ -627,6 +635,9 @@ class Encoder(Backbone[EncoderConfig]):
         self.latent = d_out
 
         self.scale_factor = cfg.scale_factor
+
+        if hasattr(nn, cfg.activation):
+            self.activation = getattr(nn, cfg.activation)()
 
         if cfg.backbone_cfg is not None:
             self.backbone = BackboneDino(
@@ -640,24 +651,15 @@ class Encoder(Backbone[EncoderConfig]):
             cfg.transformer_cfg, d_in=d_out, dropout=cfg.dropout)
 
         self.to_gaussians = nn.Sequential(
-            nn.Linear(cfg.embed_dim, d_in * d_out),
-            nn.ReLU()
+            nn.Linear(cfg.embed_dim, 2048),
+            nn.ReLU(),
+            nn.LayerNorm(2048),
+            self.activation,
+            nn.Linear(2048, self.d_in * self.latent),
         )
 
-        # self.high_resolution_skip = nn.Sequential(
-        #     nn.Conv2d(d_in, d_out, 4, 1, 3),
-        #     nn.ReLU(),
-        # )
-
-        # self.to_gaussians = nn.Sequential(
-        #     nn.ReLU(),
-        #     nn.Linear(d_out, d_in * d_out),
-        #     nn.LayerNorm(d_in * d_out),
-        #     nn.ReLU()
-        # )
-
         self.resizer = MullerResizer(
-            base_resize_method='bicubic', kernel_size=5, stddev=0.5, num_layers=cfg.resizer_num_layers,
+            d_in=d_in,  base_resize_method='bilinear', kernel_size=5, stddev=0.5, num_layers=cfg.resizer_num_layers,
             dtype=torch.float32, avg_pool=cfg.avg_pool
         )
 
@@ -686,9 +688,13 @@ class Encoder(Backbone[EncoderConfig]):
         gaussians = self.to_gaussians(features)
 
         gaussians = rearrange(gaussians, "b n c -> b c n")
-        gaussians = torch.mean(gaussians, dim=2, keepdim=True)
-        gaussians = rearrange(
-            gaussians, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
+
+        # ::pixelSplat::
+        # # gaussians = torch.mean(gaussians, dim=2, keepdim=True)
+        # gaussians = rearrange(
+        #     gaussians, 'b (c latent) 1 -> b c latent', c=self.d_in, latent=self.latent)
+
+        gaussians = gaussians.reshape(-1, self.d_in, self.latent)
 
         return gaussians
 
@@ -921,7 +927,7 @@ if __name__ == "__main__":
     encoder_cfg = EncoderConfig(
         embed_dim=32,  # Reduced dimensionality for small spatial inputs
         dropout=0.1,  # Maintain dropout to prevent overfitting
-        scale_factor=4,  # Increase scale factor to enlarge input initially
+        scale_factor=2,  # Increase scale factor to enlarge input initially
         avg_pool=False,  # Avoid pooling to preserve all available information
         resizer_num_layers=2,  # Adequate for resizing operations
         backbone_cfg=BackboneDinoCfg(
@@ -929,7 +935,7 @@ if __name__ == "__main__":
             model="dino_vits8",
             backbone_cfg=BackboneResnetCfg(
                 name="resnet",
-                model="resnet50",
+                model="resnet34",
                 num_layers=2,
                 use_first_pool=True  # Use first pooling to reduce dimensions effectively
             )

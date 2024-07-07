@@ -33,8 +33,8 @@
           , "dataroot_L": null              // path of L training dataset
           , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
-          , "dataloader_num_workers": 4
-          , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
           "name": "test_dataset"            // just name
@@ -46,7 +46,7 @@
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing.pkl"
           , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
-          , "dataloader_num_workers": 4
+          , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 
         }
       }
@@ -54,34 +54,33 @@
     , "netG": {
       "net_type": "selfattention_transformer"
       , "kernel": 9
-      , "num_mixtures": 9
       , "sharpening_factor": 1
-
-      
-      , "dropout": 0.1
-      , "patch_size": 4
       
       , "avg_pool": false
       , "resizer_num_layers":2
     
+      , "embed_dim" : 32
+      , "dropout": 0.1
+
       , "dino_model" : "dino_vits8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
-      , "resnet_model": "resnet50"
+      , "resnet_model": "resnet34" // "resnet18", "resnet34", "resnet50", "resnet101", "resnet152"
       , "resnet_num_layers" : 2
       , "use_first_pool": true
-      , "embed_dim": 64
-      , "num_octaves" : 10
+
+      , "patch_size": 4
+      , "num_octaves" : 8
       , "num_layers": 2
       , "num_heads" : 4
       ,  "d_token" : 64
-      ,  "d_dot": 128
+      ,  "d_dot": 64
       , "d_mlp": 128
-      , "downscale" : 2
+      , "downscale" : 1
    
       , "init_type": "default"         
     }
 
     , "train": {
-        "is_moe": true
+          "is_moe": true
         , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
@@ -96,9 +95,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 5000           // for testing
-        , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 200           // for print
+        , "checkpoint_test": 100000 
+        , "checkpoint_save": 5000
+        , "checkpoint_print": 250
       }
   }
   

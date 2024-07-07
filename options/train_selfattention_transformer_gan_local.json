@@ -20,59 +20,59 @@
       , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
       }
   
-    , "datasets": {
-      "train": {
-          "name": "train_dataset"           // just name
-        , "dataset_type": "medical_sr"          // "mri_sr" | blindsr
-        , "lq_patchsize": 64
-        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-        , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train"]// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train, "/mnt/e/Medical/mri/data_for_train/"
-        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-        , "use_dataset_cache": true
-        , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_training.pkl"
-        , "dataroot_L": null              // path of L training dataset
-        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_shuffle": true
-        , "dataloader_num_workers": 4
-        , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
+      , "datasets": {
+        "train": {
+            "name": "train_dataset"           // just name
+          , "dataset_type": "medical_sr"          // "mri_sr" | blindsr
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train"]// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train, "/mnt/e/Medical/mri/data_for_train/"
+          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_training.pkl"
+          , "dataroot_L": null              // path of L training dataset
+          , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_shuffle": true
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        }
+        , "test": {
+          "name": "test_dataset"            // just name
+          , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "lq_patchsize": 64
+          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing.pkl"
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1 
+        }
       }
-      , "test": {
-        "name": "test_dataset"            // just name
-        , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 64
-        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-        , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
-        , "dataroot_L": null              // path of L testing dataset
-        , "use_dataset_cache": true
-        , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing.pkl"
-        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 4
-        , "dataloader_batch_size": 1 
-      }
-    }
   
     , "netG": {
       "net_type": "selfattention_transformer"
       , "kernel": 9
-      , "num_mixtures": 9
       , "sharpening_factor": 1
-      
-      , "dropout": 0.1
-      , "patch_size": 4
       
       , "avg_pool": false
       , "resizer_num_layers":2
     
-      , "dino_model" : "dino_vitb16" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
-      , "resnet_model": "resnet50"
-      , "resnet_num_layers" : 4
+      , "embed_dim" : 32
+      , "dropout": 0.1
+
+      , "dino_model" : "dino_vits8" // "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"
+      , "resnet_model": "resnet34" // "resnet18", "resnet34", "resnet50", "resnet101", "resnet152"
+      , "resnet_num_layers" : 2
       , "use_first_pool": true
-    
-      , "num_octaves" : 16
+
+      , "patch_size": 4
+      , "num_octaves" : 8
       , "num_layers": 2
-      , "num_heads" : 8
-      ,  "d_token" : 128
-      ,  "d_dot": 128
+      , "num_heads" : 4
+      ,  "d_token" : 64
+      ,  "d_dot": 64
       , "d_mlp": 128
       , "downscale" : 1
    
@@ -80,7 +80,7 @@
     }
   
     , "netD": {
-      "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
+      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
       , "base_nc": 64
       , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
       , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
@@ -110,11 +110,11 @@
         , "D_init_iters": 0
     
         , "G_optimizer_type": "adam"
-        , "G_optimizer_lr": 1.5e-4  // learning rate
+        , "G_optimizer_lr": 1e-4  // learning rate
         , "G_optimizer_wd": 0
     
         , "D_optimizer_type": "adam"
-        , "D_optimizer_lr": 1.5e-4  // learning rate
+        , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
         
         , "G_scheduler_type": "CyclicLR"
@@ -141,9 +141,9 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 5000  // skip testing
+        , "checkpoint_test": 100000  // skip testing
         , "checkpoint_save": 5000
-        , "checkpoint_print": 200
+        , "checkpoint_print": 250
       }
   }
   

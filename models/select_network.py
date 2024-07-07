@@ -343,7 +343,7 @@ def define_G(opt):
         )
 
         z = 2 * opt_net["kernel"] + 4 * \
-            opt_net["num_mixtures"] + opt_net["kernel"]
+            opt_net["kernel"] + opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             embed_dim=opt_net["embed_dim"],
