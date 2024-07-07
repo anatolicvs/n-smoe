@@ -56,7 +56,8 @@ class Upsample(nn.Module):
         self.dims = dims
         self.resample_2d = resample_2d
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1)
+            self.conv = conv_nd(dims, self.channels,
+                                self.out_channels, 3, padding=1)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -184,7 +185,8 @@ class QKVAttentionLegacy(nn.Module):
         bs, width, length = qkv.shape
         assert width % (3 * self.n_heads) == 0
         ch = width // (3 * self.n_heads)
-        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3, length).split(ch, dim=1)
+        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3,
+                              length).split(ch, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
         weight = torch.einsum(
             "bct,bcs->bts", q * scale, k * scale
@@ -289,7 +291,8 @@ class ResBlock(Backbone[ResBlockConfig]):
             self.activation,
             nn.Dropout(p=cfg.dropout),
             zero_module(
-                conv_nd(cfg.dims, cfg.out_channels, cfg.out_channels, 3, padding=1)
+                conv_nd(cfg.dims, cfg.out_channels,
+                        cfg.out_channels, 3, padding=1)
             ),
         )
 
@@ -300,7 +303,8 @@ class ResBlock(Backbone[ResBlockConfig]):
                 cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1
             )
         else:
-            self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 1)
+            self.skip_connection = conv_nd(
+                cfg.dims, cfg.channels, cfg.out_channels, 1)
 
     def forward(self, x):
         return checkpoint(
@@ -410,7 +414,8 @@ class Encoder(Backbone[EncoderConfig]):
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    conv_nd(cfg.dims, self.d_in, cfg.model_channels, 3, padding=1)
+                    conv_nd(cfg.dims, self.d_in,
+                            cfg.model_channels, 3, padding=1)
                 )
             ]
         )
@@ -633,18 +638,19 @@ class MoE(Backbone[MoEConfig]):
 
     def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
         mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
-        mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+        mu_y = p[:, :, k: 2 * k].reshape(-1, ch, k, 1)
         mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
 
         scale_idx = 3 * k
-        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, p.shape[1], k, 2)
+        scale = p[:, :, scale_idx: scale_idx +
+                  2 * k].reshape(-1, p.shape[1], k, 2)
         rot_idx = scale_idx + 2 * k
-        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+        theta = p[:, :, rot_idx: rot_idx + k].reshape(-1, p.shape[1], k)
 
         cov_matrix = self.cov_mat_2d(scale, theta)
         cov_matrix = torch.mul(cov_matrix, self.alpha)
 
-        w = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
+        w = p[:, :, 2 * k: 3 * k].reshape(-1, ch, k)
 
         return Gaussians(mu, cov_matrix, w)
 
@@ -661,7 +667,8 @@ class MoE(Backbone[MoEConfig]):
         )
 
         mu_expanded = (
-            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
+            gauss.mu.unsqueeze(3).unsqueeze(
+                4).expand(-1, -1, -1, height, width, -1)
         )
         x_sub_mu = grid_expanded - mu_expanded
 
@@ -720,8 +727,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
 
         num_blocks_per_row = (width - block_size) // step + 1
         num_blocks_per_column = (height - block_size) // step + 1
@@ -729,14 +738,16 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         for b in range(batch_size):
             idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start : idx_start + num_blocks_per_image]
+            current_blocks = blocks[idx_start: idx_start +
+                                    num_blocks_per_image]
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
                     recon_images[
-                        b, :, i : i + block_size, j : j + block_size
+                        b, :, i: i + block_size, j: j + block_size
                     ] += current_blocks[idx]
-                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
+                    count_matrix[b, :, i: i + block_size,
+                                 j: j + block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
@@ -746,9 +757,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     def mem_lim():
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
-            torch.cuda.set_device(0)
-            tot_mem = torch.cuda.get_device_properties(0).total_memory
-            used_mem = torch.cuda.memory_allocated(0)
+            device = torch.cuda.current_device()
+            torch.cuda.set_device(device)
+            tot_mem = torch.cuda.get_device_properties(device).total_memory
+            used_mem = torch.cuda.memory_reserved(device)
             free_mem = tot_mem - used_mem
 
             thresholds = [0.7, 0.5, 0.3, 0.1]
@@ -757,8 +769,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
                 if free_mem > threshold:
                     return threshold
 
-            min_threshold = max(1 * 2**30, tot_mem * 0.05)
-            return min_threshold
+            return max(1 * 2**30, tot_mem * 0.05)
         else:
             return 1 * 2**30
 

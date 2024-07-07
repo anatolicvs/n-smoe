@@ -11,10 +11,13 @@ from einops import rearrange, repeat
 
 from utils_n.nn import normalization
 
+
 class BatchedViews(TypedDict):
     image: torch.Tensor
 
+
 T = TypeVar("T")
+
 
 class Backbone(nn.Module, Generic[T]):
     def __init__(self, cfg: T):
@@ -28,15 +31,18 @@ class Backbone(nn.Module, Generic[T]):
     def d_out(self) -> int:
         raise NotImplementedError
 
+
 class MullerResizer(nn.Module):
     """Learned Laplacian resizer in PyTorch, fixed Gaussian blur for channel handling."""
+
     def __init__(self, base_resize_method='bilinear', antialias=False,
                  kernel_size=5, stddev=1.0, num_layers=2, avg_pool=False,
                  dtype=torch.float32, init_weights=None, name='muller_resizer'):
         super(MullerResizer, self).__init__()
         self.name = name
         self.base_resize_method = base_resize_method
-        self.antialias = antialias  # Note: PyTorch does not support antialiasing in resizing.
+        # Note: PyTorch does not support antialiasing in resizing.
+        self.antialias = antialias
         self.kernel_size = kernel_size
         self.stddev = stddev
         self.num_layers = num_layers
@@ -46,8 +52,10 @@ class MullerResizer(nn.Module):
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         for layer in range(num_layers):
-            weight = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor([init_weights[2*layer]], dtype=dtype))
-            bias = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor([init_weights[2*layer+1]], dtype=dtype))
+            weight = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor(
+                [init_weights[2*layer]], dtype=dtype))
+            bias = nn.Parameter(torch.zeros(1, dtype=dtype) if init_weights is None else torch.tensor(
+                [init_weights[2*layer+1]], dtype=dtype))
             self.weights.append(weight)
             self.biases.append(bias)
 
@@ -56,25 +64,29 @@ class MullerResizer(nn.Module):
             stride_h = inputs.shape[2] // target_size[0]
             stride_w = inputs.shape[3] // target_size[1]
             if stride_h > 1 and stride_w > 1:
-                inputs = F.avg_pool2d(inputs, kernel_size=(stride_h, stride_w), stride=(stride_h, stride_w))
+                inputs = F.avg_pool2d(inputs, kernel_size=(
+                    stride_h, stride_w), stride=(stride_h, stride_w))
         return F.interpolate(inputs, size=target_size, mode=self.base_resize_method, align_corners=False)
 
     def _gaussian_blur(self, inputs):
         sigma = max(self.stddev, 0.5)  # Ensure sigma is not too small
         radius = self.kernel_size // 2
         kernel_size = 2 * radius + 1
-        x_coord = torch.arange(kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
+        x_coord = torch.arange(
+            kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
         y_grid = x_coord.repeat(kernel_size, 1)
         x_grid = x_coord.view(-1, 1).repeat(1, kernel_size)
         xy_grid = torch.sqrt(x_grid**2 + y_grid**2)
         kernel = torch.exp(-xy_grid**2 / (2 * sigma**2))
         kernel_sum = kernel.sum()
         if kernel_sum.item() == 0:
-            kernel += 1e-10  
+            kernel += 1e-10
         kernel /= kernel_sum
 
-        kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(inputs.shape[1], 1, 1, 1)
-        blurred = F.conv2d(inputs, kernel, padding=radius, groups=inputs.shape[1])
+        kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(
+            inputs.shape[1], 1, 1, 1)
+        blurred = F.conv2d(inputs, kernel, padding=radius,
+                           groups=inputs.shape[1])
         return blurred
 
     def forward(self, inputs, target_size):
@@ -89,13 +101,15 @@ class MullerResizer(nn.Module):
             inputs = blurred
         return net
 
+
 class PatchEmbed(nn.Module):
     def __init__(self, patch_size=4, in_chans=3, embed_dim=96, norm_layer=None):
         super().__init__()
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.embed_dim = embed_dim
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(in_chans, embed_dim,
+                              kernel_size=patch_size, stride=patch_size)
         self.norm = norm_layer(embed_dim) if norm_layer else None
 
     def forward(self, x):
@@ -104,6 +118,7 @@ class PatchEmbed(nn.Module):
         if self.norm:
             x = self.norm(x)
         return x
+
 
 class FeedForward(nn.Module):
     def __init__(self, dim, hidden_dim, dropout=0.0):
@@ -119,6 +134,7 @@ class FeedForward(nn.Module):
     def forward(self, x):
         return self.net(x)
 
+
 class PreNorm(nn.Module):
     def __init__(self, dim, fn, norm_type='ln'):
         super().__init__()
@@ -128,6 +144,7 @@ class PreNorm(nn.Module):
     def forward(self, x, *args, **kwargs):
         x = self.norm(x)
         return self.fn(x, *args, **kwargs)
+
 
 class Attention(nn.Module):
     def __init__(self, dim, heads=8, dim_head=64, dropout=0.0, selfatt=True, kv_dim=None):
@@ -164,7 +181,8 @@ class Attention(nn.Module):
             k, v = self.to_kv(z).chunk(2, dim=-1)
             qkv = (q, k, v)
 
-        q, k, v = map(lambda t: rearrange(t, "b n (h d) -> b h n d", h=self.heads), qkv)
+        q, k, v = map(lambda t: rearrange(
+            t, "b n (h d) -> b h n d", h=self.heads), qkv)
 
         dots = torch.matmul(q, k.transpose(-1, -2)) * self.scale
         attn = self.attend(dots)
@@ -172,9 +190,10 @@ class Attention(nn.Module):
         out = rearrange(out, "b h n d -> b n (h d)")
         return self.to_out(out)
 
+
 class Transformer(nn.Module):
-    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.0,selfatt=True,
-        kv_dim=None):
+    def __init__(self, dim, depth, heads, dim_head, mlp_dim, dropout=0.0, selfatt=True,
+                 kv_dim=None):
         super().__init__()
         self.layers = nn.ModuleList([])
         for _ in range(depth):
@@ -183,7 +202,7 @@ class Transformer(nn.Module):
                     [
                         PreNorm(
                             dim,
-                             Attention(
+                            Attention(
                                 dim,
                                 heads=heads,
                                 dim_head=dim_head,
@@ -192,7 +211,8 @@ class Transformer(nn.Module):
                                 kv_dim=kv_dim,
                             ),
                         ),
-                        PreNorm(dim, FeedForward(dim, mlp_dim, dropout=dropout), norm_type='ln'),
+                        PreNorm(dim, FeedForward(dim, mlp_dim,
+                                dropout=dropout), norm_type='ln'),
                     ]
                 )
             )
@@ -204,71 +224,84 @@ class Transformer(nn.Module):
             x = x + ff(x, **kwargs)
         return x
 
+
 @dataclass
 class BackboneResnetCfg:
     name: Literal["resnet"]
-    model: Literal["resnet18", "resnet34", "resnet50", "resnet101", "resnet152", "dino_resnet50"]
+    model: Literal["resnet18", "resnet34", "resnet50",
+                   "resnet101", "resnet152", "dino_resnet50"]
     num_layers: int
     use_first_pool: bool
     pretrained: bool = False
 
+
 class BackboneResnet(Backbone[BackboneResnetCfg]):
     def __init__(self, cfg: BackboneResnetCfg, d_in: int, d_out: int):
         super().__init__(cfg)
-        
-        norm_layer = functools.partial(nn.InstanceNorm2d, affine=False, track_running_stats=False)
-        
+
+        norm_layer = functools.partial(
+            nn.InstanceNorm2d, affine=False, track_running_stats=False)
+
         model_weights = {
             "resnet18": ResNet18_Weights.DEFAULT,
             "resnet34": ResNet34_Weights.DEFAULT,
             "resnet50": ResNet50_Weights.DEFAULT,
             "resnet101": ResNet101_Weights.DEFAULT,
             "resnet152": ResNet152_Weights.DEFAULT,
-            "dino_resnet50": ResNet50_Weights.DEFAULT  
+            "dino_resnet50": ResNet50_Weights.DEFAULT
         }
 
         weights = model_weights[cfg.model] if cfg.pretrained else None
-        
-        self.model = getattr(torchvision.models, cfg.model)(weights=weights, norm_layer=norm_layer)
 
-        
+        self.model = getattr(torchvision.models, cfg.model)(
+            weights=weights, norm_layer=norm_layer)
+
         self.model.conv1 = nn.Conv2d(d_in, self.model.conv1.out_channels, kernel_size=self.model.conv1.kernel_size,
                                      stride=self.model.conv1.stride, padding=self.model.conv1.padding, bias=False)
 
         self.projections = nn.ModuleDict()
         previous_output_channels = self.model.conv1.out_channels
-        self.projections['layer0'] = nn.Conv2d(previous_output_channels, d_out, 1)
+        self.projections['layer0'] = nn.Conv2d(
+            previous_output_channels, d_out, 1)
 
-        layers = [self.model.layer1, self.model.layer2, self.model.layer3, self.model.layer4]
+        layers = [self.model.layer1, self.model.layer2,
+                  self.model.layer3, self.model.layer4]
         for i, layer_group in enumerate(layers[:cfg.num_layers - 1]):
-            output_channels = layer_group[-1].conv3.out_channels if hasattr(layer_group[-1], 'conv3') else layer_group[-1][-1].out_channels
-            self.projections[f'layer{i+1}'] = nn.Conv2d(output_channels, d_out, 1)
+            output_channels = layer_group[-1].conv3.out_channels if hasattr(
+                layer_group[-1], 'conv3') else layer_group[-1][-1].out_channels
+            self.projections[f'layer{i+1}'] = nn.Conv2d(
+                output_channels, d_out, 1)
 
     def forward(self, context: BatchedViews) -> torch.Tensor:
         x = context['image']
         x = self.model.conv1(x)
         x = self.model.bn1(x)
         x = self.model.relu(x)
-        
+
         features = [self.projections['layer0'](x)]
-        layers = [self.model.layer1, self.model.layer2, self.model.layer3, self.model.layer4]
+        layers = [self.model.layer1, self.model.layer2,
+                  self.model.layer3, self.model.layer4]
         for index in range(1, self.cfg.num_layers):
             x = layers[index - 1](x)
             features.append(self.projections[f'layer{index}'](x))
-        
+
         h, w = context['image'].shape[2:]
-        features = [F.interpolate(feature, (h, w), mode='bilinear', align_corners=True) for feature in features]
+        features = [F.interpolate(
+            feature, (h, w), mode='bilinear', align_corners=True) for feature in features]
         output = torch.stack(features).sum(dim=0)
         return output
 
     @property
     def d_out(self) -> int:
         return self.cfg.d_out
+
+
 @dataclass
 class BackboneDinoCfg:
     name: Literal["dino"]
     model: Literal["dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8"]
-    backbone_cfg: BackboneResnetCfg 
+    backbone_cfg: BackboneResnetCfg
+
 
 class BackboneDino(Backbone[BackboneDinoCfg]):
     def __init__(self, cfg: BackboneDinoCfg, d_in: int, d_out: int) -> None:
@@ -321,13 +354,15 @@ class BackboneDino(Backbone[BackboneDinoCfg]):
         local_tokens = self.local_token_mlp(tokens[:, 1:])
 
         global_token = repeat(global_token, "b c -> b c h w", b=b, h=h, w=w)
-        local_tokens = repeat(local_tokens, "b (h w) c -> b c (h hps) (w wps)", b=b, h=h // self.patch_size, hps=self.patch_size, w=w // self.patch_size, wps=self.patch_size)
+        local_tokens = repeat(local_tokens, "b (h w) c -> b c (h hps) (w wps)", b=b, h=h //
+                              self.patch_size, hps=self.patch_size, w=w // self.patch_size, wps=self.patch_size)
 
         return resnet_features + local_tokens + global_token
 
     @property
     def patch_size(self) -> int:
         return int("".join(filter(str.isdigit, self.cfg.model)))
+
 
 @dataclass
 class EncoderConfig:
@@ -342,13 +377,15 @@ class EncoderConfig:
     scale_factor: int
     resizer_num_layers: int
     patch_size: int
-    backbone_cfg: BackboneDinoCfg 
+    backbone_cfg: BackboneDinoCfg
     activation: str = "GELU"
 
+
 class AttentionPool2d(nn.Module):
-    def __init__(self, embed_dim: int, group_dim:int, num_heads: int, output_dim: int):
+    def __init__(self, embed_dim: int, group_dim: int, num_heads: int, output_dim: int):
         super().__init__()
-        self.positional_embedding = nn.Parameter(torch.randn(embed_dim + 1, group_dim) / embed_dim ** 0.5)
+        self.positional_embedding = nn.Parameter(
+            torch.randn(embed_dim + 1, group_dim) / embed_dim ** 0.5)
         self.k_proj = nn.Linear(group_dim, group_dim)
         self.q_proj = nn.Linear(group_dim, group_dim)
         self.v_proj = nn.Linear(group_dim, group_dim)
@@ -367,7 +404,8 @@ class AttentionPool2d(nn.Module):
             k_proj_weight=self.k_proj.weight,
             v_proj_weight=self.v_proj.weight,
             in_proj_weight=None,
-            in_proj_bias=torch.cat([self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
+            in_proj_bias=torch.cat(
+                [self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
             bias_k=None,
             bias_v=None,
             add_zero_attn=False,
@@ -380,29 +418,34 @@ class AttentionPool2d(nn.Module):
         )
         return x.squeeze(0)
 
+
 class Encoder(Backbone[EncoderConfig]):
-    def __init__(self, cfg: EncoderConfig, d_in:int, d_out:int, phw:int):
+    def __init__(self, cfg: EncoderConfig, d_in: int, d_out: int, phw: int):
         super().__init__(cfg)
         self.d_in = d_in
         self.latent = d_out
-     
+
         self.embed_dim = cfg.embed_dim
         self.scale_factor = cfg.scale_factor
-        
+
         if hasattr(nn, cfg.activation):
             activation = getattr(nn, cfg.activation)()
 
         if cfg.backbone_cfg is not None:
-              self.backbone = BackboneDino(cfg.backbone_cfg, d_in=d_in,d_out=d_out)
+            self.backbone = BackboneDino(
+                cfg.backbone_cfg, d_in=d_in, d_out=d_out)
         else:
             self.backbone = None
 
-        self.patch_embed = PatchEmbed(patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim)
-        self.transformer = Transformer(cfg.embed_dim, cfg.depth, cfg.heads, cfg.dim_head, cfg.mlp_dim, cfg.dropout)
-        
+        self.patch_embed = PatchEmbed(
+            patch_size=cfg.patch_size, in_chans=d_out, embed_dim=cfg.embed_dim)
+        self.transformer = Transformer(
+            cfg.embed_dim, cfg.depth, cfg.heads, cfg.dim_head, cfg.mlp_dim, cfg.dropout)
+
         self.out = nn.Sequential(
             # normalization(cfg.num_groups, int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
-            normalization(channels=int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
+            normalization(channels=int(
+                ((phw * cfg.scale_factor)//cfg.patch_size))**2),
             activation,
             AttentionPool2d(
                 cfg.embed_dim,
@@ -428,20 +471,23 @@ class Encoder(Backbone[EncoderConfig]):
 
     def forward(self, x):
         x = self._interpolate(x, self.scale_factor)
-        
+
         features = self.backbone({'image': x})
         features = self.patch_embed(features)
         features = self.transformer(features)
-    
+
         gaussians = self.out(features)
-        gaussians = rearrange(gaussians, 'b (c latent) -> b c latent', c=self.d_in, latent=self.latent)
-        return gaussians 
-    
+        gaussians = rearrange(
+            gaussians, 'b (c latent) -> b c latent', c=self.d_in, latent=self.latent)
+        return gaussians
+
+
 @dataclass
 class MoEConfig:
     num_mixtures: int = 4
     kernel: int = 4
     sharpening_factor: float = 1.0
+
 
 class MoE(Backbone[MoEConfig]):
     def __init__(
@@ -462,21 +508,23 @@ class MoE(Backbone[MoEConfig]):
         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
         grid = torch.stack((grid_x, grid_y), 2).float()
         return grid.reshape(height * width, 2)
- 
+
     def forward(self, height, width, params):
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
-        μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
+        μ_y = params[:, :, self.kernel: 2 *
+                     self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
-        
+
         Σ = params[
-            :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
+            :, :, 3 * self.kernel: 3 * self.kernel + self.kernel * 2 * 2
         ].reshape(-1, self.kernel, 2, 2)
 
-        w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
+        w = params[:, :, 2 * self.kernel: 3 *
+                   self.kernel].reshape(-1, self.kernel)
 
         Σ = torch.tril(Σ)
         Σ = torch.mul(Σ, self.α)
-    
+
         grid = self.grid(height, width).to(params.device)
         μ = μ.unsqueeze(dim=2)
         grid_expand_dim = torch.unsqueeze(torch.unsqueeze(grid, dim=0), dim=0)
@@ -485,7 +533,8 @@ class MoE(Backbone[MoEConfig]):
 
         e = torch.exp(
             torch.negative(
-                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
+                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc",
+                                   x_sub_μ, Σ, Σ, x_sub_μ)
             )
         )
 
@@ -500,6 +549,7 @@ class MoE(Backbone[MoEConfig]):
 
         return y_hat
 
+
 @dataclass
 class AutoencoderConfig:
     EncoderConfig: EncoderConfig
@@ -509,14 +559,15 @@ class AutoencoderConfig:
     phw: int = 32,
     overlap: int = 24
 
+
 class Autoencoder(Backbone[AutoencoderConfig]):
-     def __init__(self, 
-                  cfg: AutoencoderConfig):
+    def __init__(self,
+                 cfg: AutoencoderConfig):
         super().__init__(cfg)
-        
+
         self.phw = cfg.phw
         self.overlap = cfg.overlap
-        
+
         self.encoder = Encoder(
             cfg.EncoderConfig,
             d_in=cfg.d_in,
@@ -529,14 +580,16 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             d_in=cfg.d_in
         )
 
-     @staticmethod
-     def reconstruct(blocks, original_dims, block_size, overlap):
+    @staticmethod
+    def reconstruct(blocks, original_dims, block_size, overlap):
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
 
         num_blocks_per_row = (width - block_size) // step + 1
         num_blocks_per_column = (height - block_size) // step + 1
@@ -548,34 +601,35 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
-                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
+                    recon_images[b, :, i:i+block_size, j:j +
+                                 block_size] += current_blocks[idx]
                     count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
         return recon_images
-     
-     @staticmethod
-     def mem_lim():
+
+    @staticmethod
+    def mem_lim():
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
-            torch.cuda.set_device(0)
-            tot_mem = torch.cuda.get_device_properties(0).total_memory
-            used_mem = torch.cuda.memory_allocated(0)
+            device = torch.cuda.current_device()
+            torch.cuda.set_device(device)
+            tot_mem = torch.cuda.get_device_properties(device).total_memory
+            used_mem = torch.cuda.memory_reserved(device)
             free_mem = tot_mem - used_mem
 
-            thresholds = [0.3, 0.1]
+            thresholds = [0.7, 0.5, 0.3, 0.1]
             for percent in thresholds:
                 threshold = tot_mem * percent
                 if free_mem > threshold:
                     return threshold
 
-            min_threshold = max(1 * 2**30, tot_mem * 0.05)
-            return min_threshold
+            return max(1 * 2**30, tot_mem * 0.05)
         else:
             return 1 * 2**30
 
-     def forward(self, x, s):
+    def forward(self, x, s):
         if x.ndim == 5:
             x = x.reshape(-1, *x.shape[2:])
 

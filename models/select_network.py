@@ -106,7 +106,8 @@ def define_G(opt):
     elif net_type == "conv_smoe":
         from models.network_convsmoe import Autoencoder as net
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        z = 2 * opt_net["kernel"] + 4 * \
+            opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
             in_channels=opt_net["n_channels"],
             latent_dim=z,
@@ -130,7 +131,8 @@ def define_G(opt):
             Autoencoder,
         )
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        z = 2 * opt_net["kernel"] + 4 * \
+            opt_net["num_mixtures"] + opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             model_channels=opt_net["model_channels"],
@@ -258,7 +260,8 @@ def define_G(opt):
     elif net_type == "f_u_moe":
         from models.network_f_u_moe import Autoencoder as net
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        z = 2 * opt_net["kernel"] + 4 * \
+            opt_net["num_mixtures"] + opt_net["kernel"]
         netG = net(
             in_channels=opt_net["n_channels"],
             latent_dim=z,
@@ -283,7 +286,8 @@ def define_G(opt):
             BackboneDinoCfg,
         )
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        z = 2 * opt_net["kernel"] + 4 * \
+            opt_net["num_mixtures"] + opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             embed_dim=opt_net["embed_dim"],
@@ -338,7 +342,8 @@ def define_G(opt):
             ImageSelfAttentionCfg,
         )
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
+        z = 2 * opt_net["kernel"] + 4 * \
+            opt_net["num_mixtures"] + opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             embed_dim=opt_net["embed_dim"],
@@ -375,7 +380,6 @@ def define_G(opt):
         )
 
         decoder_cfg = MoEConfig(
-            num_mixtures=opt_net["num_mixtures"],
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net["sharpening_factor"],
         )

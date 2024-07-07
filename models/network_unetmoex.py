@@ -56,7 +56,8 @@ class Upsample(nn.Module):
         self.dims = dims
         self.resample_2d = resample_2d
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1)
+            self.conv = conv_nd(dims, self.channels,
+                                self.out_channels, 3, padding=1)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -184,7 +185,8 @@ class QKVAttentionLegacy(nn.Module):
         bs, width, length = qkv.shape
         assert width % (3 * self.n_heads) == 0
         ch = width // (3 * self.n_heads)
-        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3, length).split(ch, dim=1)
+        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3,
+                              length).split(ch, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
         weight = torch.einsum(
             "bct,bcs->bts", q * scale, k * scale
@@ -289,7 +291,8 @@ class ResBlock(Backbone[ResBlockConfig]):
             self.activation,
             nn.Dropout(p=cfg.dropout),
             zero_module(
-                conv_nd(cfg.dims, cfg.out_channels, cfg.out_channels, 3, padding=1)
+                conv_nd(cfg.dims, cfg.out_channels,
+                        cfg.out_channels, 3, padding=1)
             ),
         )
 
@@ -300,7 +303,8 @@ class ResBlock(Backbone[ResBlockConfig]):
                 cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1
             )
         else:
-            self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 1)
+            self.skip_connection = conv_nd(
+                cfg.dims, cfg.channels, cfg.out_channels, 1)
 
     def forward(self, x):
         return checkpoint(
@@ -385,7 +389,8 @@ class MullerResizer(nn.Module):
         self.name = name
         self.base_resize_method = base_resize_method
         self.antialias = (
-            antialias  # Note: PyTorch does not support antialiasing in resizing.
+            # Note: PyTorch does not support antialiasing in resizing.
+            antialias
         )
         self.kernel_size = kernel_size
         self.stddev = stddev
@@ -428,7 +433,8 @@ class MullerResizer(nn.Module):
         radius = self.kernel_size // 2
         kernel_size = 2 * radius + 1
         x_coord = (
-            torch.arange(kernel_size, dtype=inputs.dtype, device=inputs.device) - radius
+            torch.arange(kernel_size, dtype=inputs.dtype,
+                         device=inputs.device) - radius
         )
         y_grid = x_coord.repeat(kernel_size, 1)
         x_grid = x_coord.view(-1, 1).repeat(1, kernel_size)
@@ -442,7 +448,8 @@ class MullerResizer(nn.Module):
         kernel = kernel.view(1, 1, kernel_size, kernel_size).repeat(
             inputs.shape[1], 1, 1, 1
         )
-        blurred = F.conv2d(inputs, kernel, padding=radius, groups=inputs.shape[1])
+        blurred = F.conv2d(inputs, kernel, padding=radius,
+                           groups=inputs.shape[1])
         return blurred
 
     def forward(self, inputs, target_size):
@@ -503,7 +510,8 @@ class Encoder(Backbone[EncoderConfig]):
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    conv_nd(cfg.dims, self.d_in, cfg.model_channels, 3, padding=1)
+                    conv_nd(cfg.dims, self.d_in,
+                            cfg.model_channels, 3, padding=1)
                 )
             ]
         )
@@ -729,12 +737,14 @@ class MoE(Backbone[MoEConfig]):
 
     def forward(self, height, width, params):
         μ_x = params[:, :, : self.kernel].reshape(-1, self.kernel, 1)
-        μ_y = params[:, :, self.kernel : 2 * self.kernel].reshape(-1, self.kernel, 1)
+        μ_y = params[:, :, self.kernel: 2 *
+                     self.kernel].reshape(-1, self.kernel, 1)
         μ = torch.cat((μ_x, μ_y), 2).view(-1, self.kernel, 2)
         Σ = params[
-            :, :, 3 * self.kernel : 3 * self.kernel + self.kernel * 2 * 2
+            :, :, 3 * self.kernel: 3 * self.kernel + self.kernel * 2 * 2
         ].reshape(-1, self.kernel, 2, 2)
-        w = params[:, :, 2 * self.kernel : 3 * self.kernel].reshape(-1, self.kernel)
+        w = params[:, :, 2 * self.kernel: 3 *
+                   self.kernel].reshape(-1, self.kernel)
 
         Σ = torch.tril(Σ)
         Σ = torch.mul(Σ, self.α)
@@ -747,7 +757,8 @@ class MoE(Backbone[MoEConfig]):
 
         e = torch.exp(
             torch.negative(
-                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc", x_sub_μ, Σ, Σ, x_sub_μ)
+                0.5 * torch.einsum("abcli,ablm,abnm,abcnj->abc",
+                                   x_sub_μ, Σ, Σ, x_sub_μ)
             )
         )
 
@@ -789,8 +800,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(
+            batch_size, num_channels, height, width).to(device)
 
         num_blocks_per_row = (width - block_size) // step + 1
         num_blocks_per_column = (height - block_size) // step + 1
@@ -798,14 +811,16 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         for b in range(batch_size):
             idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start : idx_start + num_blocks_per_image]
+            current_blocks = blocks[idx_start: idx_start +
+                                    num_blocks_per_image]
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
                     recon_images[
-                        b, :, i : i + block_size, j : j + block_size
+                        b, :, i: i + block_size, j: j + block_size
                     ] += current_blocks[idx]
-                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
+                    count_matrix[b, :, i: i + block_size,
+                                 j: j + block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
@@ -815,19 +830,19 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     def mem_lim():
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
-            torch.cuda.set_device(0)
-            tot_mem = torch.cuda.get_device_properties(0).total_memory
-            used_mem = torch.cuda.memory_allocated(0)
+            device = torch.cuda.current_device()
+            torch.cuda.set_device(device)
+            tot_mem = torch.cuda.get_device_properties(device).total_memory
+            used_mem = torch.cuda.memory_reserved(device)
             free_mem = tot_mem - used_mem
 
-            thresholds = [0.3, 0.1]
+            thresholds = [0.7, 0.5, 0.3, 0.1]
             for percent in thresholds:
                 threshold = tot_mem * percent
                 if free_mem > threshold:
                     return threshold
 
-            min_threshold = max(1 * 2**30, tot_mem * 0.05)
-            return min_threshold
+            return max(1 * 2**30, tot_mem * 0.05)
         else:
             return 1 * 2**30
 

@@ -129,7 +129,6 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
     opt["dist"] = args.dist
     opt["visulize"] = args.visulize
     opt = initialize_distributed(opt)
-    logger = setup_logging(opt)
 
     if opt["rank"] == 0:
         util.mkdirs(
@@ -156,6 +155,16 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
         option.save(opt)
 
     opt = option.dict_to_nonedict(opt)
+    logger = setup_logging(opt)
+    
+    seed = opt["train"]["manual_seed"]
+    if seed is None:
+        seed = random.randint(1, 10000)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
     train_loader, test_loader = create_data_loaders(opt, logger)
 
     model = define_Model(opt)
@@ -165,15 +174,7 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    seed = opt["train"]["manual_seed"]
-    if seed is None:
-        seed = random.randint(1, 10000)
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-
-    for epoch in range(2000000):
+    for epoch in range(4000000):
         if opt["dist"] and train_loader.sampler is not None:
             train_loader.sampler.set_epoch(epoch)
             dist.barrier()
@@ -196,10 +197,8 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
             model.optimize_parameters(current_step)
             model.update_learning_rate(current_step)
 
-            if (
-                current_step % opt["train"]["checkpoint_print"] == 0
-                and opt["rank"] == 0
-            ):
+            if (current_step % opt["train"]["checkpoint_print"] == 0
+                and opt["rank"] == 0):
                 logs = model.current_log()
                 message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(
                     epoch, current_step, model.current_learning_rate()
@@ -236,11 +235,12 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     local_psnr_sum += current_psnr
                     local_count += 1
 
-                    logger.info(
-                        "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
-                            local_count, image_name_ext, current_psnr
+                    if opt["rank"] == 0:
+                        logger.info(
+                            "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
+                                local_count, image_name_ext, current_psnr
+                            )
                         )
-                    )
 
                 if opt["dist"]:
                     local_psnr_sum_tensor = torch.tensor(

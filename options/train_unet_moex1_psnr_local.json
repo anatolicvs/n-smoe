@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v2_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -93,9 +93,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 5000           // for testing
+        , "checkpoint_test": 100000           // for testing
         , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 200           // for print
+        , "checkpoint_print": 500           // for print
       }
   }
   
