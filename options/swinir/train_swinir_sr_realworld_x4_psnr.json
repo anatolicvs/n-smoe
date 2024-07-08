@@ -71,6 +71,7 @@
     , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
     , "G_scheduler_milestones": [500000, 800000, 900000, 950000, 1000000]
     , "G_scheduler_gamma": 0.5
+    
 
     , "G_regularizer_orthstep": null    // unused
     , "G_regularizer_clipstep": null    // unused

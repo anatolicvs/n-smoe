@@ -253,7 +253,7 @@ class ModelGAN(ModelBase):
                     self.G_optimizer,
                     mode="min",
                     patience=self.opt_train["G_scheduler_lr_patience"],
-                    factor=0.1,
+                    factor=self.opt_train["G_scheduler_lr_factor"],
                     verbose=True,
                     min_lr=self.opt_train["G_scheduler_lr_min"],
                 )

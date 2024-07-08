@@ -15,9 +15,9 @@
         
     , "path": {
       "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
-      , "pretrained_netG": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_G.pth"  // path of pretrained model
-      , "pretrained_netD": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_D.pth"  // path of pretrained model
-      , "pretrained_netE": null // "/work/pb035507/superresolution/f_u_moe_muller__sr_gan_x4_v1_color/models/5000_E.pth"  // path of pretrained model
+      , "pretrained_netG": "/home/ozkan/works/n-smoe/superresolution/unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu/models/100000_G.pth"
+      , "pretrained_netD": null 
+      , "pretrained_netE": null 
       }
   
       , "datasets": {
