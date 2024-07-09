@@ -25,8 +25,8 @@ JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
 NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
-GPUS=1
-TIME="30:00:00"
+GPUS=2
+TIME="32:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -57,9 +57,9 @@ sbatch <<-EOT
 
 echo "Starting job at: $(date)"
 nvidia-smi
-echo "Attempting to bind SquashFS container..."
-apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif python -u $PWD/main_train_gan.py --opt=$OPTION_PATH
-echo "Job completed at: $(date)"
+
+apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 EOT
 
 echo "Job submission complete. Monitor job with squeue or check output/error files."

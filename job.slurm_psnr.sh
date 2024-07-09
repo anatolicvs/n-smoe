@@ -71,10 +71,16 @@ nvidia-smi
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
 
-apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
+
+module load Python/3.10.4
+source $HOME/venv/bin/activate
+
+torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
+
+# apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
+#   torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
 
 echo "Job completed at: $(date)"
 EOT
 
-echo "Job submission complete. Monitor job with squeue or check output/error files."
+echo "Job submission complete."
