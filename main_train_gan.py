@@ -104,7 +104,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
-    parser.add_argument("--dist", default=False, action="store_true")
+    parser.add_argument("--dist", default=True, action="store_true")
     parser.add_argument("--visulize", type=bool, default=False)
 
     args = parser.parse_args()

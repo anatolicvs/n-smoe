@@ -25,7 +25,8 @@ JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
 NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
-GPUS=2
+GPUS=4
+MEMORY="32G"
 TIME="32:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
@@ -33,7 +34,6 @@ MAIL_USER="aytac@linux.com"
 OUTPUT_DIR="/home/pb035507/slurm/output"
 ERROR_DIR="/home/pb035507/slurm/error"
 WORKDIR="/hpcwork/p0021791"
-
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
 
 PARTITION="c23g"
@@ -55,11 +55,22 @@ sbatch <<-EOT
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-echo "Starting job at: $(date)"
+echo "Starting job at: \$(date)"
 nvidia-smi
 
-apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+
+
+module load Python/3.10.4
+source $HOME/venv/bin/activate
+
+torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
+
+# apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
+#   torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
+
+echo "Job completed at: $(date)"
 EOT
 
-echo "Job submission complete. Monitor job with squeue or check output/error files."
+echo "Job submission complete."

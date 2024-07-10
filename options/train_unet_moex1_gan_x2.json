@@ -1,7 +1,7 @@
 {
     "task": "unet_unet_moex1_sr_gan_v1_x2_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
-    , "gpu_ids": [0]
+    , "gpu_ids": [0, 1, 2, 3]
     
     , "scale": 2       
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/15000_G.pth"
+      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -141,7 +141,7 @@
         , "E_param_strict": true
     
         , "checkpoint_test": 100000           
-        , "checkpoint_save": 5000        
-        , "checkpoint_print": 500          
+        , "checkpoint_save": 7000        
+        , "checkpoint_print": 1000          
       }
     }
