@@ -17,6 +17,8 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
         _init_dist_slurm(backend, **kwargs)
     else:
         raise ValueError(f"Invalid launcher type: {launcher}")
+    
+    torch.cuda.synchronize()
 
 
 def _init_dist_pytorch(backend, **kwargs):

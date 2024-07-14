@@ -7,6 +7,7 @@ import random
 import numpy as np
 import torch
 import torch.distributed as dist
+import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 
@@ -19,7 +20,7 @@ from utils_n.utils_dist import init_dist
 
 def initialize_distributed(opt):
     if opt["dist"]:
-        init_dist("pytorch")
+        init_dist("pytorch", backend="nccl")
         opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
         opt["rank"] = int(os.environ.get("LOCAL_RANK", 0))
         torch.cuda.set_device(opt["rank"])
@@ -105,12 +106,12 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
     parser.add_argument("--dist", default=True, action="store_true")
-    parser.add_argument("--visulize", type=bool, default=False)
+    parser.add_argument("--visualize", type=bool, default=False)
 
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
-    opt["visulize"] = args.visulize
+    opt["visualize"] = args.visualize
     opt = initialize_distributed(opt)
    
     if opt["rank"] == 0:
@@ -158,7 +159,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     for epoch in range(4000000):  # keep running
         if opt["dist"] and train_loader.sampler is not None:
             train_loader.sampler.set_epoch(epoch)
-            dist.barrier()  # Ensure all processes start the epoch simultaneously
+            dist.barrier()
 
         for i, train_data in enumerate(train_loader):
             if train_data is None:
@@ -170,26 +171,26 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
 
             model.feed_data(train_data)
 
-            if opt["visulize"]:
+            if opt["visualize"]:
                 model.visualize_data()
 
             model.optimize_parameters(current_step)
             model.update_learning_rate(current_step)
 
             if (current_step % opt["train"]["checkpoint_print"] == 0 and opt["rank"] == 0):
-                logs = model.current_log()  # such as loss
+                logs = model.current_log()
                 message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(epoch, current_step, model.current_learning_rate())
-                for k, v in logs.items():  # merge log information into message
+                for k, v in logs.items(): 
                     message += "{:s}: {:.3e} ".format(k, v)
                 logger.info(message)
 
             if current_step % opt["train"]["checkpoint_save"] == 0 and opt["rank"] == 0:
                 logger.info("Saving the model.")
                 model.save(current_step)
-                dist.barrier()  # Ensure all processes wait until model saving is complete
+                dist.barrier()
 
             if opt["dist"]:
-                dist.barrier()  # Ensure all processes are synchronized before next iteration
+                dist.barrier()
 
             if current_step % opt["train"]["checkpoint_test"] == 0:
                 local_psnr_sum = 0.0
@@ -234,11 +235,10 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
                             logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
 
                 if opt["dist"]:
-                    dist.barrier()  # Ensure all processes wait until PSNR computation is complete
+                    dist.barrier()
 
 if __name__ == "__main__":
     main()
-
 # if current_step % opt["train"]["checkpoint_test"] == 0 and opt["rank"] == 0:
 
 #     avg_psnr = 0.0
