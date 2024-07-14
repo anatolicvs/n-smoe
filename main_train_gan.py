@@ -239,6 +239,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
 
 if __name__ == "__main__":
     main()
+    
 # if current_step % opt["train"]["checkpoint_test"] == 0 and opt["rank"] == 0:
 
 #     avg_psnr = 0.0
