@@ -66,13 +66,13 @@ nvidia-smi
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
 
-module load Python/3.10.4
-source $HOME/venv/bin/activate
-
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
     torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 else
+  module load Python/3.10.4
+  source $HOME/venv/bin/activate
+
   torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 fi
 
