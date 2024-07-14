@@ -1,12 +1,17 @@
 #!/bin/bash
 
-while getopts ":m:o:" opt; do
+USE_APPTAINER=false
+
+while getopts ":m:o:a:" opt; do
   case $opt in
     m)
       MODEL_NAME=$OPTARG
       ;;
     o)
       OPTION_PATH=$OPTARG
+      ;;
+    a)
+      USE_APPTAINER=true
       ;;
     \?)
       echo "Invalid option: -$OPTARG" >&2
@@ -75,10 +80,12 @@ export NCCL_DEBUG_SUBSYS=ALL
 module load Python/3.10.4
 source $HOME/venv/bin/activate
 
-torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
-
-# apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $HOME/cuda_latest.sif \
-#   torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
+if [ "$USE_APPTAINER" = true ]; then
+  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
+else
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
+fi
 
 echo "Job completed at: $(date)"
 EOT

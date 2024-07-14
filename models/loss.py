@@ -3,7 +3,7 @@ import torch.nn as nn
 import torchvision
 from torch.nn import functional as F
 from torch import autograd as autograd
-from torchvision.models import VGG19_Weights
+from torchvision.models import VGG19_BN_Weights
 
 """
 Sequential(
@@ -52,13 +52,14 @@ Sequential(
 # Perceptual loss
 # --------------------------------------------
 class VGGFeatureExtractor(nn.Module):
-    def __init__(self, feature_layer=[2,7,16,25,34], use_input_norm=True, use_range_norm=False):
+    def __init__(self, feature_layer=[2, 7, 16, 25, 34], use_input_norm=True, use_range_norm=False):
         super(VGGFeatureExtractor, self).__init__()
         '''
         use_input_norm: If True, x: [0, 1] --> (x - mean) / std
         use_range_norm: If True, x: [0, 1] --> x: [-1, 1]
         '''
-        model = torchvision.models.vgg19(weights=VGG19_Weights.DEFAULT)
+        model = torchvision.models.vgg19_bn(
+            weights=VGG19_BN_Weights.IMAGENET1K_V1)
         self.use_input_norm = use_input_norm
         self.use_range_norm = use_range_norm
         if self.use_input_norm:
@@ -71,9 +72,11 @@ class VGGFeatureExtractor(nn.Module):
             self.features = nn.Sequential()
             feature_layer = [-1] + feature_layer
             for i in range(len(feature_layer)-1):
-                self.features.add_module('child'+str(i), nn.Sequential(*list(model.features.children())[(feature_layer[i]+1):(feature_layer[i+1]+1)]))
+                self.features.add_module('child'+str(i), nn.Sequential(
+                    *list(model.features.children())[(feature_layer[i]+1):(feature_layer[i+1]+1)]))
         else:
-            self.features = nn.Sequential(*list(model.features.children())[:(feature_layer + 1)])
+            self.features = nn.Sequential(
+                *list(model.features.children())[:(feature_layer + 1)])
 
         print(self.features)
 
@@ -100,9 +103,10 @@ class PerceptualLoss(nn.Module):
     """VGG Perceptual loss
     """
 
-    def __init__(self, feature_layer=[2,7,16,25,34], weights=[0.1,0.1,1.0,1.0,1.0], lossfn_type='l1', use_input_norm=True, use_range_norm=False):
+    def __init__(self, feature_layer=[2, 7, 16, 25, 34], weights=[0.1, 0.1, 1.0, 1.0, 1.0], lossfn_type='l1', use_input_norm=True, use_range_norm=False):
         super(PerceptualLoss, self).__init__()
-        self.vgg = VGGFeatureExtractor(feature_layer=feature_layer, use_input_norm=use_input_norm, use_range_norm=use_range_norm)
+        self.vgg = VGGFeatureExtractor(
+            feature_layer=feature_layer, use_input_norm=use_input_norm, use_range_norm=use_range_norm)
         self.lossfn_type = lossfn_type
         self.weights = weights
         if self.lossfn_type == 'l1':
@@ -132,6 +136,8 @@ class PerceptualLoss(nn.Module):
 # --------------------------------------------
 # GAN loss: gan, ragan
 # --------------------------------------------
+
+
 class GANLoss(nn.Module):
     def __init__(self, gan_type, real_label_val=1.0, fake_label_val=0.0):
         super(GANLoss, self).__init__()
@@ -156,7 +162,8 @@ class GANLoss(nn.Module):
 
             self.loss = softplusgan_loss
         else:
-            raise NotImplementedError('GAN type [{:s}] is not found'.format(self.gan_type))
+            raise NotImplementedError(
+                'GAN type [{:s}] is not found'.format(self.gan_type))
 
     def get_target_label(self, input, target_is_real):
         if self.gan_type in ['wgan', 'softplusgan']:
@@ -215,7 +222,6 @@ class CharbonnierLoss(nn.Module):
         diff = x - y
         loss = torch.mean(torch.sqrt((diff * diff) + self.eps))
         return loss
-
 
 
 def r1_penalty(real_pred, real_img):
