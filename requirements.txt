@@ -1,9 +1,7 @@
-# Basic Python tools
 pip>=23.0
 setuptools
 wheel
 
-# Commonly used packages for data handling and computation
 numpy
 scipy
 cython
@@ -30,12 +28,10 @@ colorspacious
 tqdm
 debugpy
 
-# PyTorch and related libraries (nightly versions)
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 
-# Machine learning and deep learning packages
 pandas
 wandb
 scikit-learn
@@ -78,18 +74,3 @@ datashader
 holoviews
 hvplot
 jupyterlab
-
-# RAPIDS and related GPU-accelerated libraries (specific versions for compatibility)
---extra-index-url https://pypi.anaconda.org/rapidsai-wheels-nightly/simple
-cudf-cu12>=24.8.0a0,<=24.8
-dask-cudf-cu12>=24.8.0a0,<=24.8
-cuml-cu12>=24.8.0a0,<=24.8
-cugraph-cu12>=24.8.0a0,<=24.8
-cuspatial-cu12>=24.8.0a0,<=24.8
-cuproj-cu12>=24.8.0a0,<=24.8
-cuxfilter-cu12>=24.8.0a0,<=24.8
-cucim-cu12>=24.8.0a0,<=24.8
-pylibraft-cu12>=24.8.0a0,<=24.8
-raft-dask-cu12>=24.8.0a0,<=24.8
-cuvs-cu12>=24.8.0a0,<=24.8
-dask-cuda>=24.8.0a0,<=24.8

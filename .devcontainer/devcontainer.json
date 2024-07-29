@@ -29,7 +29,7 @@
                 "ms-toolsai.jupyter-slideshow",
                 "ms-python.autopep8",
                 "ms-python.vscode-pylance",
-                "ms-vscode.cpptools"  # Official Microsoft C++ extension
+                "ms-vscode.cpptools"
             ]
         }
     },
@@ -44,5 +44,8 @@
         "--gpus=all",
         "--network=host"
     ],
-    "postStartCommand": "ln -s /mnt/wsl /wsl || true"
+    "postStartCommand": [
+        "ln -s /mnt/wsl /wsl || true",
+        "eval \"$(ssh-agent -s)\" && ssh-add ~/.ssh/github_id_ed25519"
+    ]
 }

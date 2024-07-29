@@ -256,7 +256,7 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         return img_H
 
     def apply_degradation(self, img, fname):
-        chosen_model = random.choice(["bsrgan_plus"])
+        chosen_model = random.choice(["dpsr"])
         kernel = self.select_kernel()
         img_L, img_H = {
             "dpsr": lambda x: blindsr.dpsr_degradation(x, kernel, self.sf),

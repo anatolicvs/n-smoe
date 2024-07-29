@@ -388,7 +388,8 @@ def main(json_path='/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         upsample_mode=netG_dpsr["upsample_mode"],
     )
 
-    model_dpsr.load_state_dict(torch.load(dpsr_state_path), strict=True)
+    model_dpsr.load_state_dict(torch.load(
+        dpsr_state_path, weights_only=True), strict=True)
     model_dpsr.eval()
     for k, v in model_dpsr.named_parameters():
         v.requires_grad = False
@@ -397,7 +398,7 @@ def main(json_path='/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     model_esrgan = RRDB(in_nc=3, out_nc=3, nc=64, nb=23, gc=32,
                         upscale=opt['scale'], act_mode='L', upsample_mode='upconv')
     model_esrgan.load_state_dict(torch.load(
-        esrgan), strict=False)  # strict=False
+        esrgan, weights_only=True), strict=False)  # strict=False
     model_esrgan.eval()
     for k, v in model_esrgan.named_parameters():
         v.requires_grad = False
