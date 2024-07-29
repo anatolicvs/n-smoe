@@ -135,28 +135,28 @@ if __name__ == "__main__":
 
     # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    device = "cuda"
+    # device = "cuda"
 
-    def extract_blocks(img_tensor, block_size, overlap):
-        blocks = []
-        step = block_size - overlap
-        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
-            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-                block = img_tensor[:, i : i + block_size, j : j + block_size]
-                blocks.append(block)
-        return torch.stack(blocks)
+    # def extract_blocks(img_tensor, block_size, overlap):
+    #     blocks = []
+    #     step = block_size - overlap
+    #     for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+    #         for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+    #             block = img_tensor[:, i : i + block_size, j : j + block_size]
+    #             blocks.append(block)
+    #     return torch.stack(blocks)
 
-    ch = 3
-    w = 256
-    h = 256
+    # ch = 3
+    # w = 256
+    # h = 256
 
-    image_tensor = torch.randn(ch, w, h).to(device=device)
+    # image_tensor = torch.randn(ch, w, h).to(device=device)
 
-    phw = 16
-    overlap = 14
+    # phw = 16
+    # overlap = 14
 
-    blocks = extract_blocks(image_tensor, phw, overlap)
-    image_tensor = image_tensor.unsqueeze(0)
+    # blocks = extract_blocks(image_tensor, phw, overlap)
+    # image_tensor = image_tensor.unsqueeze(0)
 
     # encoder_cfg = EncoderConfig(
     #     embed_dim=32,
@@ -202,27 +202,27 @@ if __name__ == "__main__":
     # output = model(blocks, image_tensor.shape)
     # print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 
-    encoder_cfg = EncoderConfig(
-        model_channels=16,  # Start with fewer channels to avoid too many parameters with small inputs
-        num_res_blocks=4,  # Fewer residual blocks to prevent over-parameterization
-        attention_resolutions=[16, 8],  # Apply attention at higher resolutions only
-        dropout=0.2,  # Increased dropout for more regularization
-        num_groups=8,  # Maintain group normalization to stabilize training with small batch sizes
-        scale_factor=8,  # Reduced scale factor to limit downsampling given the small input size
-        num_heads=4,  # Fewer heads in attention mechanisms to balance model complexity
-        num_head_channels=16,  # Fewer channels per head to reduce complexity and focus on essential features
-        use_new_attention_order=True,
-        use_checkpoint=True,  # Reduce memory usage since model is smaller
-        resblock_updown=True,  # Disable resblock upsampling and downsampling
-        channel_mult=(
-            1,
-            2,
-            4,
-            8,
-        ),  # Smaller channel multiplier as fewer stages of feature enhancement are needed
-        resample_2d=True,  # Avoid resampling in 2D to preserve spatial dimensions
-        pool="attention",  # Use attention pooling to focus on relevant features without spatial reduction
-    )
+    # encoder_cfg = EncoderConfig(
+    #     model_channels=16,  # Start with fewer channels to avoid too many parameters with small inputs
+    #     num_res_blocks=4,  # Fewer residual blocks to prevent over-parameterization
+    #     attention_resolutions=[16, 8],  # Apply attention at higher resolutions only
+    #     dropout=0.2,  # Increased dropout for more regularization
+    #     num_groups=8,  # Maintain group normalization to stabilize training with small batch sizes
+    #     scale_factor=8,  # Reduced scale factor to limit downsampling given the small input size
+    #     num_heads=4,  # Fewer heads in attention mechanisms to balance model complexity
+    #     num_head_channels=16,  # Fewer channels per head to reduce complexity and focus on essential features
+    #     use_new_attention_order=True,
+    #     use_checkpoint=True,  # Reduce memory usage since model is smaller
+    #     resblock_updown=True,  # Disable resblock upsampling and downsampling
+    #     channel_mult=(
+    #         1,
+    #         2,
+    #         4,
+    #         8,
+    #     ),  # Smaller channel multiplier as fewer stages of feature enhancement are needed
+    #     resample_2d=True,  # Avoid resampling in 2D to preserve spatial dimensions
+    #     pool="attention",  # Use attention pooling to focus on relevant features without spatial reduction
+    # )
 
     # encoder = Encoder(encoder_cfg, d_in=3, d_out=72).cuda()
     # input_tensor = rand(1, 3, 32, 32).cuda()
@@ -235,29 +235,29 @@ if __name__ == "__main__":
     # output = encoder(input_tensor)
     # print(output.shape)
 
-    kernel = 9
-    sf = 1.0
-    decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
+    # kernel = 9
+    # sf = 1.0
+    # decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
 
-    z = 2 * kernel + 4 * kernel + kernel
+    # z = 2 * kernel + 4 * kernel + kernel
 
-    autoenocer_cfg = AutoencoderConfig(
-        EncoderConfig=encoder_cfg,
-        DecoderConfig=decoder_cfg,
-        d_in=ch,
-        d_out=z,
-        phw=phw,
-        overlap=overlap,
-    )
+    # autoenocer_cfg = AutoencoderConfig(
+    #     EncoderConfig=encoder_cfg,
+    #     DecoderConfig=decoder_cfg,
+    #     d_in=ch,
+    #     d_out=z,
+    #     phw=phw,
+    #     overlap=overlap,
+    # )
 
-    model = Autoencoder(cfg=autoenocer_cfg).cuda()
+    # model = Autoencoder(cfg=autoenocer_cfg).cuda()
 
-    print(model)
+    # print(model)
 
-    params = sum(p.numel() for p in model.parameters())
-    print(f"Total number of parameters: {params}")
+    # params = sum(p.numel() for p in model.parameters())
+    # print(f"Total number of parameters: {params}")
 
-    with torch.no_grad():
-        output = model(blocks, image_tensor.shape)
-        print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+    # with torch.no_grad():
+    #     output = model(blocks, image_tensor.shape)
+    #     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
     # unittest.main()

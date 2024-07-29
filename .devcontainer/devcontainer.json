@@ -1,0 +1,17 @@
+{
+    "name": "CUDA Development",
+    "image": "aytacozkan/cuda:latest",
+    "forwardPorts": [5678],
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "terminal.integrated.shell.linux": "/bin/bash",
+                "python.defaultInterpreterPath": "/opt/miniconda/envs/venv/bin/python"
+            },
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    },
+    "remoteUser": "root"
+}

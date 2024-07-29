@@ -30,13 +30,26 @@ RUN pip3 install --pre torch torchvision torchaudio --index-url https://download
 RUN pip install pandas wandb -U scikit-learn timm lightning['extra'] tensorboard \
                                pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
                                torchensemble torchattacks torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
-                               "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch
+                               "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch \
+                               datashader holoviews hvplot jupyterlab
 
-COPY ./cu/block_ops.cu /usr/src/
-COPY ./cu/build_ops.py /usr/src/
-COPY ./cu/build.sh /usr/src/
+RUN pip install debugpy
 
-RUN chmod +x /usr/src/build.sh
-RUN /usr/src/build.sh
+RUN pip install \
+    --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+    "cudf-cu12>=24.8.0a0,<=24.8" "dask-cudf-cu12>=24.8.0a0,<=24.8" \
+    "cuml-cu12>=24.8.0a0,<=24.8" "cugraph-cu12>=24.8.0a0,<=24.8" \
+    "cuspatial-cu12>=24.8.0a0,<=24.8" "cuproj-cu12>=24.8.0a0,<=24.8" \
+    "cuxfilter-cu12>=24.8.0a0,<=24.8" "cucim-cu12>=24.8.0a0,<=24.8" \
+    "pylibraft-cu12>=24.8.0a0,<=24.8" "raft-dask-cu12>=24.8.0a0,<=24.8" \
+    "cuvs-cu12>=24.8.0a0,<=24.8" "pylibraft-cu12>=24.8.0a0,<=24.8" \
+    "dask-cuda>=24.8.0a0,<=24.8"
+
+# COPY ./cu/block_ops.cu /usr/src/
+# COPY ./cu/build_ops.py /usr/src/
+# COPY ./cu/build.sh /usr/src/
+
+# RUN chmod +x /usr/src/build.sh
+# RUN /usr/src/build.sh
 
 ENTRYPOINT ["python"]
