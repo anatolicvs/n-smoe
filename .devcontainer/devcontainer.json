@@ -1,5 +1,5 @@
 {
-    "name": "CUDA Development",
+    "name": "CUDA",
     "image": "aytacozkan/cuda:latest",
     "forwardPorts": [5678],
     "customizations": {
@@ -29,7 +29,18 @@
                 "ms-toolsai.jupyter-slideshow",
                 "ms-python.autopep8",
                 "ms-python.vscode-pylance",
-                "ms-vscode.cpptools"
+                "ms-vscode.cpptools",
+                "julialang.language-julia",
+                "ms-toolsai.jupyter-cell-tags",
+                "ms-toolsai.jupyter-notebook-renderers",
+                "mathworks.matlab",
+                "modular.mojo",
+                "analytic-signal-limited.pdf-preview",
+                "ms-vscode-remote.remote-tunnels",
+                "ms-vscode-remote.remote-development",
+                "ms-vscode-remote.remote-explorer",
+                "ms-vscode-remote.remote-repositories",
+                "vscodevim.vim"
             ]
         }
     },
@@ -37,7 +48,10 @@
     "mounts": [
         "source=/home/ozkan,target=/home/ozkan,type=bind,consistency=cached",
         "source=/mnt/e,target=/mnt/e,type=bind,consistency=cached",
-        "source=/mnt/d,target=/mnt/d,type=bind,consistency=cached"
+        "source=/mnt/d,target=/mnt/d,type=bind,consistency=cached",
+        "source=vscode-extensions,target=/root/.vscode-server/extensions,type=volume",
+        "source=vscode-user-data,target=/root/.vscode-server/data,type=volume",
+        "source=user-home,target=/root,type=volume"
     ],
     "runArgs": [
         "--privileged",
@@ -46,6 +60,6 @@
     ],
     "postStartCommand": [
         "ln -s /mnt/wsl /wsl || true",
-        "eval \"$(ssh-agent -s)\" && ssh-add ~/.ssh/github_id_ed25519"
+        "eval \"$(ssh-agent -s)\" && ssh-add /home/ozkan/.ssh/github_id_ed25519"
     ]
 }
