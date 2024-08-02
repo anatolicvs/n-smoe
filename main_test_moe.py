@@ -190,6 +190,93 @@ class SRResNet(nn.Module):
         return x
 
 
+def visualize_with_segmentation(images, titles):
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from torchvision.transforms import ToTensor
+    import numpy as np
+    import segmentation_models_pytorch as smp
+    import torch
+
+    fig = plt.figure(figsize=(15, 10))
+    gs = GridSpec(3, 5, height_ratios=[2, 2, 1], width_ratios=[
+                  2, 1, 1, 1, 1], hspace=0, wspace=0)
+
+    model = smp.Unet(encoder_name="resnext101_32x48d", encoder_weights="instagram",
+                     in_channels=1, classes=4, activation='softmax')
+    model.eval()
+
+    ax_img = fig.add_subplot(gs[0:2, 0])
+    ax_img.imshow(images[0], cmap='gray')
+    ax_img.axis('off')
+    ax_img.set_title(titles[0], fontsize=15, weight='bold')
+
+    for i in range(1, len(images)):
+        ax_crop = fig.add_subplot(gs[0, i])
+        ax_crop.imshow(images[i], cmap='gray')
+        ax_crop.axis('off')
+
+        tensor_img = ToTensor()(images[i]).unsqueeze(0)
+        with torch.no_grad():
+            mask = model(tensor_img)
+        mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
+
+        ax_seg = fig.add_subplot(gs[1, i])
+        ax_seg.imshow(np.argmax(mask, axis=2), cmap='viridis')
+        ax_seg.axis('off')
+
+        ax_title = fig.add_subplot(gs[2, i])
+        ax_title.text(0.6, 0.6, titles[i], fontsize=12,
+                      weight='bold', va='center', ha='center')
+        ax_title.axis('off')
+
+    plt.tight_layout(pad=0)
+    plt.subplots_adjust(wspace=0, hspace=0)
+    plt.show()
+
+
+# def visualize_with_segmentation(images, titles):
+#     import matplotlib.pyplot as plt
+#     from matplotlib.gridspec import GridSpec
+#     from torchvision.transforms import ToTensor
+#     import numpy as np
+#     import segmentation_models_pytorch as smp
+#     import torch
+
+#     fig = plt.figure(figsize=(20, 10))
+#     gs = GridSpec(3, 5, height_ratios=[1, 1, 1], width_ratios=[
+#                   3, 1, 1, 1, 1], hspace=0, wspace=0)
+
+#     model = smp.Unet(encoder_name="resnext101_32x48d",
+#                      encoder_weights="instagram", in_channels=1, classes=64, activation=None)
+#     model.eval()
+
+#     ax_img = fig.add_subplot(gs[:, 0])
+#     ax_img.imshow(images[0], cmap='gray')
+#     ax_img.axis('off')
+#     ax_img.set_title(titles[0], fontsize=15, weight='bold')
+
+#     for i in range(1, len(images)):
+
+#         ax_crop = fig.add_subplot(gs[0, i])
+#         ax_crop.imshow(images[i], cmap='gray')
+#         ax_crop.axis('off')
+#         ax_crop.set_title(titles[i], fontsize=12, weight='bold')
+
+#         tensor_img = ToTensor()(images[i]).unsqueeze(0)
+#         with torch.no_grad():
+#             mask = model(tensor_img)
+#         mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
+
+#         ax_seg = fig.add_subplot(gs[1:, i])
+#         ax_seg.imshow(np.argmax(mask, axis=2), cmap='viridis')
+#         ax_seg.axis('off')
+
+#     plt.tight_layout()
+#     plt.subplots_adjust(wspace=0, hspace=0)
+#     plt.show()
+
+
 def visualize_data(images, titles):
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
@@ -407,7 +494,10 @@ def main(json_path='/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     avg_psnr = 0.0
     idx = 0
 
-    titles = ['Noisy Low Resolution', 'Ground Truth',
+    # titles = ['Noisy Low Resolution', 'Ground Truth',
+    #           'N-SMoE', "DPSR"]
+
+    titles = ["High Resolution", "Low Resolution Crop", "High Resolution Crop",
               'N-SMoE', "DPSR"]
 
     with torch.no_grad():
@@ -440,17 +530,25 @@ def main(json_path='/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
             model.test()
 
             visuals = model.current_visuals()
-            L_img = util.tensor2uint(visuals['L'])
-            E_img = util.tensor2uint(visuals['E'])
-            H_img = util.tensor2uint(visuals['H'])
+            L_crop_img = util.tensor2uint(visuals['L'])
+            E_crop_img = util.tensor2uint(visuals['E'])
+            H_crop_img = util.tensor2uint(visuals['H'])
 
-            visualize_data([L_img, H_img, E_img, E_img_dpsr], titles)
+            img_H = util.imread_uint(test_data['H_path'][0], n_channels=1)
+            img_H = util.modcrop(img_H, border)
+
+            # visualize_data(
+            #     [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
+
+            visualize_with_segmentation(
+                [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
 
             save_img_path = os.path.join(
                 img_dir, '{:s}_{:d}.png'.format(img_name, current_step))
-            util.imsave(E_img, save_img_path)
+            util.imsave(E_crop_img, save_img_path)
 
-            current_psnr = util.calculate_psnr(E_img, H_img, border=border)
+            current_psnr = util.calculate_psnr(
+                E_crop_img, H_crop_img, border=border)
 
             logger.info(
                 '{:->4d}--> {:>10s} | {:<4.2f}dB'.format(idx, image_name_ext, current_psnr))

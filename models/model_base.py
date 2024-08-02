@@ -13,7 +13,8 @@ class ModelBase:
             torch.cuda.set_device(rank)
             self.device = torch.device(f"cuda:{rank}")
         else:
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu")
         self.is_train = opt["is_train"]
         self.schedulers = []
 
@@ -79,7 +80,8 @@ class ModelBase:
         network = network.to(self.device)
         if self.opt["dist"]:
             network = DistributedDataParallel(
-                network, device_ids=[self.opt["rank"]], output_device=self.opt["rank"]
+                network, device_ids=[self.opt["rank"]
+                                     ], output_device=self.opt["rank"]
             )
             if self.opt.get("use_static_graph", False):
                 print(
@@ -135,12 +137,12 @@ class ModelBase:
     def load_network(self, load_path, network, strict=True, param_key="params"):
         network = self.get_bare_model(network)
         if strict:
-            state_dict = torch.load(load_path)
+            state_dict = torch.load(load_path, weights_only=True)
             if param_key in state_dict.keys():
                 state_dict = state_dict[param_key]
             network.load_state_dict(state_dict, strict=strict)
         else:
-            state_dict_old = torch.load(load_path)
+            state_dict_old = torch.load(load_path, weights_only=True)
             if param_key in state_dict_old.keys():
                 state_dict_old = state_dict_old[param_key]
             state_dict = network.state_dict()
@@ -171,7 +173,8 @@ class ModelBase:
         netG_params = dict(netG.named_parameters())
         netE_params = dict(self.netE.named_parameters())
         for k in netG_params.keys():
-            netE_params[k].data.mul_(decay).add_(netG_params[k].data, alpha=1 - decay)
+            netE_params[k].data.mul_(decay).add_(
+                netG_params[k].data, alpha=1 - decay)
 
     def merge_bnorm_train(self):
         merge_bn(self.netG)

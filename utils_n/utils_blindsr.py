@@ -281,6 +281,8 @@ def dpsr_degradation(x, k, sf=3, lq_patchsize=64):
     lq, hq = bicubic_degradation(x, sf=sf)
     lq = ndimage.filters.convolve(lq, np.expand_dims(k, axis=2), mode='wrap')
 
+    lq, hq = random_crop(lq, hq, sf, lq_patchsize)
+
     return lq, hq
 
 
@@ -734,8 +736,8 @@ def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=False, lq_pat
     img = img.copy()[:w1 - w1 % sf, :h1 - h1 % sf, ...]  # mod crop
     h, w = img.shape[:2]
 
-    # if h < lq_patchsize*sf or w < lq_patchsize*sf:
-    #     raise ValueError(f'img size ({h1}X{w1}) is too small!')
+    if h < lq_patchsize*sf or w < lq_patchsize*sf:
+        raise ValueError(f'img size ({h1}X{w1}) is too small!')
 
     if use_sharp:
         img = add_sharpening(img)
@@ -799,7 +801,7 @@ def degradation_bsrgan_plus(img, sf=4, shuffle_prob=0.5, use_sharp=False, lq_pat
     img = add_JPEG_noise(img)
 
     # random crop
-    # img, hq = random_crop(img, hq, sf, lq_patchsize)
+    img, hq = random_crop(img, hq, sf, lq_patchsize)
 
     return img, hq
 

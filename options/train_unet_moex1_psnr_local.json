@@ -39,9 +39,9 @@
         , "test": {
           "name": "test_dataset"            // just name
           , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-          , "lq_patchsize": 220
+          , "lq_patchsize": 64
           , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/braints/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/oct-stare-and-drive/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": false
           , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing.pkl"

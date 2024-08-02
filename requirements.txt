@@ -74,3 +74,4 @@ datashader
 holoviews
 hvplot
 jupyterlab
+mahotas

@@ -39,7 +39,11 @@ RUN pip install pandas wandb -U scikit-learn timm lightning['extra'] tensorboard
                                "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch \
                                datashader holoviews hvplot jupyterlab
 
-RUN pip install debugpy
+RUN pip install debugpy mahotas motile
+
+conda install -c conda-forge python-elf
+
+RUN conda install -c conda-forge -c funkelab -c gurobi ilpy
 
 RUN pip install \
     --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
