@@ -1,4 +1,4 @@
-pip>=23.0
+pip
 setuptools
 wheel
 
@@ -38,16 +38,12 @@ scikit-learn
 timm
 lightning[extra]
 tensorboard
-pytorch-metric-learning
 pytorch-ignite
-pytorch-gradcam
 pytorch-msssim
 pytorchvideo
 torchmetrics
 torch_optimizer
 torchsampler
-torchensemble
-torchattacks
 torchgeometry
 torchio
 piq
