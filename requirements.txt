@@ -1,6 +1,7 @@
 pip
 setuptools
 wheel
+
 numpy
 scipy
 cython
@@ -25,9 +26,8 @@ e3nn
 lpips
 colorspacious
 tqdm
-tyro
+debugpy
 
-# Pre-release versions of torch, torchvision, and torchaudio from the nightly build
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
@@ -38,16 +38,12 @@ scikit-learn
 timm
 lightning[extra]
 tensorboard
-# pytorch-metric-learning
-# pytorch-ignite
-# pytorch-gradcam
-# pytorch-msssim
+pytorch-ignite
+pytorch-msssim
 pytorchvideo
 torchmetrics
 torch_optimizer
-# torchsampler
-torchensemble
-# torchattacks
+torchsampler
 torchgeometry
 torchio
 piq
@@ -64,10 +60,14 @@ pydicom
 jax[cuda12_local] --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 gsplat
 segmentation-models-pytorch
-cupy-cuda12x
 ruamel.yaml
 nerfview
 viser
 icecream
 dahuffman
 vector-quantize-pytorch
+datashader
+holoviews
+hvplot
+jupyterlab
+mahotas

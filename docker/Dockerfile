@@ -1,42 +1,50 @@
-FROM nvidia/cuda:12.4.0-devel-ubuntu22.04
+FROM nvidia/cuda:12.5.1-devel-ubuntu24.04
 
-ENV CUDA_HOME /usr/local/cuda
-ENV PATH /usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
-ENV LD_LIBRARY_PATH /usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}:/opt/miniconda/envs/venv/lib:/opt/miniconda/envs/venv/lib/python3.11/site-packages/torch/lib
-ENV NVIDIA_VISIBLE_DEVICES all
-ENV NVIDIA_DRIVER_CAPABILITIES compute,utility
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/opt/miniconda/bin:${PATH} \
+    LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}:/opt/miniconda/envs/venv/lib:/opt/miniconda/envs/venv/lib/python3.10/site-packages/torch/lib \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility \
+    DEBIAN_FRONTEND=noninteractive
 
-WORKDIR /usr/src/
+WORKDIR /usr/src/app
 
-RUN apt-get update && apt-get install -y build-essential gcc wget bzip2 curl git ffmpeg libsm6 libxext6 ninja-build && rm -rf /var/lib/apt/lists/*
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
 
-RUN wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && bash ~/miniconda.sh -b -p /opt/miniconda && rm ~/miniconda.sh
+RUN apt-get update && apt-get install -y \
+    build-essential gcc wget bzip2 curl git ffmpeg libsm6 libxext6 ninja-build ttf-mscorefonts-installer \
+    && rm -rf /var/lib/apt/lists/*
 
-ENV PATH /opt/miniconda/bin:$PATH
+RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh \
+    && bash ~/miniconda.sh -b -p /opt/miniconda \
+    && rm ~/miniconda.sh
 
-RUN conda create -y --name venv python=3.11
-ENV PATH /opt/miniconda/envs/venv/bin:$PATH
+RUN /opt/miniconda/bin/conda create -y --name venv python=3.10 \
+    && /opt/miniconda/bin/conda clean -afy
 
-RUN echo "source activate venv" >> ~/.bashrc && conda init bash
+RUN echo "source /opt/miniconda/bin/activate venv" >> ~/.bashrc \
+    && /opt/miniconda/bin/conda init bash
 
-RUN nvcc --version
+SHELL ["/bin/bash", "-c"]
 
-RUN pip install --upgrade pip setuptools wheel && \
-    pip install numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image \
-                               beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm
+RUN source /opt/miniconda/bin/activate venv \
+    && pip install --no-cache-dir requests==2.28.1 \
+    && conda install -y -n venv -c conda-forge nifty=1.2.1 python-elf=0.3.0
 
-RUN pip3 install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+RUN source /opt/miniconda/bin/activate venv \
+    && pip install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm \
+    && pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124 \
+    && pip install --no-cache-dir pandas wandb -U scikit-learn timm lightning['extra'] tensorboard \
+    pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
+    torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
+    "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch \
+    datashader holoviews hvplot jupyterlab mahotas
 
-RUN pip install pandas wandb -U scikit-learn timm lightning['extra'] tensorboard \
-                               pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
-                               torchensemble torchattacks torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
-                               "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch
-
-COPY ./cu/block_ops.cu /usr/src/
-COPY ./cu/build_ops.py /usr/src/
-COPY ./cu/build.sh /usr/src/
-
-RUN chmod +x /usr/src/build.sh
-RUN /usr/src/build.sh
+RUN source /opt/miniconda/bin/activate venv \
+    && pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+    "cudf-cu12>=24.8.0a0,<=24.8" "dask-cudf-cu12>=24.8.0a0,<=24.8" "cuml-cu12>=24.8.0a0,<=24.8" "cugraph-cu12>=24.8.0a0,<=24.8" \
+    "cuspatial-cu12>=24.8.0a0,<=24.8" "cuproj-cu12>=24.8.0a0,<=24.8" "cuxfilter-cu12>=24.8.0a0,<=24.8" "cucim-cu12>=24.8.0a0,<=24.8" \
+    "pylibraft-cu12>=24.8.0a0,<=24.8" "raft-dask-cu12>=24.8.0a0,<=24.8" "cuvs-cu12>=24.8.0a0,<=24.8" "pylibraft-cu12>=24.8.0a0,<=24.8" \
+    "dask-cuda>=24.8.0a0,<=24.8"
 
 ENTRYPOINT ["python"]

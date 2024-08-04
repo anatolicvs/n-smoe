@@ -42,11 +42,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         self.lq_patchsize = opt["lq_patchsize"] if "lq_patchsize" in opt else 64
         self.phw = opt["phw"] if "phw" in opt else 32
         self.overlap = opt["overlap"] if "overlap" in opt else 4
-        self.recons_key = (
-            "reconstruction_esc"
-            if self.challenge == "singlecoil"
-            else "reconstruction_rss"
-        )
+
+        self.recons_keys = ['kspace', 'reconstruction_rss']
         self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
 
@@ -146,7 +143,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
 
             lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
             enc_limits_center = int(self.et_query(et_root, lims + ["center"]))
-            enc_limits_max = int(self.et_query(et_root, lims + ["maximum"])) + 1
+            enc_limits_max = int(self.et_query(
+                et_root, lims + ["maximum"])) + 1
 
             padding_left = enc_size[1] // 2 - enc_limits_center
             padding_right = padding_left + enc_limits_max
@@ -188,11 +186,15 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
 
             if fname.endswith(".h5"):
                 with h5py.File(fname, "r") as hf:
-                    img = (
-                        hf[self.recons_key][slice_ind]
-                        if self.recons_key in hf
-                        else None
-                    )
+                    key_to_use = None
+                    for key in self.recons_keys:
+                        if key in hf:
+                            key_to_use = key
+                            break
+                    if key_to_use:
+                        img = hf[key_to_use][slice_ind]
+                    else:
+                        img = None
             elif fname.endswith(".gz") and "t1n" in fname:
                 volume = nibabel.load(fname).get_fdata()
                 best_slice_index = self._get_best_slice(volume)
@@ -205,7 +207,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
                 img = util.imread_uint(fname, self.n_channels)
                 img = util.uint2single(img)
         except PermissionError as e:
-            logging.warning(f"Skipping file {fname} due to PermissionError: {e}")
+            logging.warning(
+                f"Skipping file {fname} due to PermissionError: {e}")
             return None
         except Exception as e:
             logging.warning(f"Skipping file {fname} due to error: {e}")
@@ -244,7 +247,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         if normalized_diff == 0:
             return None
 
-        img_H = (img_H - np.min(img_H)) / (normalized_diff + np.finfo(np.float32).eps)
+        img_H = (img_H - np.min(img_H)) / \
+            (normalized_diff + np.finfo(np.float32).eps)
 
         if img_H.ndim == 2:
             img_H = img_H[:, :, np.newaxis]
@@ -252,13 +256,14 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         return img_H
 
     def apply_degradation(self, img, fname):
-        chosen_model = random.choice(["dpsr", "bsrgan_plus"])
+        chosen_model = random.choice(["dpsr"])
         kernel = self.select_kernel()
         img_L, img_H = {
             "dpsr": lambda x: blindsr.dpsr_degradation(x, kernel, self.sf),
             "bsrgan_plus": lambda x: blindsr.degradation_bsrgan_plus(
-                x, self.sf, self.lq_patchsize
-            ),
+                x, self.sf, self.lq_patchsize),
+            "classic_sr": lambda x: blindsr.classical_degradation(x, kernel, self.sf),
+            "bicubic_degradation": lambda x: blindsr.bicubic_degradation(x, self.sf),
         }[chosen_model](img)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
@@ -287,7 +292,8 @@ class MedicalDatasetSR(torch.utils.data.Dataset):
         step = block_size - overlap
         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-                blocks.append(img_tensor[:, i : i + block_size, j : j + block_size])
+                blocks.append(
+                    img_tensor[:, i: i + block_size, j: j + block_size])
         return torch.stack(blocks)
 
     def __len__(self):

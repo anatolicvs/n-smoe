@@ -18,6 +18,7 @@ from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
+
 def initialize_distributed(opt):
     if opt["dist"]:
         init_dist("pytorch", backend="nccl")
@@ -27,6 +28,7 @@ def initialize_distributed(opt):
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
+
 
 def setup_logging(opt):
     if opt["rank"] == 0:
@@ -39,17 +41,21 @@ def setup_logging(opt):
         logger = None
     return logger
 
+
 def create_data_loaders(opt, logger):
     train_loader, test_loader = None, None
 
     for phase, dataset_opt in opt["datasets"].items():
         if phase == "train":
             train_set = define_Dataset(dataset_opt)
-            train_size = int(math.ceil(len(train_set) / dataset_opt["dataloader_batch_size"]))
+            train_size = int(math.ceil(len(train_set) /
+                             dataset_opt["dataloader_batch_size"]))
             if opt["rank"] == 0:
-                logger.info(f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}")
+                logger.info(
+                    f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}")
             if opt["dist"]:
-                train_sampler = DistributedSampler(train_set, shuffle=dataset_opt["dataloader_shuffle"], drop_last=True)
+                train_sampler = DistributedSampler(
+                    train_set, shuffle=dataset_opt["dataloader_shuffle"], drop_last=True)
                 train_loader = DataLoader(
                     train_set,
                     batch_size=dataset_opt["dataloader_batch_size"] // opt["num_gpu"],
@@ -72,11 +78,14 @@ def create_data_loaders(opt, logger):
                 )
         elif phase == "test":
             test_set = define_Dataset(dataset_opt)
-            test_size = int(math.ceil(len(test_set) / dataset_opt["dataloader_batch_size"]))
+            test_size = int(
+                math.ceil(len(test_set) / dataset_opt["dataloader_batch_size"]))
             if opt["rank"] == 0:
-                logger.info(f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}")
+                logger.info(
+                    f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}")
             if opt["dist"]:
-                test_sampler = DistributedSampler(test_set, num_replicas=opt["world_size"], rank=opt["rank"], shuffle=False)
+                test_sampler = DistributedSampler(
+                    test_set, num_replicas=opt["world_size"], rank=opt["rank"], shuffle=False)
                 test_loader = DataLoader(
                     test_set,
                     batch_size=1,
@@ -101,33 +110,41 @@ def create_data_loaders(opt, logger):
             raise NotImplementedError(f"Phase [{phase}] is not recognized.")
     return train_loader, test_loader
 
+
 def main(json_path="options/train_transformer_x2_gan_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
-    parser.add_argument("--dist", default=True, action="store_true")
-    parser.add_argument("--visualize", type=bool, default=False)
+    parser.add_argument("--dist", default=False, action="store_true")
+    parser.add_argument("--visualize", type=bool, default=True)
 
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
     opt["visualize"] = args.visualize
     opt = initialize_distributed(opt)
-   
-    if opt["rank"] == 0:
-        util.mkdirs((path for key, path in opt["path"].items() if "pretrained" not in key))
 
-    init_iter_G, init_path_G = option.find_last_checkpoint(opt["path"]["models"], net_type="G", pretrained_path=opt["path"]["pretrained_netG"])
-    init_iter_D, init_path_D = option.find_last_checkpoint(opt["path"]["models"], net_type="D", pretrained_path=opt["path"]["pretrained_netD"])
-    init_iter_E, init_path_E = option.find_last_checkpoint(opt["path"]["models"], net_type="E", pretrained_path=opt["path"]["pretrained_netE"])
+    if opt["rank"] == 0:
+        util.mkdirs(
+            (path for key, path in opt["path"].items() if "pretrained" not in key))
+
+    init_iter_G, init_path_G = option.find_last_checkpoint(
+        opt["path"]["models"], net_type="G", pretrained_path=opt["path"]["pretrained_netG"])
+    init_iter_D, init_path_D = option.find_last_checkpoint(
+        opt["path"]["models"], net_type="D", pretrained_path=opt["path"]["pretrained_netD"])
+    init_iter_E, init_path_E = option.find_last_checkpoint(
+        opt["path"]["models"], net_type="E", pretrained_path=opt["path"]["pretrained_netE"])
     opt["path"]["pretrained_netG"] = init_path_G
     opt["path"]["pretrained_netD"] = init_path_D
     opt["path"]["pretrained_netE"] = init_path_E
-    init_iter_optimizerG, init_path_optimizerG = option.find_last_checkpoint(opt["path"]["models"], net_type="optimizerG")
-    init_iter_optimizerD, init_path_optimizerD = option.find_last_checkpoint(opt["path"]["models"], net_type="optimizerD")
+    init_iter_optimizerG, init_path_optimizerG = option.find_last_checkpoint(
+        opt["path"]["models"], net_type="optimizerG")
+    init_iter_optimizerD, init_path_optimizerD = option.find_last_checkpoint(
+        opt["path"]["models"], net_type="optimizerD")
     opt["path"]["pretrained_optimizerG"] = init_path_optimizerG
     opt["path"]["pretrained_optimizerD"] = init_path_optimizerD
-    current_step = max(init_iter_G, init_iter_D, init_iter_E, init_iter_optimizerG, init_iter_optimizerD)
+    current_step = max(init_iter_G, init_iter_D, init_iter_E,
+                       init_iter_optimizerG, init_iter_optimizerD)
 
     border = opt["scale"]
 
@@ -164,7 +181,8 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
         for i, train_data in enumerate(train_loader):
             if train_data is None:
                 if logger:
-                    logger.warning(f"train_data is None at iteration {i} in epoch {epoch}")
+                    logger.warning(
+                        f"train_data is None at iteration {i} in epoch {epoch}")
                 continue
 
             current_step += 1
@@ -179,8 +197,9 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
 
             if (current_step % opt["train"]["checkpoint_print"] == 0 and opt["rank"] == 0):
                 logs = model.current_log()
-                message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(epoch, current_step, model.current_learning_rate())
-                for k, v in logs.items(): 
+                message = "<epoch:{:3d}, iter:{:8,d}, lr:{:.3e}> ".format(
+                    epoch, current_step, model.current_learning_rate())
+                for k, v in logs.items():
                     message += "{:s}: {:.3e} ".format(k, v)
                 logger.info(message)
 
@@ -208,18 +227,23 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
                     visuals = model.current_visuals()
                     E_img = util.tensor2uint(visuals["E"])
                     H_img = util.tensor2uint(visuals["H"])
-                    current_psnr = util.calculate_psnr(E_img, H_img, border=border)
+                    current_psnr = util.calculate_psnr(
+                        E_img, H_img, border=border)
 
                     local_psnr_sum += current_psnr
                     local_count += 1
 
                     if opt["rank"] == 0:
-                        logger.info("{:->4d}--> {:>10s} | {:<4.2f}dB".format(local_count, image_name_ext, current_psnr))
+                        logger.info(
+                            "{:->4d}--> {:>10s} | {:<4.2f}dB".format(local_count, image_name_ext, current_psnr))
 
                 if opt["dist"]:
-                    local_psnr_sum_tensor = torch.tensor(local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}"))
-                    local_count_tensor = torch.tensor(local_count, device=torch.device(f"cuda:{opt['rank']}"))
-                    dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
+                    local_psnr_sum_tensor = torch.tensor(
+                        local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}"))
+                    local_count_tensor = torch.tensor(
+                        local_count, device=torch.device(f"cuda:{opt['rank']}"))
+                    dist.all_reduce(local_psnr_sum_tensor,
+                                    op=dist.ReduceOp.SUM)
                     dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
                     if opt["rank"] == 0:
                         global_avg_psnr = (
@@ -227,19 +251,22 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
                             if local_count_tensor > 0
                             else torch.tensor(0.0, device=torch.device(f"cuda:{opt['rank']}"))
                         ).item()
-                        logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>")
+                        logger.info(
+                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>")
                 else:
                     if local_count > 0:
                         avg_psnr = local_psnr_sum / local_count
                         if opt["rank"] == 0:
-                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
+                            logger.info(
+                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
 
                 if opt["dist"]:
                     dist.barrier()
 
+
 if __name__ == "__main__":
     main()
-    
+
 # if current_step % opt["train"]["checkpoint_test"] == 0 and opt["rank"] == 0:
 
 #     avg_psnr = 0.0
