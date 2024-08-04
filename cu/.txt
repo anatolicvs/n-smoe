@@ -1,0 +1,6 @@
+# COPY ../cu/block_ops.cu /usr/src/
+# COPY ../cu/build_ops.py /usr/src/
+# COPY ../cu/build.sh /usr/src/
+
+# RUN chmod +x /usr/src/build.sh
+# RUN /usr/src/build.sh

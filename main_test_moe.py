@@ -234,11 +234,89 @@ def visualize_with_segmentation(images, titles):
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-
     from torchvision.transforms import ToTensor
     import segmentation_models_pytorch as smp
+    import mahotas
+    from scipy import ndimage
 
-    fig = plt.figure(figsize=(15, 10))
+    def randomlabel(segmentation):
+        segmentation = segmentation.astype(np.uint32)
+        uid = np.unique(segmentation)
+        mid = int(uid.max()) + 1
+        mapping = np.zeros(mid, dtype=segmentation.dtype)
+        mapping[uid] = np.random.choice(len(uid), len(uid), replace=False).astype(
+            segmentation.dtype
+        )
+        out = mapping[segmentation]
+        out[segmentation == 0] = 0
+        return out
+
+    def watershed(affs, seed_method, use_mahotas_watershed=True):
+        affs_xy = 1.0 - 0.5 * (affs[1] + affs[2])
+        depth = affs_xy.shape[0]
+        fragments = np.zeros_like(affs[0]).astype(np.uint64)
+        next_id = 1
+        for z in range(depth):
+            seeds, num_seeds = get_seeds(
+                affs_xy[z], next_id=next_id, method=seed_method
+            )
+            if use_mahotas_watershed:
+                fragments[z] = mahotas.cwatershed(affs_xy[z], seeds)
+            else:
+                fragments[z] = ndimage.watershed_ift(
+                    (255.0 * affs_xy[z]).astype(np.uint8), seeds
+                )
+            next_id += num_seeds
+        return fragments
+
+    def get_seeds(boundary, method="grid", next_id=1, seed_distance=10):
+        if method == "grid":
+            height = boundary.shape[0]
+            width = boundary.shape[1]
+            seed_positions = np.ogrid[0:height:seed_distance, 0:width:seed_distance]
+            num_seeds_y = seed_positions[0].size
+            num_seeds_x = seed_positions[1].size
+            num_seeds = num_seeds_x * num_seeds_y
+            seeds = np.zeros_like(boundary).astype(np.int32)
+            seeds[seed_positions] = np.arange(next_id, next_id + num_seeds).reshape(
+                (num_seeds_y, num_seeds_x)
+            )
+
+        if method == "minima":
+            minima = mahotas.regmin(boundary)
+            seeds, num_seeds = mahotas.label(minima)
+            seeds += next_id
+            seeds[seeds == next_id] = 0
+
+        if method == "maxima_distance":
+            distance = mahotas.distance(boundary < 0.5)
+            maxima = mahotas.regmax(distance)
+            seeds, num_seeds = mahotas.label(maxima)
+            seeds += next_id
+            seeds[seeds == next_id] = 0
+
+        return seeds, num_seeds
+
+    def relabel(seg):
+        uid = np.unique(seg)
+        if len(uid) == 1 and uid[0] == 0:
+            return seg
+
+        uid = uid[uid > 0]
+        mid = int(uid.max()) + 1
+        m_type = seg.dtype
+        mapping = np.zeros(mid, dtype=m_type)
+        mapping[uid] = np.arange(1, len(uid) + 1, dtype=m_type)
+        return mapping[seg]
+
+    def remove_small(seg, thres=100):
+        sz = seg.shape
+        seg = seg.reshape(-1)
+        uid, uc = np.unique(seg, return_counts=True)
+        seg[np.in1d(seg, uid[uc < thres])] = 0
+        return seg.reshape(sz)
+
+    fig = plt.figure(figsize=(15, 6))
     gs = GridSpec(
         3, 5, height_ratios=[2, 2, 1], width_ratios=[2, 1, 1, 1, 1], hspace=0, wspace=0
     )
@@ -264,16 +342,18 @@ def visualize_with_segmentation(images, titles):
 
         tensor_img = ToTensor()(images[i]).unsqueeze(0)
         with torch.no_grad():
-            mask = model(tensor_img)
-        mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
+            # mask = model(tensor_img)
+            output_affs = model(tensor_img).squeeze().cpu().numpy()
+        # mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
 
+        segments = watershed(output_affs, "grid")
         ax_seg = fig.add_subplot(gs[1, i])
-        ax_seg.imshow(np.argmax(mask, axis=2), cmap="viridis")
+        ax_seg.imshow(np.argmax(randomlabel(segments), axis=2), cmap="viridis")
         ax_seg.axis("off")
 
         ax_title = fig.add_subplot(gs[2, i])
         ax_title.text(
-            0.6, 0.6, titles[i], fontsize=12, weight="bold", va="center", ha="center"
+            0.5, 0.5, titles[i], fontsize=12, weight="bold", va="center", ha="center"
         )
         ax_title.axis("off")
 

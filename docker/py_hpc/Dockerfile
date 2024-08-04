@@ -1,8 +1,8 @@
-FROM nvidia/cuda:12.5.1-devel-ubuntu24.04
+FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 
 ENV CUDA_HOME=/usr/local/cuda \
     PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/opt/miniconda/bin:${PATH} \
-    LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}:/opt/miniconda/envs/venv/lib:/opt/miniconda/envs/venv/lib/python3.12/site-packages/torch/lib \
+    LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}:/opt/miniconda/envs/venv/lib:/opt/miniconda/envs/venv/lib/python3.11/site-packages/torch/lib \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
     DEBIAN_FRONTEND=noninteractive
@@ -19,6 +19,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     libsm6 \
     libxext6 \
+    libxrender1 \
+    tk-dev \
     ninja-build && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*

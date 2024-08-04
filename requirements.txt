@@ -5,7 +5,6 @@ wheel
 numpy
 scipy
 cython
-numba
 matplotlib
 seaborn
 opencv-python
@@ -26,7 +25,6 @@ e3nn
 lpips
 colorspacious
 tqdm
-debugpy
 
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
