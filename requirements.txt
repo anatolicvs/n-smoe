@@ -1,14 +1,17 @@
 pip
+pipenv
 setuptools
 wheel
-
+requests==2.28.1
 numpy
 scipy
 cython
+numba
 matplotlib
 seaborn
 opencv-python
 pyyaml
+rawpy
 imageio
 imageio-ffmpeg
 scikit-image
@@ -25,18 +28,15 @@ e3nn
 lpips
 colorspacious
 tqdm
-
-torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
-torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
-torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
-
 pandas
 wandb
 scikit-learn
 timm
 lightning[extra]
 tensorboard
+pytorch-metric-learning
 pytorch-ignite
+pytorch-gradcam
 pytorch-msssim
 pytorchvideo
 torchmetrics
@@ -55,7 +55,6 @@ nibabel
 dicom2nifti
 hdf5storage
 pydicom
-jax[cuda12_local] --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 gsplat
 segmentation-models-pytorch
 ruamel.yaml
@@ -69,3 +68,11 @@ holoviews
 hvplot
 jupyterlab
 mahotas
+
+
+torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+
+--find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+jax[cuda12_local]

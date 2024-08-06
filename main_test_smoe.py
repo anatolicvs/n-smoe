@@ -10,15 +10,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image, ImageDraw, ImageFont
 from torch.utils.data import DataLoader, Dataset
-from torchvision.transforms import (CenterCrop, Compose, Resize, ToPILImage,
-                                    ToTensor)
+from torchvision.transforms import CenterCrop, Compose, Resize, ToPILImage, ToTensor
 from torchvision.utils import make_grid, save_image
 
 from dnnlib import EasyDict
-import matplotlib.cm as cm 
+import matplotlib.cm as cm
 import numpy as np
 from timm.models.layers import DropPath, trunc_normal_
 import matplotlib.pyplot as plt
+
 
 def network_parameters(nets):
     num_params = sum(param.numel() for param in nets.parameters())
@@ -79,10 +79,9 @@ class OpenImageDataset(Dataset):
         step = block_size - overlap
         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-                block = img_tensor[:, i:i+block_size, j:j+block_size]
+                block = img_tensor[:, i : i + block_size, j : j + block_size]
                 blocks.append(block)
         return torch.stack(blocks)
-
 
     def __getitem__(self, index: int):
         rng = torch.Generator().manual_seed(torch.initial_seed() + index)
@@ -101,7 +100,7 @@ class OpenImageDataset(Dataset):
             # n_y_p = n_y_p.view(
             #     n_y_p.shape[1] * n_y_p.shape[2], n_y_p.shape[0], n_y_p.shape[3], n_y_p.shape[4]
             # )
-            
+
             n_y_p = self.extract_blocks(n_y, self.phw, self.stride)
 
             return gt_y.to(self.device), n_y_p.to(self.device), n_y.to(self.device)
@@ -136,6 +135,7 @@ class OpenImageDataset(Dataset):
     def __len__(self):
         return len(self.images)
 
+
 @dataclass
 class InceptionConfig:
     out_1x1: int
@@ -166,6 +166,7 @@ class FFv3(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+
 
 class DenseResidualBlock(nn.Module):
     def __init__(self, num_channels, growth_rate, num_layers, group_size=32):
@@ -455,6 +456,7 @@ class MoE(nn.Module):
 
         return y_hat
 
+
 class AutoencoderN(nn.Module):
     def __init__(
         self,
@@ -536,31 +538,35 @@ class AutoencoderN(nn.Module):
 
         return y_hat
 
+
 class up(nn.Module):
     def __init__(self, in_ch, out_ch):
         super(up, self).__init__()
         self.up_scale = nn.ConvTranspose2d(in_ch, out_ch, 2, stride=2)
 
-    def forward(self, x1, x2): # x1 (bs,out_ch,w1,h1) x2 (bs,in_ch,w2,h2)
-        x2 = self.up_scale(x2) # (bs,out_ch,2*w2,2*h2)
+    def forward(self, x1, x2):  # x1 (bs,out_ch,w1,h1) x2 (bs,in_ch,w2,h2)
+        x2 = self.up_scale(x2)  # (bs,out_ch,2*w2,2*h2)
         diffY = x1.size()[2] - x2.size()[2]
         diffX = x1.size()[3] - x2.size()[3]
 
-        x2 = F.pad(x2, [diffX // 2, diffX - diffX // 2,
-                        diffY // 2, diffY - diffY // 2]) # (bs,out_ch,w1,h1)
-        x = torch.cat([x2, x1], dim=1) # (bs,2*out_ch,w1,h1)
+        x2 = F.pad(
+            x2, [diffX // 2, diffX - diffX // 2, diffY // 2, diffY - diffY // 2]
+        )  # (bs,out_ch,w1,h1)
+        x = torch.cat([x2, x1], dim=1)  # (bs,2*out_ch,w1,h1)
         return x
 
+
 class up_layer(nn.Module):
-    def __init__(self, in_ch, out_ch): # !! 2*out_ch = in_ch !!
+    def __init__(self, in_ch, out_ch):  # !! 2*out_ch = in_ch !!
         super(up_layer, self).__init__()
         self.up = up(in_ch, out_ch)
         self.conv = double_conv(in_ch, out_ch)
 
-    def forward(self, x1, x2): # x1 (bs,out_ch,w1,h1) x2 (bs,in_ch,w2,h2)
-        a = self.up(x1, x2) # (bs,2*out_ch,w1,h1)
-        x = self.conv(a) # (bs,out_ch,w1,h1) because 2*out_ch = in_ch
+    def forward(self, x1, x2):  # x1 (bs,out_ch,w1,h1) x2 (bs,in_ch,w2,h2)
+        a = self.up(x1, x2)  # (bs,2*out_ch,w1,h1)
+        x = self.conv(a)  # (bs,out_ch,w1,h1) because 2*out_ch = in_ch
         return x
+
 
 class double_conv(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -571,12 +577,13 @@ class double_conv(nn.Module):
             nn.ReLU(inplace=True),
             nn.Conv2d(out_ch, out_ch, 3, padding=1),
             nn.BatchNorm2d(out_ch),
-            nn.ReLU(inplace=True)
+            nn.ReLU(inplace=True),
         )
 
     def forward(self, x):
         x = self.conv(x)
         return x
+
 
 class down_layer(nn.Module):
     def __init__(self, in_ch, out_ch):
@@ -588,15 +595,16 @@ class down_layer(nn.Module):
         x = self.conv(self.pool(x))
         return x
 
-class UNetV2(nn.Module):
-    def __init__(self,
-                 in_channels=1,
-                 latent_dim:int=28,
-                 layers:int=4,
-                 dropout_rate:float=0.0
-                 ):
-        super(UNetV2, self).__init__()
 
+class UNetV2(nn.Module):
+    def __init__(
+        self,
+        in_channels=1,
+        latent_dim: int = 28,
+        layers: int = 4,
+        dropout_rate: float = 0.0,
+    ):
+        super(UNetV2, self).__init__()
 
         self.latent_dim = latent_dim
         self.in_channels = in_channels
@@ -614,8 +622,12 @@ class UNetV2(nn.Module):
         self.final_conv = nn.Conv2d(64, 3, 1)
 
         self.adaptive_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.fc = FFv3(in_features=3, out_features=in_channels * latent_dim, layers=layers, dropout_rate=dropout_rate)
-
+        self.fc = FFv3(
+            in_features=3,
+            out_features=in_channels * latent_dim,
+            layers=layers,
+            dropout_rate=dropout_rate,
+        )
 
     def forward(self, x):
         x1 = self.conv1(x)
@@ -631,7 +643,8 @@ class UNetV2(nn.Module):
         x_final = self.final_conv(x4_up)
         x_pooled = self.adaptive_pool(x_final)
         x_out = self.fc(x_pooled.view(x_pooled.size(0), -1))
-        return x_out.view(-1,  self.in_channels, self.latent_dim)
+        return x_out.view(-1, self.in_channels, self.latent_dim)
+
 
 class MoE_v1(nn.Module):
     def __init__(
@@ -663,7 +676,7 @@ class MoE_v1(nn.Module):
     @staticmethod
     def _soft_clipping(x, beta=10):
         return 1 / (1 + torch.exp(-beta * (x - 0.5)))
-    
+
     # @staticmethod
     # def sample_image_grid(
     #     shape: tuple[int, ...],
@@ -672,13 +685,13 @@ class MoE_v1(nn.Module):
     #     """Get normalized (range 0 to 1) coordinates and integer indices for an image."""
     #     indices = [torch.arange(length, device=device) for length in shape]
     #     stacked_indices = torch.stack(torch.meshgrid(*indices, indexing="ij"), dim=-1)
-        
+
     #     coordinates = [(idx + 0.5) / length for idx, length in zip(indices, shape)]
     #     coordinates = reversed(coordinates)
     #     coordinates = torch.stack(torch.meshgrid(*coordinates, indexing="xy"), dim=-1)
-        
+
     #     return coordinates.reshape(-1, 2), stacked_indices
-    
+
     def forward(self, height, width, params):
 
         # grid, _ = self.sample_image_grid((height, width), device=params.device)
@@ -719,15 +732,11 @@ class MoE_v1(nn.Module):
 
         return y_hat
 
+
 class UNet(nn.Module):
-    def __init__(self, 
-                 in_channels=1, 
-                 latent_dim:int=28, 
-                 size:int=16
-                 ):
+    def __init__(self, in_channels=1, latent_dim: int = 28, size: int = 16):
         super(UNet, self).__init__()
 
-  
         self.latent_dim = latent_dim
         self.in_channels = in_channels
 
@@ -736,7 +745,7 @@ class UNet(nn.Module):
         self.down2 = down_layer(128, 256)
         self.down3 = down_layer(256, 512)
         self.down4 = down_layer(512, 1024)
-        
+
         self.up1 = up_layer(1024, 512)
         self.up2 = up_layer(512, 256)
         self.up3 = up_layer(256, 128)
@@ -746,10 +755,11 @@ class UNet(nn.Module):
         self.flatten = nn.Flatten()
 
         self.fc1 = nn.Sequential(
-                nn.Linear((latent_dim*size**2), in_channels * latent_dim),
-                nn.BatchNorm1d(in_channels * latent_dim),
-                nn.ReLU())
-            
+            nn.Linear((latent_dim * size**2), in_channels * latent_dim),
+            nn.BatchNorm1d(in_channels * latent_dim),
+            nn.ReLU(),
+        )
+
     def forward(self, x):
         x1 = self.conv1(x)
         x2 = self.down1(x1)
@@ -760,7 +770,7 @@ class UNet(nn.Module):
         x1_up = self.up1(x4, x5)
         x2_up = self.up2(x3, x1_up)
         x3_up = self.up3(x2, x2_up)
-        x4_up = self.up4(x1, x3_up) 
+        x4_up = self.up4(x1, x3_up)
         x_last = self.last_conv(x4_up)
 
         xf = self.flatten(x_last)
@@ -769,19 +779,20 @@ class UNet(nn.Module):
         x = x.view(-1, self.in_channels, self.latent_dim)
         return x
 
+
 class AutoencoderU(nn.Module):
     def __init__(
         self,
-        in_channels:int=1,
-        latent_dim:int=28,
-        num_mixtures:int=4,
-        kernel:int=4,
-        sharpening_factor:int=1,
-        overlap:int=16,
-        phw:int=64,
-        dropout:int=0.0,
-        scale_factor:int=16,
-        pre_trained:str=None,
+        in_channels: int = 1,
+        latent_dim: int = 28,
+        num_mixtures: int = 4,
+        kernel: int = 4,
+        sharpening_factor: int = 1,
+        overlap: int = 16,
+        phw: int = 64,
+        dropout: float = 0.0,
+        scale_factor: int = 16,
+        pre_trained: str = "",
     ):
         super().__init__()
 
@@ -790,7 +801,7 @@ class AutoencoderU(nn.Module):
         self.latent_dim = latent_dim
         self.scale_factor = scale_factor
 
-        self.encoder= UNet(in_channels=in_channels,latent_dim=latent_dim, size=phw)
+        self.encoder = UNet(in_channels=in_channels, latent_dim=latent_dim, size=phw)
 
         if pre_trained:
             model = torch.load(pre_trained)
@@ -798,7 +809,6 @@ class AutoencoderU(nn.Module):
                 k.replace("encoder.", ""): v for k, v in model["state_dict"].items()
             }
             self.encoder.load_state_dict(state_dict)
-
 
         self.decoder = MoE_v1(
             ch=in_channels,
@@ -811,7 +821,7 @@ class AutoencoderU(nn.Module):
 
     @staticmethod
     def reconstruct(blocks, original_dims, block_size, overlap):
-        
+
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
@@ -825,12 +835,14 @@ class AutoencoderU(nn.Module):
 
         for b in range(batch_size):
             idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start:idx_start + num_blocks_per_image]
+            current_blocks = blocks[idx_start : idx_start + num_blocks_per_image]
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
-                    recon_images[b, :, i:i+block_size, j:j+block_size] += current_blocks[idx]
-                    count_matrix[b, :, i:i+block_size, j:j+block_size] += 1
+                    recon_images[
+                        b, :, i : i + block_size, j : j + block_size
+                    ] += current_blocks[idx]
+                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
@@ -841,20 +853,23 @@ class AutoencoderU(nn.Module):
             x = x.view(-1, *x.size()[2:])
 
         bs = len(x) // 1024
-      
+
         encoded = self.encoder(x)
 
         B, C, H, W = shape
-        scaled_phw = self.phw * self.scale_factor 
- 
+        scaled_phw = self.phw * self.scale_factor
+
         params = torch.split(encoded, bs, dim=0)
-        
+
         decoded = [self.decoder(scaled_phw, scaled_phw, param) for param in params]
         decoded = torch.cat(decoded, dim=0)
 
-
-        y_hat = self.reconstruct(decoded, (B, C, H * self.scale_factor, W * self.scale_factor), scaled_phw, self.overlap*self.scale_factor)
-        
+        y_hat = self.reconstruct(
+            decoded,
+            (B, C, H * self.scale_factor, W * self.scale_factor),
+            scaled_phw,
+            self.overlap * self.scale_factor,
+        )
 
         return y_hat
 
@@ -877,6 +892,7 @@ class FFv4(nn.Module):
 
     def forward(self, x):
         return self.layers(x)
+
 
 class Block(nn.Module):
     r"""ConvNeXt Block. There are two equivalent implementations:
@@ -922,6 +938,7 @@ class Block(nn.Module):
 
         x = input + self.drop_path(x)
         return x
+
 
 class ConvNeXt(nn.Module):
     r"""ConvNeXt
@@ -1010,6 +1027,7 @@ class ConvNeXt(nn.Module):
         x = self.fc(x)
         x = x.view(-1, self.in_chans, self.latent_dim)
         return x
+
 
 class LayerNorm(nn.Module):
     r"""LayerNorm that supports two data formats: channels_last (default) or channels_first.
@@ -1126,7 +1144,7 @@ def visualize_data(L, H, G):
     H (tensor): Noisy image
     G (tensor): Ground truth image
     """
-    
+
     L_np = L.cpu().numpy()[0][0]
     H_np = H.cpu().numpy()[0][0]
     G_np = G.cpu().numpy()[0][0]
@@ -1140,38 +1158,47 @@ def visualize_data(L, H, G):
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
 
-    im0 = axes[0].imshow(H_np, cmap='gray', aspect='auto')
-    axes[0].set_title('Noisy Image', fontsize=14)
-    axes[0].grid(True, color='white', linestyle='--', linewidth=0.5)
-    cbar0 = fig.colorbar(im0, ax=axes[0], orientation='vertical', fraction=0.046, pad=0.04)
-    cbar0.set_label('Intensity', fontsize=10)
-    axes[0].set_xlabel('X-axis (pixels)', fontsize=10)
-    axes[0].set_ylabel('Y-axis (pixels)', fontsize=10)
-    axes[0].tick_params(axis='both', which='major', labelsize=8)
+    im0 = axes[0].imshow(H_np, cmap="gray", aspect="auto")
+    axes[0].set_title("Noisy Image", fontsize=14)
+    axes[0].grid(True, color="white", linestyle="--", linewidth=0.5)
+    cbar0 = fig.colorbar(
+        im0, ax=axes[0], orientation="vertical", fraction=0.046, pad=0.04
+    )
+    cbar0.set_label("Intensity", fontsize=10)
+    axes[0].set_xlabel("X-axis (pixels)", fontsize=10)
+    axes[0].set_ylabel("Y-axis (pixels)", fontsize=10)
+    axes[0].tick_params(axis="both", which="major", labelsize=8)
 
-    im1 = axes[1].imshow(L_np, cmap='gray', aspect='auto')
-    axes[1].set_title('Restored Image', fontsize=14)
-    axes[1].grid(True, color='white', linestyle='--', linewidth=0.5)
-    cbar1 = fig.colorbar(im1, ax=axes[1], orientation='vertical', fraction=0.046, pad=0.04)
-    cbar1.set_label('Intensity', fontsize=10)
-    axes[1].set_xlabel('X-axis (pixels)', fontsize=10)
-    axes[1].set_ylabel('Y-axis (pixels)', fontsize=10)
-    axes[1].tick_params(axis='both', which='major', labelsize=8)
+    im1 = axes[1].imshow(L_np, cmap="gray", aspect="auto")
+    axes[1].set_title("Restored Image", fontsize=14)
+    axes[1].grid(True, color="white", linestyle="--", linewidth=0.5)
+    cbar1 = fig.colorbar(
+        im1, ax=axes[1], orientation="vertical", fraction=0.046, pad=0.04
+    )
+    cbar1.set_label("Intensity", fontsize=10)
+    axes[1].set_xlabel("X-axis (pixels)", fontsize=10)
+    axes[1].set_ylabel("Y-axis (pixels)", fontsize=10)
+    axes[1].tick_params(axis="both", which="major", labelsize=8)
 
-    im2 = axes[2].imshow(G_np, cmap='gray', aspect='auto')
-    axes[2].set_title('Ground Truth Image', fontsize=14)
-    axes[2].grid(True, color='white', linestyle='--', linewidth=0.5)
-    cbar2 = fig.colorbar(im2, ax=axes[2], orientation='vertical', fraction=0.046, pad=0.04)
-    cbar2.set_label('Intensity', fontsize=10)
-    axes[2].set_xlabel('X-axis (pixels)', fontsize=10)
-    axes[2].set_ylabel('Y-axis (pixels)', fontsize=10)
-    axes[2].tick_params(axis='both', which='major', labelsize=8)
+    im2 = axes[2].imshow(G_np, cmap="gray", aspect="auto")
+    axes[2].set_title("Ground Truth Image", fontsize=14)
+    axes[2].grid(True, color="white", linestyle="--", linewidth=0.5)
+    cbar2 = fig.colorbar(
+        im2, ax=axes[2], orientation="vertical", fraction=0.046, pad=0.04
+    )
+    cbar2.set_label("Intensity", fontsize=10)
+    axes[2].set_xlabel("X-axis (pixels)", fontsize=10)
+    axes[2].set_ylabel("Y-axis (pixels)", fontsize=10)
+    axes[2].tick_params(axis="both", which="major", labelsize=8)
 
     # Adding a unified title
-    fig.suptitle('Comparison of Noisy, Restored, and Ground Truth Images', fontsize=16, y=0.95)
+    fig.suptitle(
+        "Comparison of Noisy, Restored, and Ground Truth Images", fontsize=16, y=0.95
+    )
 
     plt.tight_layout(rect=[0, 0, 1, 0.95])
     plt.show()
+
 
 @click.command()
 @click.option("--kernels", default=9, help="Number of Kernels", type=int)
@@ -1196,13 +1223,13 @@ def visualize_data(L, H, G):
 )
 
 
-
 # @click.option(
 #     "--resume",
 #     default="./zoo/conv-next-moe/convnext_hw-128_pHW-64_stride-8_color-L_opti-Adam_criter-MSE_lr-0.001_lr_min-0.0001_epochs-100_kernel-16_z-112_noise-lvl-25_noise-typ-gauss-jid-5394519_psnr22.76_ssim0.66_e5.pth",
 #     help="Pre-trained.",
 #     type=str,
 # )
+
 
 @click.option(
     "--resume",
@@ -1263,7 +1290,6 @@ def main(**kwargs):
     current_time: str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     output_dir = os.path.join(c.model_name + c.output_dir, current_time)
 
-
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
 
@@ -1282,8 +1308,8 @@ def main(**kwargs):
         noise_type=c.noise_type,
         noise_level=c.noise_level,
         transform=transform,
-        device=device, 
-        length=1
+        device=device,
+        length=1,
     )
 
     test_dataloader = DataLoader(
@@ -1313,7 +1339,7 @@ def main(**kwargs):
     # if c.resume:
     #     model1.load_state_dict(torch.load(c.resume, map_location=device))
     #     print(f"Pre-trained model loaded: {c.resume}")
-    
+
     model2 = AutoencoderU(
         in_channels=c.in_channels,
         latent_dim=z,
@@ -1360,7 +1386,7 @@ def main(**kwargs):
     ssim_vals_n = []
     with torch.no_grad():
         for data in test_dataloader:
-            y_gt, y_n_p, y_n = data  
+            y_gt, y_n_p, y_n = data
             restored = model2(y_n_p, y_gt.size())
             visualize_data(restored, y_n, y_gt)
             ground_truth_imgs.append(y_gt.cpu())
@@ -1371,52 +1397,66 @@ def main(**kwargs):
             psnr_vals_n.append(piq.psnr(y_n, y_gt).item())
             ssim_vals_n.append(piq.ssim(y_n, y_gt).item())
 
-    
     font = ImageFont.load_default()
     annotated_imgs = []
 
-    for gt, noisy, restored, psnr_n, ssim_n, psnr_r, ssim_r in zip(ground_truth_imgs, noisy_imgs, restored_imgs, psnr_vals_n, ssim_vals_n, psnr_vals, ssim_vals):
-        for img, title, psnr, ssim in zip([gt, noisy, restored], ["Ground Truth", "Noisy", "Restored"], [None, psnr_n, psnr_r], [None, ssim_n, ssim_r]):
-            img_tensor = ToTensor()(img.squeeze()) if not isinstance(img, torch.Tensor) else img
-            if img_tensor.dim() == 2:  
+    for gt, noisy, restored, psnr_n, ssim_n, psnr_r, ssim_r in zip(
+        ground_truth_imgs,
+        noisy_imgs,
+        restored_imgs,
+        psnr_vals_n,
+        ssim_vals_n,
+        psnr_vals,
+        ssim_vals,
+    ):
+        for img, title, psnr, ssim in zip(
+            [gt, noisy, restored],
+            ["Ground Truth", "Noisy", "Restored"],
+            [None, psnr_n, psnr_r],
+            [None, ssim_n, ssim_r],
+        ):
+            img_tensor = (
+                ToTensor()(img.squeeze()) if not isinstance(img, torch.Tensor) else img
+            )
+            if img_tensor.dim() == 2:
                 img_tensor = img_tensor.unsqueeze(0)
-            if img_tensor.dim() == 4:  
+            if img_tensor.dim() == 4:
                 img_tensor = img_tensor[0]
-            if img_tensor.dim() == 3 and img_tensor.size(0) == 1: 
+            if img_tensor.dim() == 3 and img_tensor.size(0) == 1:
                 img_tensor = img_tensor.repeat(3, 1, 1)
-            
+
             img_pil = ToPILImage()(img_tensor)
             draw = ImageDraw.Draw(img_pil)
-            
-            text = title  
+
+            text = title
             if psnr is not None and ssim is not None:
                 text += f", PSNR: {psnr:.4f}, SSIM: {ssim:.4f}"
-            
-            text_position = (10, img_pil.height - 10)  
+
+            text_position = (10, img_pil.height - 10)
             draw.text(text_position, text, font=font, fill="green")
-            
+
             annotated_imgs.append(ToTensor()(img_pil))
-        
-        
+
         error_map = torch.abs(gt - restored)
         error_map /= error_map.max()
-        
 
         error_map_pil = ToPILImage()(error_map.squeeze())
-        
+
         error_map_colored = cm.viridis(np.array(error_map_pil))
         error_map_colored = (error_map_colored[:, :, :3] * 255).astype(np.uint8)
         error_map_colored_pil = Image.fromarray(error_map_colored)
-        
+
         draw = ImageDraw.Draw(error_map_colored_pil)
         text = "Error Map"
         text_position = (10, error_map_colored_pil.height - 10)
         draw.text(text_position, text, font=font, fill="green")
-        
+
         annotated_imgs.append(ToTensor()(error_map_colored_pil))
 
-    grid = make_grid(annotated_imgs, nrow=4) 
+    grid = make_grid(annotated_imgs, nrow=4)
     save_image(grid, f"{output_dir}/{model_name}.png")
     print(f"Test images saved: {output_dir}/{model_name}.png")
+
+
 if __name__ == "__main__":
     main()

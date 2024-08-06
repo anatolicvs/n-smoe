@@ -8,6 +8,9 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+
+from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+from sam2.build_sam import build_sam2
 from torch.utils.data import DataLoader
 
 import models.basicblock as B
@@ -18,9 +21,6 @@ from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
-
-from sam2.build_sam import build_sam2
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -237,15 +237,19 @@ class SRResNet(nn.Module):
         return x
 
 
+def convert_to_3_channel(images):
+    return [
+        np.repeat(img[:, :, None], 3, axis=-1) if len(img.shape) == 2 else img
+        for img in images
+    ]
+
+
 def visualize_with_segmentation(images, titles, mask_generator):
     import matplotlib
 
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-
-    # from torchvision.transforms import ToTensor
-    # import segmentation_models_pytorch as smp
 
     def show_anns(anns, borders=True):
         if len(anns) == 0:
@@ -281,19 +285,12 @@ def visualize_with_segmentation(images, titles, mask_generator):
 
         ax.imshow(img)
 
+    # masks = mask_generator.generate(convert_to_3_channel(images[1:]))
+
     fig = plt.figure(figsize=(15, 6))
     gs = GridSpec(
         3, 5, height_ratios=[2, 2, 1], width_ratios=[2, 1, 1, 1, 1], hspace=0, wspace=0
     )
-
-    # model = smp.Unet(
-    #     encoder_name="resnext101_32x48d",
-    #     encoder_weights="instagram",
-    #     in_channels=1,
-    #     classes=4,
-    #     activation=None,
-    # )
-    # model.eval()
 
     ax_img = fig.add_subplot(gs[0:2, 0])
     ax_img.imshow(images[0], cmap="gray")
@@ -301,34 +298,26 @@ def visualize_with_segmentation(images, titles, mask_generator):
     ax_img.set_title(titles[0], fontsize=15, weight="bold")
 
     for i in range(1, len(images)):
-        ax_crop = fig.add_subplot(gs[0, i])
-        ax_crop.imshow(images[i], cmap="gray")
-        ax_crop.axis("off")
 
         if len(images[i].shape) == 2:
             img_3c = np.repeat(images[i][:, :, None], 3, axis=-1)
         else:
             img_3c = images[i]
 
-        masks = mask_generator.generate(img_3c)
+        mask = mask_generator.generate(img_3c)
 
-        # tensor_img = ToTensor()(images[i]).unsqueeze(0)
-        # with torch.no_grad():
-        #     # mask = model(tensor_img)
-        #     output_affs = model(tensor_img).squeeze().cpu().numpy()
-        # mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
-
-        # segments = watershed(output_affs, "grid")
-        # ax_seg.imshow(np.argmax(randomlabel(segments), axis=2), cmap="viridis")
+        ax_crop = fig.add_subplot(gs[0, i])
+        ax_crop.imshow(images[i], cmap="gray")
+        ax_crop.axis("off")
 
         ax_seg = fig.add_subplot(gs[1, i])
-        ax_seg.imshow(img_3c)
-        show_anns(masks)
+        ax_seg.imshow(images[i])
+        show_anns(mask)
         ax_seg.axis("off")
 
         ax_title = fig.add_subplot(gs[2, i])
         ax_title.text(
-            0.5, 0.5, titles[i], fontsize=12, weight="bold", va="center", ha="center"
+            0.5, 0.2, titles[i], fontsize=12, weight="bold", va="center", ha="center"
         )
         ax_title.axis("off")
 
@@ -337,66 +326,20 @@ def visualize_with_segmentation(images, titles, mask_generator):
     plt.show()
 
 
-# def visualize_with_segmentation(images, titles):
-#     import matplotlib.pyplot as plt
-#     from matplotlib.gridspec import GridSpec
-#     from torchvision.transforms import ToTensor
-#     import numpy as np
-#     import segmentation_models_pytorch as smp
-#     import torch
-
-#     fig = plt.figure(figsize=(20, 10))
-#     gs = GridSpec(3, 5, height_ratios=[1, 1, 1], width_ratios=[
-#                   3, 1, 1, 1, 1], hspace=0, wspace=0)
-
-#     model = smp.Unet(encoder_name="resnext101_32x48d",
-#                      encoder_weights="instagram", in_channels=1, classes=64, activation=None)
-#     model.eval()
-
-#     ax_img = fig.add_subplot(gs[:, 0])
-#     ax_img.imshow(images[0], cmap='gray')
-#     ax_img.axis('off')
-#     ax_img.set_title(titles[0], fontsize=15, weight='bold')
-
-#     for i in range(1, len(images)):
-
-#         ax_crop = fig.add_subplot(gs[0, i])
-#         ax_crop.imshow(images[i], cmap='gray')
-#         ax_crop.axis('off')
-#         ax_crop.set_title(titles[i], fontsize=12, weight='bold')
-
-#         tensor_img = ToTensor()(images[i]).unsqueeze(0)
-#         with torch.no_grad():
-#             mask = model(tensor_img)
-#         mask = mask.squeeze(0).permute(1, 2, 0).cpu().numpy()
-
-#         ax_seg = fig.add_subplot(gs[1:, i])
-#         ax_seg.imshow(np.argmax(mask, axis=2), cmap='viridis')
-#         ax_seg.axis('off')
-
-#     plt.tight_layout()
-#     plt.subplots_adjust(wspace=0, hspace=0)
-#     plt.show()
-
-
 def visualize_data(images, titles):
     import matplotlib
 
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-
     from numpy.fft import fft2, fftshift
-    from skimage.metrics import (
-        peak_signal_noise_ratio as psnr,
-        structural_similarity as ssim,
-    )
+    from skimage.metrics import peak_signal_noise_ratio as psnr
+    from skimage.metrics import structural_similarity as ssim
 
     num_images = len(images)
     fig = plt.figure(figsize=(18, 10), constrained_layout=True)
     gs = GridSpec(5, num_images + 1, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
 
-    # Scientifically appropriate axis colors
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
     reference_title = "Ground Truth"
     reference_index = titles.index(reference_title) if reference_title in titles else -1
@@ -462,9 +405,7 @@ def visualize_data(images, titles):
         dpsr_image = images[dpsr_idx].squeeze()
         error_map = np.abs(rec_image - dpsr_image)
 
-        # Placing error map in the new column right after DPSR
         ax_error_map = fig.add_subplot(gs[0, dpsr_idx + 1])
-        # Changed to 'viridis' colormap
         ax_error_map.imshow(error_map, cmap="viridis")
         ax_error_map.set_title(
             "Error Map (N-SMoE - DPSR)",
@@ -477,10 +418,6 @@ def visualize_data(images, titles):
     plt.show()
 
 
-#  Unet-SMoE: /mnt/e/Weights/superresolution/f_u_moe_muller__sr_gan_x2_v9_mri_rgb_gan_discriminator_unet/options/train_f_u_moe_gan_x2_240528_030700.json
-#  Transformer-SMoE: /mnt/e/Weights/superresolution/transformer_moe_sr_gan_gan_x2_v2_mri_rgb_gan_discriminator_unet/options/train_transformer_x2_gan_240528_031433.json
-
-
 def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -490,15 +427,12 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--dist", default=False)
 
-    opt = option.parse(parser.parse_args().opt, is_train=True)
+    opt = vars(option.parse(parser.parse_args().opt, is_train=True))
     opt["dist"] = parser.parse_args().dist
 
     if opt["dist"]:
         init_dist("pytorch")
     opt["rank"], opt["world_size"] = get_dist_info()
-
-    # init_iter_G, init_path_G = option.find_last_checkpoint(
-    #     opt['path']['models'], net_type='G')
 
     init_path_G = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
     init_iter_G = 25000
@@ -511,7 +445,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
 
     opt = option.dict_to_nonedict(opt)
 
-    if opt["rank"] == 0:
+    if isinstance(opt, dict) and opt.get("rank") == 0:
         logger_name = "train"
         utils_logger.logger_info(
             logger_name, os.path.join(opt["path"]["log"], logger_name + ".log")
@@ -551,12 +485,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     esrgan = os.path.join(directory, "ESRGAN.pth")
 
     dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
-
-    # model_esrgan = torch.load(esrgan, map_location=torch.device(model.device))
-    # model_dpsr = torch.load(dpsr, map_location=torch.device(model.device))
-
-    # model_dpsr = MSRResNet_prior(in_nc=1, out_nc=1, nc=96, nb=16,
-    #                              upscale=opt['scale'], act_mode='R', upsample_mode='pixelshuffle')
 
     json_dpsr = """
         {
@@ -625,34 +553,38 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     avg_psnr = 0.0
     idx = 0
 
-    # titles = ['Noisy Low Resolution', 'Ground Truth',
-    #           'N-SMoE', "DPSR"]
+    # titles = [
+    #     "High Resolution",
+    #     "Low Resolution Crop",
+    #     "High Resolution Crop",
+    #     "N-SMoE",
+    #     "DPSR",
+    # ]
 
     titles = [
-        "High Resolution",
         "Low Resolution Crop",
         "High Resolution Crop",
         "N-SMoE",
         "DPSR",
     ]
 
-    sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
-    model_cfg = "sam2_hiera_l.yaml"
+    # sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
+    # model_cfg = "sam2_hiera_l.yaml"
 
-    sam2 = build_sam2(
-        model_cfg, sam2_checkpoint, device="cuda", apply_postprocessing=False
-    )
+    # sam2 = build_sam2(
+    #     model_cfg, sam2_checkpoint, device="cuda", apply_postprocessing=True
+    # )
 
     # mask_generator = SAM2AutomaticMaskGenerator(
     #     model=sam2,
-    #     points_per_side=64,  # Very high density for the finest details
-    #     points_per_batch=64,  # More points per batch for thorough segmentation
+    #     points_per_side=256,  # Very high density for the finest details
+    #     points_per_batch=128,  # More points per batch for thorough segmentation
     #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
     #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
     #     stability_score_offset=1.0,
     #     mask_threshold=0.0,
     #     box_nms_thresh=0.7,
-    #     crop_n_layers=3,  # More layers for multi-level cropping
+    #     crop_n_layers=4,  # More layers for multi-level cropping
     #     crop_nms_thresh=0.7,
     #     crop_overlap_ratio=512 / 1500,
     #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
@@ -662,19 +594,19 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     #     multimask_output=True,
     # )
 
-    mask_generator = SAM2AutomaticMaskGenerator(
-        model=sam2,
-        points_per_side=512,
-        points_per_batch=512,
-        pred_iou_thresh=0.7,
-        stability_score_thresh=0.92,
-        stability_score_offset=0.7,
-        crop_n_layers=1,
-        box_nms_thresh=0.7,
-        crop_n_points_downscale_factor=2,
-        min_mask_region_area=25.0,
-        use_m2m=True,
-    )
+    # mask_generator = SAM2AutomaticMaskGenerator(
+    #     model=sam2,
+    #     points_per_side=64,
+    #     points_per_batch=128,
+    #     pred_iou_thresh=0.7,
+    #     stability_score_thresh=0.92,
+    #     stability_score_offset=0.7,
+    #     crop_n_layers=1,
+    #     box_nms_thresh=0.7,
+    #     crop_n_points_downscale_factor=2,
+    #     min_mask_region_area=25.0,
+    #     use_m2m=True,
+    # )
 
     for test_data in test_loader:
         if test_data is None:
@@ -687,23 +619,12 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         img_dir = os.path.join(opt["path"]["images"], img_name)
         util.mkdir(img_dir)
 
-        # L_img_3ch = util.make_3ch(test_data['L']).cuda()
-
-        # noise_level_map = torch.ones((1, 1, L_img_3ch.size(2), L_img_3ch.size(
-        #     3)), dtype=torch.float, device=L_img_3ch.device).mul_(0./255.)
-        # img_L = torch.cat((L_img_3ch, noise_level_map), dim=1)
         with torch.no_grad():
             E_img_dpsr = model_dpsr(test_data["L"].to(model.device))
+            model.feed_data(test_data)
+            model.test()
+
         E_img_dpsr = util._tensor2uint(E_img_dpsr)
-        # E_img_dpsr = util.bgr2ycbcr(E_img_dpsr, only_y=True)
-
-        # E_img_esrgan = model_esrgan(L_img_3ch)
-        # E_img_esrgan = util._tensor2uint(E_img_esrgan)
-        # E_img_esrgan = util.bgr2ycbcr(E_img_esrgan, only_y=True)
-
-        model.feed_data(test_data)
-        model.test()
-
         visuals = model.current_visuals()
         L_crop_img = util.tensor2uint(visuals["L"])
         E_crop_img = util.tensor2uint(visuals["E"])
@@ -712,14 +633,13 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
         img_H = util.modcrop(img_H, border)
 
-        # visualize_data(
-        #     [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
+        visualize_data([L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
 
-        visualize_with_segmentation(
-            [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
-            titles,
-            mask_generator,
-        )
+        # visualize_with_segmentation(
+        #     [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
+        #     titles,
+        #     mask_generator,
+        # )
 
         save_img_path = os.path.join(
             img_dir, "{:s}_{:d}.png".format(img_name, current_step)
