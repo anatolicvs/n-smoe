@@ -626,7 +626,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     idx = 0
 
     # titles = ['Noisy Low Resolution', 'Ground Truth',
-    #           'N-SMoE', "DPSR"]
+    #           'N-SMoE', 'DPSR']
 
     titles = [
         "High Resolution",

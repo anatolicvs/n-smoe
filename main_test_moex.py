@@ -341,7 +341,7 @@ def visualize_data(images, titles):
     gs = GridSpec(5, num_images + 1, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
-    reference_title = "Ground Truth"
+    reference_title = "Ground Truth Crop"
     reference_index = titles.index(reference_title) if reference_title in titles else -1
     reference_image = (
         images[reference_index].squeeze() if reference_index != -1 else None
@@ -427,7 +427,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--dist", default=False)
 
-    opt = vars(option.parse(parser.parse_args().opt, is_train=True))
+    opt = option.parse(parser.parse_args().opt, is_train=True)
     opt["dist"] = parser.parse_args().dist
 
     if opt["dist"]:
@@ -561,12 +561,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     #     "DPSR",
     # ]
 
-    titles = [
-        "Low Resolution Crop",
-        "High Resolution Crop",
-        "N-SMoE",
-        "DPSR",
-    ]
+    titles = ["Noisy Low Resolution Crop", "Ground Truth Crop", "N-SMoE", "DPSR"]
 
     # sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
     # model_cfg = "sam2_hiera_l.yaml"
