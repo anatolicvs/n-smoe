@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_gan_v2_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_gan_v1_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -9,13 +9,13 @@
     , "overlap": 14
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
-    , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
+    , "sigma_test": 15  // 15, 25, 50
     , "merge_bn": false              // if no BN exists, set false
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
+      , "pretrained_netG": null
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
