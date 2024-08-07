@@ -71,7 +71,7 @@ if [ "$USE_APPTAINER" = true ]; then
     torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 else
   module load Python/3.10.4
-  source $HOME/venv/bin/activate
+  source $WORKDIR/env/bin/activate
 
   torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 fi

@@ -19,9 +19,12 @@ from utils_n.utils_dist import init_dist
 
 def initialize_distributed(opt):
     if opt["dist"]:
+        print("Initializing distributed environment...")
         init_dist("pytorch")
-        opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
-        opt["rank"] = int(os.environ.get("LOCAL_RANK", 0))
+        if not dist.is_initialized():
+            raise RuntimeError("Failed to initialize the PyTorch distributed process group.")
+        opt["world_size"] = dist.get_world_size()
+        opt["rank"] = dist.get_rank()
         torch.cuda.set_device(opt["rank"])
     else:
         opt["rank"], opt["world_size"] = 0, 1
@@ -120,7 +123,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     opt["dist"] = args.dist
     opt["visulize"] = args.visulize
 
-    check_gpu_availability()  # Check GPU availability before initialization
+    check_gpu_availability()
 
     opt = initialize_distributed(opt)
 
@@ -169,7 +172,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
     for epoch in range(4000000):  # keep running
         if opt["dist"] and train_loader.sampler is not None:
             train_loader.sampler.set_epoch(epoch)
-            dist.barrier()  # Ensure all processes start the epoch simultaneously
+            dist.barrier()
 
         for i, train_data in enumerate(train_loader):
             if train_data is None:
@@ -197,10 +200,6 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
             if current_step % opt["train"]["checkpoint_save"] == 0 and opt["rank"] == 0:
                 logger.info("Saving the model.")
                 model.save(current_step)
-                dist.barrier()  # Ensure all processes wait until model saving is complete
-
-            if opt["dist"]:
-                dist.barrier()  # Ensure all processes are synchronized before next iteration
 
             if current_step % opt["train"]["checkpoint_test"] == 0:
                 local_psnr_sum = 0.0
@@ -245,7 +244,7 @@ def main(json_path="options/train_transformer_x2_gan_local.json"):
                             logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
 
                 if opt["dist"]:
-                    dist.barrier()  # Ensure all processes wait until PSNR computation is complete
+                    dist.barrier()
 
 if __name__ == "__main__":
     main()

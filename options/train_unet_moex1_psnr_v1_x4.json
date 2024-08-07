@@ -1,5 +1,5 @@
 {
-  "task": "unet_unet_moex1_sr_plain_v5_x4_mri_rgb_act_gelu" 
+  "task": "unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0, 1, 2, 3]
   
@@ -79,11 +79,11 @@
 
   , "train": {
       "is_moe": true
-      , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+      , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
       , "G_lossfn_weight": 1.0            // default
   
       , "G_optimizer_type": "adam"        // fixed, adam is enough
-      , "G_optimizer_lr": 1e-4            // learning rate
+      , "G_optimizer_lr": 1e-5            // learning rate
       , "G_optimizer_clipgrad": null      // unused
   
       , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
@@ -93,7 +93,7 @@
       , "G_regularizer_orthstep": null    // unused
       , "G_regularizer_clipstep": null    // unused
   
-      , "checkpoint_test": 50000           // for testing
+      , "checkpoint_test": 10000           // for testing
       , "checkpoint_save": 10000           // for saving model
       , "checkpoint_print": 500           // for print
     }
