@@ -48,20 +48,19 @@ def create_data_loaders(
     train_loader, test_loader = None, None
 
     for phase, dataset_opt in opt["datasets"].items():
-        local_batch_size = dataset_opt["dataloader_batch_size"]
-
         if phase == "train":
             train_set = define_Dataset(dataset_opt)
-            train_size = int(math.ceil(len(train_set) / local_batch_size))
+            train_batch_size = dataset_opt["dataloader_batch_size"]
+            train_size = int(math.ceil(len(train_set) / train_batch_size))
             if opt["rank"] == 0:
                 logger.info(
                     f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}"
                 )
-            if opt["dist"] and local_batch_size % opt["num_gpu"] != 0:
-                local_batch_size = (local_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+            if opt["dist"] and train_batch_size % opt["num_gpu"] != 0:
+                train_batch_size = (train_batch_size // opt["num_gpu"]) * opt["num_gpu"]
                 if opt["rank"] == 0:
                     logger.info(
-                        f"Adjusted train batch size to {local_batch_size} for better GPU utilization"
+                        f"Adjusted train batch size to {train_batch_size} for better GPU utilization"
                     )
             if opt["dist"]:
                 train_sampler = DistributedSampler(
@@ -73,7 +72,7 @@ def create_data_loaders(
                 )
                 train_loader = DataLoader(
                     train_set,
-                    batch_size=local_batch_size // opt["num_gpu"],
+                    batch_size=train_batch_size // opt["num_gpu"],
                     shuffle=False,
                     num_workers=dataset_opt["dataloader_num_workers"] // opt["num_gpu"],
                     drop_last=True,
@@ -84,7 +83,7 @@ def create_data_loaders(
             else:
                 train_loader = DataLoader(
                     train_set,
-                    batch_size=local_batch_size,
+                    batch_size=train_batch_size,
                     shuffle=dataset_opt["dataloader_shuffle"],
                     num_workers=dataset_opt["dataloader_num_workers"],
                     drop_last=True,
@@ -93,20 +92,19 @@ def create_data_loaders(
                 )
         elif phase == "test":
             test_set = define_Dataset(dataset_opt)
-            test_size = int(math.ceil(len(test_set) / local_batch_size))
+            test_batch_size = dataset_opt["dataloader_batch_size"]
+            test_size = int(math.ceil(len(test_set) / test_batch_size))
             if opt["rank"] == 0:
                 logger.info(
                     f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}"
                 )
+            if opt["dist"] and test_batch_size % opt["num_gpu"] != 0:
+                test_batch_size = (test_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+                if opt["rank"] == 0:
+                    logger.info(
+                        f"Adjusted test batch size to {test_batch_size} for consistency"
+                    )
             if opt["dist"]:
-                if local_batch_size % opt["num_gpu"] != 0:
-                    local_batch_size = (local_batch_size // opt["num_gpu"]) * opt[
-                        "num_gpu"
-                    ]
-                    if opt["rank"] == 0:
-                        logger.info(
-                            f"Adjusted test batch size to {local_batch_size} for consistency"
-                        )
                 test_sampler = DistributedSampler(
                     test_set,
                     num_replicas=opt["world_size"],
@@ -115,11 +113,9 @@ def create_data_loaders(
                 )
                 test_loader = DataLoader(
                     test_set,
-                    batch_size=max(1, local_batch_size // opt["num_gpu"]),
+                    batch_size=test_batch_size,
                     shuffle=False,
-                    num_workers=max(
-                        1, dataset_opt["dataloader_num_workers"] // opt["num_gpu"]
-                    ),
+                    num_workers=dataset_opt["dataloader_num_workers"],
                     drop_last=False,
                     pin_memory=True,
                     sampler=test_sampler,
@@ -128,9 +124,9 @@ def create_data_loaders(
             else:
                 test_loader = DataLoader(
                     test_set,
-                    batch_size=max(1, local_batch_size // 10),
+                    batch_size=test_batch_size,
                     shuffle=False,
-                    num_workers=1,
+                    num_workers=dataset_opt["dataloader_num_workers"],
                     drop_last=False,
                     pin_memory=True,
                     collate_fn=util.custom_collate,
