@@ -76,3 +76,4 @@ torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 
 --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda12_local]
+cupy-cuda12x

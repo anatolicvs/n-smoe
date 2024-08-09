@@ -1,13 +1,16 @@
 import math
 from dataclasses import dataclass
-from typing import Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, Tuple, TypeVar
 
+import cv2
+from grpc import StatusCode
 import numpy as np
 import torch
 import torch.fft
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+import cupy as cp
 
 from utils_n.nn import avg_pool_nd, checkpoint, conv_nd, zero_module, GroupNorm32
 
@@ -56,8 +59,7 @@ class Upsample(nn.Module):
         self.dims = dims
         self.resample_2d = resample_2d
         if use_conv:
-            self.conv = conv_nd(dims, self.channels,
-                                self.out_channels, 3, padding=1)
+            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1)
 
     def forward(self, x):
         assert x.shape[1] == self.channels
@@ -185,8 +187,7 @@ class QKVAttentionLegacy(nn.Module):
         bs, width, length = qkv.shape
         assert width % (3 * self.n_heads) == 0
         ch = width // (3 * self.n_heads)
-        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3,
-                              length).split(ch, dim=1)
+        q, k, v = qkv.reshape(bs * self.n_heads, ch * 3, length).split(ch, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
         weight = torch.einsum(
             "bct,bcs->bts", q * scale, k * scale
@@ -291,8 +292,7 @@ class ResBlock(Backbone[ResBlockConfig]):
             self.activation,
             nn.Dropout(p=cfg.dropout),
             zero_module(
-                conv_nd(cfg.dims, cfg.out_channels,
-                        cfg.out_channels, 3, padding=1)
+                conv_nd(cfg.dims, cfg.out_channels, cfg.out_channels, 3, padding=1)
             ),
         )
 
@@ -303,10 +303,9 @@ class ResBlock(Backbone[ResBlockConfig]):
                 cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1
             )
         else:
-            self.skip_connection = conv_nd(
-                cfg.dims, cfg.channels, cfg.out_channels, 1)
+            self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 1)
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor):
         return checkpoint(
             self._forward, (x,), self.parameters(), self.cfg.use_checkpoint
         )
@@ -326,7 +325,7 @@ class ResBlock(Backbone[ResBlockConfig]):
 
     @property
     def d_out(self) -> int:
-        return self.cfg.out_channels
+        return self.cfg.out_channels or 0
 
 
 @dataclass
@@ -371,7 +370,17 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
 
 
 class MullerResizer(nn.Module):
-    def __init__(self, d_in=3, base_resize_method='bilinear', kernel_size=5, stddev=1.0, num_layers=2, avg_pool=False, init_weights=None, dtype=torch.float32):
+    def __init__(
+        self,
+        d_in=3,
+        base_resize_method="bilinear",
+        kernel_size=5,
+        stddev=1.0,
+        num_layers=2,
+        avg_pool=False,
+        init_weights=None,
+        dtype=torch.float32,
+    ):
         super(MullerResizer, self).__init__()
         self.d_in = d_in
         self.kernel_size = kernel_size
@@ -381,21 +390,24 @@ class MullerResizer(nn.Module):
         self.dtype = dtype
 
         interpolation_methods = {
-            'bilinear': 'bilinear',
-            'nearest': 'nearest',
-            'bicubic': 'bicubic'
+            "bilinear": "bilinear",
+            "nearest": "nearest",
+            "bicubic": "bicubic",
         }
         self.interpolation_method = interpolation_methods.get(
-            base_resize_method, 'bilinear')
+            base_resize_method, "bilinear"
+        )
 
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         if init_weights is not None:
             for i in range(num_layers):
-                self.weights.append(nn.Parameter(
-                    torch.tensor(init_weights[2 * i], dtype=dtype)))
-                self.biases.append(nn.Parameter(torch.tensor(
-                    init_weights[2 * i + 1], dtype=dtype)))
+                self.weights.append(
+                    nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
+                )
+                self.biases.append(
+                    nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
+                )
         else:
             for _ in range(num_layers):
                 weight = nn.Parameter(torch.empty((), dtype=dtype))
@@ -412,13 +424,14 @@ class MullerResizer(nn.Module):
         gaussian_kernel = torch.exp(-t.pow(2) / (2 * stddev**2))
         gaussian_kernel /= gaussian_kernel.sum()
         gaussian_kernel = gaussian_kernel.view(
-            1, 1, kernel_size, 1) * gaussian_kernel.view(1, 1, 1, kernel_size)
+            1, 1, kernel_size, 1
+        ) * gaussian_kernel.view(1, 1, 1, kernel_size)
         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
         return gaussian_kernel
 
     def _apply_gaussian_blur(self, x):
         padding = self.kernel_size // 2
-        x = F.pad(x, (padding, padding, padding, padding), mode='reflect')
+        x = F.pad(x, (padding, padding, padding, padding), mode="reflect")
         # Move the kernel to the same device as the input tensor
         gaussian_kernel = self.gaussian_kernel.to(x.device)
         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
@@ -427,14 +440,19 @@ class MullerResizer(nn.Module):
         x = x.to(dtype=self.dtype)
         if self.avg_pool:
             x = F.avg_pool2d(x, kernel_size=2, stride=2)
-        net = F.interpolate(x, size=target_size,
-                            mode=self.interpolation_method, align_corners=False)
+        net = F.interpolate(
+            x, size=target_size, mode=self.interpolation_method, align_corners=False
+        )
 
         for weight, bias in zip(self.weights, self.biases):
             blurred = self._apply_gaussian_blur(x)
             residual = blurred - x
             resized_residual = F.interpolate(
-                residual, size=target_size, mode=self.interpolation_method, align_corners=False)
+                residual,
+                size=target_size,
+                mode=self.interpolation_method,
+                align_corners=False,
+            )
             net = net + torch.tanh(weight * resized_residual + bias)
             x = blurred
 
@@ -463,7 +481,7 @@ class EncoderConfig:
     resample_2d: bool = True
     scale_factor: int = 2
     resizer_num_layers: int = 2
-    resizer_avg_pool: bool = (False,)
+    resizer_avg_pool: bool = False
     activation: str = "GELU"
 
 
@@ -471,7 +489,7 @@ class Encoder(Backbone[EncoderConfig]):
     def __init__(self, cfg: EncoderConfig, phw: int, d_in: int, d_out: int):
         super().__init__(cfg)
         self.d_in = d_in
-        self.latent = d_out
+        self.latent: int = d_out
         self.phw = phw
 
         if cfg.num_heads_upsample == -1:
@@ -485,8 +503,7 @@ class Encoder(Backbone[EncoderConfig]):
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    conv_nd(cfg.dims, self.d_in,
-                            cfg.model_channels, 3, padding=1)
+                    conv_nd(cfg.dims, self.d_in, cfg.model_channels, 3, padding=1)
                 )
             ]
         )
@@ -498,7 +515,7 @@ class Encoder(Backbone[EncoderConfig]):
 
         for level, mult in enumerate(cfg.channel_mult):
             for _ in range(cfg.num_res_blocks):
-                layers = [
+                layers: list[Any] = [
                     ResBlock(
                         ResBlockConfig(
                             channels=ch,
@@ -512,7 +529,10 @@ class Encoder(Backbone[EncoderConfig]):
                     )
                 ]
                 ch = mult * cfg.model_channels
-                if ds in cfg.attention_resolutions:
+                if (
+                    cfg.attention_resolutions is not None
+                    and ds in cfg.attention_resolutions
+                ):
                     layers.append(
                         AttentionBlock(
                             AttentionBlockConfig(
@@ -635,7 +655,7 @@ class Encoder(Backbone[EncoderConfig]):
             stddev=1.0,
             num_layers=cfg.resizer_num_layers,
             dtype=self.dtype,
-            avg_pool=cfg.resizer_avg_pool
+            avg_pool=cfg.resizer_avg_pool,
         )
 
     def _interpolate(self, x, scale_factor):
@@ -678,7 +698,7 @@ class Encoder(Backbone[EncoderConfig]):
 
     @property
     def d_out(self) -> int:
-        raise self.latent
+        return self.latent
 
     @property
     def scale_factor(self) -> int:
@@ -714,7 +734,8 @@ class MoE(Backbone[MoEConfig]):
     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
         R = self.ang_to_rot_mat(theta)
         S = torch.diag_embed(scale) + epsilon * torch.eye(
-            scale.size(-1), device=scale.device)
+            scale.size(-1), device=scale.device
+        )
 
         RS = R @ S
         Sigma = RS @ RS.transpose(-2, -1)
@@ -728,19 +749,18 @@ class MoE(Backbone[MoEConfig]):
 
     def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
         mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
-        mu_y = p[:, :, k: 2 * k].reshape(-1, ch, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
         mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
 
         scale_idx = 3 * k
-        scale = p[:, :, scale_idx: scale_idx +
-                  2 * k].reshape(-1, p.shape[1], k, 2)
+        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, p.shape[1], k, 2)
         rot_idx = scale_idx + 2 * k
-        theta = p[:, :, rot_idx: rot_idx + k].reshape(-1, p.shape[1], k)
+        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
 
         cov_matrix = self.cov_mat_2d(scale, theta)
         cov_matrix = torch.mul(cov_matrix, self.alpha)
 
-        w = p[:, :, 2 * k: 3 * k].reshape(-1, ch, k)
+        w = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
 
         return Gaussians(mu, cov_matrix, w)
 
@@ -757,8 +777,7 @@ class MoE(Backbone[MoEConfig]):
         )
 
         mu_expanded = (
-            gauss.mu.unsqueeze(3).unsqueeze(
-                4).expand(-1, -1, -1, height, width, -1)
+            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
         )
         x_sub_mu = grid_expanded - mu_expanded
 
@@ -797,7 +816,7 @@ class AutoencoderConfig:
     DecoderConfig: MoEConfig
     d_in: int
     d_out: int
-    phw: int = (32,)
+    phw: int = 32
     overlap: int = 24
 
 
@@ -812,15 +831,18 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.decoder = MoE(cfg.DecoderConfig)
 
     @staticmethod
-    def reconstruct(blocks, original_dims, block_size, overlap):
+    def reconstruct(
+        blocks: torch.Tensor,
+        original_dims: Tuple[int, int, int, int],
+        block_size: int,
+        overlap: int,
+    ) -> torch.Tensor:
         batch_size, num_channels, height, width = original_dims
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(
-            batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(
-            batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
+        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
 
         num_blocks_per_row = (width - block_size) // step + 1
         num_blocks_per_column = (height - block_size) // step + 1
@@ -828,16 +850,14 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         for b in range(batch_size):
             idx_start = b * num_blocks_per_image
-            current_blocks = blocks[idx_start: idx_start +
-                                    num_blocks_per_image]
+            current_blocks = blocks[idx_start : idx_start + num_blocks_per_image]
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
                     recon_images[
-                        b, :, i: i + block_size, j: j + block_size
+                        b, :, i : i + block_size, j : j + block_size
                     ] += current_blocks[idx]
-                    count_matrix[b, :, i: i + block_size,
-                                 j: j + block_size] += 1
+                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
@@ -863,7 +883,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         else:
             return 1 * 2**30
 
-    def forward(self, x, s):
+    def forward(self, x: torch.Tensor, s: Tuple[int, int, int, int]) -> torch.Tensor:
         if x.ndim == 5:
             x = x.reshape(-1, *x.shape[2:])
 
@@ -886,8 +906,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
 
         y = self.reconstruct(
-            dec, (B, C, H * self.encoder.scale_factor,
-                  W * self.encoder.scale_factor),
-            sp, self.overlap * self.encoder.scale_factor,
+            dec,
+            (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
+            sp,
+            self.overlap * self.encoder.scale_factor,
         )
         return y

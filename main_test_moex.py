@@ -5,6 +5,8 @@ import math
 import os.path
 import random
 
+import datetime
+from typing import Any
 import numpy as np
 import torch
 import torch.nn as nn
@@ -21,6 +23,8 @@ from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
+import scipy.io
+
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -627,6 +631,20 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
 
         img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
         img_H = util.modcrop(img_H, border)
+
+        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        degradation_model = "bicubic downsampling + blur"
+        images: dict[str, Any] = {
+            "H_img": img_H,
+            "L_crop_img": L_crop_img,
+            "H_crop_img": H_crop_img,
+            "E_SMoE_img": E_crop_img,
+            "E_DPSR_img": E_img_dpsr,
+            "Degradation_Model": degradation_model,
+        }
+
+        filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
+        scipy.io.savemat(filename, images)
 
         visualize_data([L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
 
