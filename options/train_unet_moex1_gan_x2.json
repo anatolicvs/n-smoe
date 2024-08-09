@@ -1,12 +1,12 @@
 {
-    "task": "unet_unet_moex1_sr_gan_v2_x2_mri_rgb_act_gelu" 
+    "task": "unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
     , "scale": 2       
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 14
+    , "overlap": 15
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -34,7 +34,7 @@
             , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
-            , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+            , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
             "name": "test_dataset"            // just name
@@ -51,11 +51,11 @@
             }
         }
   
-      , "netG": {
+        , "netG": {
           "net_type": "unet_moex1"
           , "kernel": 16
           , "sharpening_factor": 1
-      
+    
           , "model_channels": 64
           , "num_res_blocks": 8
           , "attention_resolutions": [16, 8, 4]
@@ -68,7 +68,7 @@
           , "resblock_updown": false
           , "channel_mult": [1, 2, 4, 8]
           , "resample_2d" : false
-      
+    
           , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
           , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
           ,"resizer_num_layers": 2
@@ -78,23 +78,23 @@
     }
 
     , "netD": {
-        "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
+        "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 3
-        , "base_nc": 64
+        , "base_nc": 128
         , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
     
-        , "init_type": "default"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+        , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
         , "init_bn_type": "uniform"      // "uniform" | "constant"
         , "init_gain": 0.2
     }
 
     , "train": {
           "is_moe": true
-        , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+        , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
         , "G_lossfn_weight": 1
     
-        , "F_lossfn_type": "l1"  // "l1" | "l2"
+        , "F_lossfn_type": "l2"  // "l1" | "l2"
         , "F_lossfn_weight": 1
         , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
         , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
@@ -109,11 +109,11 @@
         , "D_init_iters": 0
     
         , "G_optimizer_type": "adam"
-        , "G_optimizer_lr": 1e-5  // learning rate
+        , "G_optimizer_lr": 1e-4  // learning rate
         , "G_optimizer_wd": 0
     
         , "D_optimizer_type": "adam"
-        , "D_optimizer_lr": 1e-5  // learning rate
+        , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
     
         , "G_scheduler_type": "MultiStepLR"
