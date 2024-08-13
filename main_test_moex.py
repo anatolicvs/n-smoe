@@ -473,7 +473,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
                 test_set,
                 batch_size=1,
                 shuffle=False,
-                num_workers=1,
+                num_workers=16,
                 drop_last=False,
                 pin_memory=True,
                 collate_fn=util.custom_collate,

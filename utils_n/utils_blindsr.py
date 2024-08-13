@@ -234,8 +234,8 @@ def bicubic_degradation(x, sf=3, lq_patchsize=64):
     hq = x.copy()
     x = util.imresize_np(x, scale=1 / sf)
 
-    lq, hq = random_crop(x, hq, sf, lq_patchsize)
-    return lq, hq
+    # lq, hq = random_crop(x, hq, sf, lq_patchsize)
+    return x, hq
 
 
 def srmd_degradation(x, k, sf=3):
