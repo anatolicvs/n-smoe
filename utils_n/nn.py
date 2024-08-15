@@ -2,6 +2,7 @@ import math
 
 import torch as th
 import torch.nn as nn
+from typing import Any, Callable, Sequence, Tuple, Union, List, Iterator
 
 
 # PyTorch 1.7 has SiLU, but we support PyTorch 1.5.
@@ -88,12 +89,14 @@ class GroupNorm32(nn.GroupNorm):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
 
+
 class BatchNorm32(nn.BatchNorm2d):
     def __init__(self, num_channels):
         super().__init__(num_features=num_channels)
 
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
+
 
 class LayerNorm32(nn.LayerNorm):
     def __init__(self, num_channels, height, width):
@@ -103,6 +106,7 @@ class LayerNorm32(nn.LayerNorm):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
 
+
 class InstanceNorm32(nn.InstanceNorm2d):
     def __init__(self, num_channels):
         super().__init__(num_features=num_channels)
@@ -110,7 +114,8 @@ class InstanceNorm32(nn.InstanceNorm2d):
     def forward(self, x):
         return super().forward(x.float()).type(x.dtype)
 
-def normalization(channels, height=None, width=None, groups=None, norm_type='instance'):
+
+def normalization(channels, height=None, width=None, groups=None, norm_type="instance"):
     """
     Make a standard normalization layer.
 
@@ -121,20 +126,21 @@ def normalization(channels, height=None, width=None, groups=None, norm_type='ins
     :param groups: number of groups (required for GroupNorm).
     :return: an nn.Module for normalization.
     """
-    if norm_type == 'group':
+    if norm_type == "group":
         if groups is None:
             raise ValueError("Number of groups must be specified for GroupNorm")
         return GroupNorm32(groups, channels)
-    elif norm_type == 'batch':
+    elif norm_type == "batch":
         return BatchNorm32(channels)
-    elif norm_type == 'layer':
+    elif norm_type == "layer":
         if height is None or width is None:
             raise ValueError("Height and width must be specified for LayerNorm")
         return LayerNorm32(channels, height, width)
-    elif norm_type == 'instance':
+    elif norm_type == "instance":
         return InstanceNorm32(channels)
     else:
         raise ValueError(f"Unsupported normalization type: {norm_type}")
+
 
 def timestep_embedding(timesteps, dim, max_period=10000):
     """
@@ -157,7 +163,12 @@ def timestep_embedding(timesteps, dim, max_period=10000):
     return embedding
 
 
-def checkpoint(func, inputs, params, flag):
+def checkpoint(
+    func: Callable[..., Any],
+    inputs: Union[Tuple[Any, ...], Sequence[Any]],
+    params: Union[Tuple[Any, ...], Sequence[Any], List[Any]],
+    flag: bool,
+) -> Any:
     """
     Evaluate a function without caching intermediate activations, allowing for
     reduced memory at the expense of extra compute in the backward pass.
@@ -169,7 +180,7 @@ def checkpoint(func, inputs, params, flag):
     :param flag: if False, disable gradient checkpointing.
     """
     if flag:
-        args = tuple(inputs) + tuple(params)
+        args: Tuple[Any, ...] = tuple(inputs) + tuple(params)
         return CheckpointFunction.apply(func, len(inputs), *args)
     else:
         return func(*inputs)
