@@ -274,8 +274,8 @@ if __name__ == "__main__":
     z = 2 * kernel + 4 * kernel + kernel
 
     ch = 3
-    w = 256
-    h = 256
+    w = 128
+    h = 128
 
     phw = 16
     overlap = 14
@@ -292,25 +292,26 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     encoder_cfg = EncoderConfig(
-        model_channels=16,
+        model_channels=32,
         num_res_blocks=4,
         attention_resolutions=[16, 8],
         dropout=0.2,
-        channel_mult=(1, 2, 4, 8),
-        conv_resample=True,
+        channel_mult=(2, 4, 8),
+        conv_resample=False,
         dims=2,
         use_checkpoint=True,
         use_fp16=False,
-        num_heads=2,
-        num_head_channels=32,
+        num_heads=4,
+        num_head_channels=8,
         resblock_updown=False,
-        num_groups=8,
+        num_groups=32,
         resample_2d=True,
-        scale_factor=2,
-        resizer_num_layers=2,
+        scale_factor=3,
+        resizer_num_layers=4,
         resizer_avg_pool=False,
         activation="GELU",
         rope_theta=10000.0,
+        attention_type="cross_attention",  # "attention" or "cross_attention"
     )
 
     decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
