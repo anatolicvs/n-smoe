@@ -18,6 +18,7 @@ from torch.utils.data import Dataset
 import utils_n.utils_image as util
 from utils_n import utils_blindsr as blindsr
 from itertools import chain
+import torch.cuda.amp as amp
 
 
 class FastMRIRawDataSample(NamedTuple):
@@ -47,7 +48,7 @@ class MedicalDatasetSR(Dataset):
         self.phw = opt["phw"] if "phw" in opt else 32
         self.overlap = opt["overlap"] if "overlap" in opt else 4
 
-        self.recons_keys = ["kspace", "reconstruction_rss"]
+        # self.recons_keys = ["reconstruction_rss"]  # "kspace",
         self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
 
@@ -77,19 +78,71 @@ class MedicalDatasetSR(Dataset):
     def filter_low_content_images(
         self, samples: List[FastMRIRawDataSample]
     ) -> List[FastMRIRawDataSample]:
-        tensors = []
-        for s in samples:
-            img_data = self.load_image_data(str(s.fname), s.slice_ind)
-            if img_data is not None:
-                tensor = torch.from_numpy(img_data).float().to("cuda")
-                tensors.append(tensor)
+        std_devs = []
+        sample_indices = []
 
-        if not tensors:
+        batch_size = 64
+        sub_batch_size = 16
+        max_memory_usage = torch.cuda.get_device_properties(0).total_memory * 0.9
+        scaler = amp.GradScaler(enabled=True)
+
+        i = 0
+
+        while i < len(samples):
+            try:
+                batch = samples[i : i + batch_size]
+                batch_img_tensors = []
+
+                for s in batch:
+                    img_data = self.load_image_data(str(s.fname), s.slice_ind)
+                    if img_data is not None:
+                        tensor = torch.from_numpy(img_data).float().unsqueeze(0)
+                        batch_img_tensors.append(tensor)
+
+                if batch_img_tensors:
+                    batch_tensor = torch.cat(batch_img_tensors, dim=0)
+                    num_splits = max(1, len(batch_img_tensors) // sub_batch_size)
+
+                    with amp.autocast():
+                        sub_batches = torch.split(
+                            batch_tensor.to("cuda", non_blocking=True), sub_batch_size
+                        )
+                        for sub_batch in sub_batches:
+                            sub_batch_std_devs = torch.std(
+                                sub_batch, dim=(1, 2, 3), keepdim=False
+                            )
+                            std_devs.extend(sub_batch_std_devs.cpu().tolist())
+                            sample_indices.extend(batch[: len(sub_batch_std_devs)])
+
+                    del batch_tensor, sub_batches
+                    torch.cuda.empty_cache()
+
+                current_memory_usage = torch.cuda.memory_allocated()
+                if current_memory_usage > max_memory_usage:
+                    batch_size = max(1, batch_size // 2)
+                else:
+                    batch_size = min(len(samples) - i, batch_size * 2)
+
+                i += batch_size
+
+            except RuntimeError as e:
+                if "out of memory" in str(e):
+                    torch.cuda.empty_cache()
+                    batch_size = max(1, batch_size // 2)
+                else:
+                    raise e
+
+        if not std_devs:
             return []
 
-        std_devs = torch.tensor([torch.std(t).item() for t in tensors], device="cuda")
-        threshold = torch.quantile(std_devs, 0.25)
-        return [s for s, std_dev in zip(samples, std_devs) if std_dev >= threshold]
+        std_devs_tensor = torch.tensor(std_devs)
+        threshold = torch.quantile(std_devs_tensor, 0.25)
+
+        filtered_samples = [
+            s for s, std_dev in zip(sample_indices, std_devs) if std_dev >= threshold
+        ]
+
+        return filtered_samples
 
     def load_sample(self, fname):
         fname_path = Path(fname)
@@ -106,6 +159,7 @@ class MedicalDatasetSR(Dataset):
             return None
 
     def handle_special_formats(self, fname_path):
+        fname_path = Path(fname_path)
         if fname_path.suffix == ".h5":
             metadata, num_slices = self._retrieve_metadata(str(fname_path))
             return [
@@ -196,15 +250,7 @@ class MedicalDatasetSR(Dataset):
 
             if fname.endswith(".h5"):
                 with h5py.File(fname, "r") as hf:
-                    key_to_use = None
-                    for key in self.recons_keys:
-                        if key in hf:
-                            key_to_use = key
-                            break
-                    if key_to_use:
-                        img = hf[key_to_use][slice_ind]
-                    else:
-                        img = None
+                    img = np.array(hf["reconstruction_rss"])[slice_ind]
             elif fname.endswith(".gz") and "t1n" in fname:
                 volume = nibabel.load(fname).get_fdata()
                 best_slice_index = self._get_best_slice(volume)

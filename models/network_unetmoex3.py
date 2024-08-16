@@ -583,11 +583,12 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         if self.attention_type == "attention" and self.attention is not None:
             h = self.attention(qkv)
         else:
-            print(f"X shape: {x.shape}")
-            print(f"num_heads shape: {self.num_heads}")
-            print(f"embedding_dim{int(self.num_heads * self.scale_factor**2),}")
-            print(f"QKV shape: {qkv.shape}")
-            print(f"Attention shape: {self.attention}")
+
+            # print(f"X shape: {x.shape}")
+            # print(f"num_heads shape: {self.num_heads}")
+            # print(f"embedding_dim{int(self.num_heads * self.scale_factor**2),}")
+            # print(f"QKV shape: {qkv.shape}")
+            # print(f"Attention shape: {self.attention}")
 
             h = self.attention(*qkv.chunk(3, dim=1))
 

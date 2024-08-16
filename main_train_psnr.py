@@ -5,6 +5,11 @@ import os
 import random
 import sys
 
+from models.model_gan import ModelGAN
+from models.model_plain import ModelPlain
+from models.model_plain2 import ModelPlain2
+from models.model_plain4 import ModelPlain4
+from models.model_vrt import ModelVRT
 import numpy as np
 import torch
 import torch.distributed as dist
@@ -53,11 +58,17 @@ def create_data_loaders(
             train_batch_size = dataset_opt["dataloader_batch_size"]
             train_size = int(math.ceil(len(train_set) / train_batch_size))
             if opt["rank"] == 0:
-                logger.info(f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}")
+                logger.info(
+                    f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}"
+                )
             if opt["dist"] and train_batch_size % opt["num_gpu"] != 0:
-                train_batch_size = max(1, (train_batch_size // opt["num_gpu"]) * opt["num_gpu"])
+                train_batch_size = max(
+                    1, (train_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+                )
                 if opt["rank"] == 0:
-                    logger.info(f"Adjusted train batch size to {train_batch_size} for better GPU utilization")
+                    logger.info(
+                        f"Adjusted train batch size to {train_batch_size} for better GPU utilization"
+                    )
             if opt["dist"]:
                 train_sampler = DistributedSampler(
                     train_set,
@@ -91,11 +102,17 @@ def create_data_loaders(
             test_batch_size = dataset_opt["dataloader_batch_size"]
             test_size = int(math.ceil(len(test_set) / test_batch_size))
             if opt["rank"] == 0:
-                logger.info(f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}")
+                logger.info(
+                    f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}"
+                )
             if opt["dist"] and test_batch_size % opt["num_gpu"] != 0:
-                test_batch_size = max(1, (test_batch_size // opt["num_gpu"]) * opt["num_gpu"])
+                test_batch_size = max(
+                    1, (test_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+                )
                 if opt["rank"] == 0:
-                    logger.info(f"Adjusted test batch size to {test_batch_size} for consistency")
+                    logger.info(
+                        f"Adjusted test batch size to {test_batch_size} for consistency"
+                    )
             if opt["dist"]:
                 test_sampler = DistributedSampler(
                     test_set,
@@ -126,11 +143,11 @@ def create_data_loaders(
         else:
             logger.error(f"Phase [{phase}] is not recognized.")
             raise NotImplementedError(f"Phase [{phase}] is not recognized.")
-    
+
     return train_loader, test_loader
 
 
-def main(json_path: str = "options/train_unet_moex_psnr_local.json"):
+def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
@@ -189,9 +206,11 @@ def main(json_path: str = "options/train_unet_moex_psnr_local.json"):
         option.save(opt)
 
     opt = option.dict_to_nonedict(opt)
-    logger = setup_logging(opt)
+    logger: logging.Logger | None = setup_logging(opt)
     train_loader, test_loader = create_data_loaders(opt, logger)
-    model = define_Model(opt)
+    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
+        opt
+    )
 
     model.init_train()
     if opt["rank"] == 0:

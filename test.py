@@ -294,7 +294,7 @@ if __name__ == "__main__":
     encoder_cfg = EncoderConfig(
         model_channels=32,
         num_res_blocks=4,
-        attention_resolutions=[16, 8],
+        attention_resolutions=[16, 8, 4],
         dropout=0.2,
         channel_mult=(2, 4, 8),
         conv_resample=False,
@@ -306,7 +306,7 @@ if __name__ == "__main__":
         resblock_updown=False,
         num_groups=32,
         resample_2d=True,
-        scale_factor=3,
+        scale_factor=1,
         resizer_num_layers=4,
         resizer_avg_pool=False,
         activation="GELU",
