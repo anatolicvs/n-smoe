@@ -1,3 +1,5 @@
+# type: ignore
+
 import math
 from dataclasses import dataclass
 from functools import partial
@@ -25,7 +27,7 @@ T = TypeVar("T")
 
 
 class Backbone(nn.Module, Generic[T]):
-    def __init__(self, cfg: T):
+    def __init__(self, cfg: T) -> None:
         super().__init__()
         self.cfg = cfg
 
@@ -148,7 +150,7 @@ def normalization(num_channels: int, num_groups: int) -> GroupNorm32:
     return GroupNorm32(num_groups, num_channels)
 
 
-def count_flops_attn(model, _x, y):
+def count_flops_attn(model, _x, y) -> None:
     """
     A counter for the `thop` package to count the operations in an
     attention operation.
@@ -533,12 +535,16 @@ class AttentionBlockConfig:
 class AttentionBlock(Backbone[AttentionBlockConfig]):
     def __init__(self, cfg: AttentionBlockConfig, phw: int, scale_factor: int = 1):
         super().__init__(cfg)
-        self.cfg = cfg
-        self.scale_factor = scale_factor
-        self.phw = phw
+        self.cfg: AttentionBlockConfig = cfg
+        self.scale_factor: int = scale_factor
+        self.phw: int = phw
 
-        self.norm = normalization(num_channels=cfg.channels, num_groups=cfg.num_groups)
-        self.qkv = conv_nd(1, cfg.channels, cfg.channels * 3, 1)
+        self.norm: GroupNorm32 = normalization(
+            num_channels=cfg.channels, num_groups=cfg.num_groups
+        )
+        self.qkv: nn.Conv1d | nn.Conv2d | nn.Conv3d = conv_nd(
+            1, cfg.channels, cfg.channels * 3, 1
+        )
 
         self.num_heads = (
             cfg.num_heads
@@ -551,7 +557,7 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
                 f"by num_head_channels {cfg.num_head_channels}"
             )
 
-        self.attention_type = (
+        self.attention_type: str = (
             cfg.attention_type if hasattr(cfg, "attention_type") else "attention"
         )
 
@@ -568,7 +574,9 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
 
         self.attention = self.attention_map.get(self.attention_type, None)
 
-        self.proj_out = zero_module(conv_nd(cfg.dims, cfg.channels, cfg.channels, 1))
+        self.proj_out: nn.Conv1d | nn.Conv2d | nn.Conv3d = zero_module(
+            conv_nd(cfg.dims, cfg.channels, cfg.channels, 1)
+        )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return checkpoint(
@@ -913,7 +921,7 @@ class Gaussians:
 
 
 class MoE(Backbone[MoEConfig]):
-    def __init__(self, cfg: MoEConfig):
+    def __init__(self, cfg: MoEConfig) -> None:
         super(MoE, self).__init__(cfg)
         self.kernel: int = cfg.kernel
         self.alpha: float = cfg.sharpening_factor
@@ -935,7 +943,7 @@ class MoE(Backbone[MoEConfig]):
         Sigma: torch.Tensor = RS @ RS.transpose(-2, -1)
         return Sigma
 
-    def ang_to_rot_mat(self, theta: torch.Tensor):
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
         cos_theta: torch.Tensor = torch.cos(theta).unsqueeze(-1)
         sin_theta: torch.Tensor = torch.sin(theta).unsqueeze(-1)
         R: torch.Tensor = torch.cat(
@@ -1021,7 +1029,7 @@ class AutoencoderConfig:
 
 
 class Autoencoder(Backbone[AutoencoderConfig]):
-    def __init__(self, cfg: AutoencoderConfig):
+    def __init__(self, cfg: AutoencoderConfig) -> None:
         super().__init__(cfg)
         self.phw: int = cfg.phw
         self.overlap: int = cfg.overlap

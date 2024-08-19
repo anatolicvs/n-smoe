@@ -1,3 +1,5 @@
+# type: ignore
+
 import argparse
 import logging
 import math
@@ -218,7 +220,11 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
         logger.info(model.info_params())
 
     for epoch in range(4000000):
-        if opt["dist"] and train_loader.sampler is not None:
+        if (
+            opt["dist"]
+            and train_loader is not None
+            and isinstance(train_loader.sampler, DistributedSampler)
+        ):
             train_loader.sampler.set_epoch(epoch)
             dist.barrier()
 

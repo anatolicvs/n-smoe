@@ -1,4 +1,5 @@
-from email.policy import default
+# type: ignore
+
 import logging
 import os
 import pickle
@@ -94,7 +95,7 @@ class MedicalDatasetSR(Dataset):
                     tensor = torch.from_numpy(img_data).float().to("cuda")
 
                     with amp.autocast():
-                        std_dev = torch.std(tensor).item()
+                        std_dev: int | float | bool = torch.std(tensor).item()
 
                     std_devs.append(std_dev)
                     sample_indices.append(s)
@@ -110,8 +111,8 @@ class MedicalDatasetSR(Dataset):
         if not std_devs:
             return []
 
-        std_devs_tensor = torch.tensor(std_devs)
-        threshold = torch.quantile(std_devs_tensor, 0.25)
+        std_devs_tensor: torch.Tensor = torch.tensor(std_devs)
+        threshold: torch.Tensor = torch.quantile(std_devs_tensor, 0.25)
 
         filtered_samples = [
             s for s, std_dev in zip(sample_indices, std_devs) if std_dev >= threshold
@@ -119,65 +120,6 @@ class MedicalDatasetSR(Dataset):
 
         return filtered_samples
 
-    def filter_low_content_images_(
-        self, samples: List[FastMRIRawDataSample]
-    ) -> List[FastMRIRawDataSample]:
-        std_devs = []
-        sample_indices = []
-
-        image_groups = defaultdict(list)
-        for s in samples:
-            img_data = self.load_image_data(str(s.fname), s.slice_ind)
-            if img_data is not None:
-                img_size = (img_data.shape[0], img_data.shape[1])
-                image_groups[img_size].append((s, img_data))
-
-        for img_size, group in image_groups.items():
-            if len(group) > 1:
-                try:
-                    self.process_group(group, std_devs, sample_indices)
-                except RuntimeError as e:
-                    if "out of memory" in str(e):
-                        torch.cuda.empty_cache()
-                        for sample_data in group:
-                            self.process_single_image(
-                                sample_data, std_devs, sample_indices
-                            )
-                    else:
-                        raise e
-            else:
-                self.process_single_image(group[0], std_devs, sample_indices)
-
-        if not std_devs:
-            return []
-
-        std_devs_tensor = torch.tensor(std_devs)
-        threshold = torch.quantile(std_devs_tensor, 0.25)
-
-        filtered_samples = [
-            s for s, std_dev in zip(sample_indices, std_devs) if std_dev >= threshold
-        ]
-
-        return filtered_samples
-
-    def process_group(self, group, std_devs, sample_indices):
-        batch_img_tensors = []
-        for sample, img_data in group:
-            tensor = torch.from_numpy(img_data).float().unsqueeze(0)
-            if tensor.ndim == 3:
-                tensor = tensor.unsqueeze(1)
-            batch_img_tensors.append((sample, tensor))
-
-        batch_tensors = torch.cat([x[1] for x in batch_img_tensors], dim=0)
-        with amp.autocast():
-            std_devs_batch = torch.std(batch_tensors, dim=(1, 2, 3)).cpu().tolist()
-
-        std_devs.extend(std_devs_batch)
-        sample_indices.extend([x[0] for x in batch_img_tensors])
-
-        torch.cuda.empty_cache()
-
-    def process_single_image(self, sample_data, std_devs, sample_indices):
         sample, img_data = sample_data
         tensor = torch.from_numpy(img_data).float().unsqueeze(0)
         if tensor.ndim == 3:
@@ -191,7 +133,7 @@ class MedicalDatasetSR(Dataset):
 
         torch.cuda.empty_cache()
 
-    def load_sample(self, fname):
+    def load_sample(self, fname) -> None | List[FastMRIRawDataSample]:
         fname_path = Path(fname)
         if not fname_path.exists() or not os.access(fname, os.R_OK):
             logging.warning(f"Access issue with file: {fname}")
@@ -205,7 +147,7 @@ class MedicalDatasetSR(Dataset):
             logging.error(f"Error processing file {fname}: {e}")
             return None
 
-    def handle_special_formats(self, fname_path):
+    def handle_special_formats(self, fname_path) -> List[FastMRIRawDataSample] | None:
         fname_path = Path(fname_path)
         if fname_path.suffix == ".h5":
             metadata, num_slices = self._retrieve_metadata(str(fname_path))
@@ -400,7 +342,7 @@ class MedicalDatasetSR(Dataset):
 
         return img_H
 
-    def apply_degradation(self, img, fname):
+    def apply_degradation(self, img, fname):  # -> dict[str, Any]:
         # "bicubic_degradation", "dpsr", "bsrgan_plus"
         chosen_model = random.choice(["dpsr", "bsrgan_plus"])
         kernel = self.select_kernel()
@@ -440,7 +382,7 @@ class MedicalDatasetSR(Dataset):
             )  # Default to average blur kernel
 
     @staticmethod
-    def extract_blocks(img_tensor, block_size, overlap):
+    def extract_blocks(img_tensor, block_size, overlap) -> torch.Tensor:
         blocks = []
         step = block_size - overlap
         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
@@ -448,8 +390,8 @@ class MedicalDatasetSR(Dataset):
                 blocks.append(img_tensor[:, i : i + block_size, j : j + block_size])
         return torch.stack(blocks)
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.raw_samples)
 
-    def is_valid_image(self, file_path):
+    def is_valid_image(self, file_path) -> bool:
         return not file_path.split("/")[-1].startswith(".")
