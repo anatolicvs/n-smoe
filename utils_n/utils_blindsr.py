@@ -578,6 +578,12 @@ def random_crop(lq, hq, sf=4, lq_patchsize=64):
         lq = np.expand_dims(lq, axis=-1)
 
     h, w = lq.shape[:2]
+
+    if h < lq_patchsize or w < lq_patchsize:
+        raise ValueError(
+            f"Image is too small for the requested crop size. lq, Image size: ({h}, {w}), crop size: {lq_patchsize}"
+        )
+
     rnd_h = random.randint(0, h - lq_patchsize)
     rnd_w = random.randint(0, w - lq_patchsize)
     lq = lq[rnd_h : rnd_h + lq_patchsize, rnd_w : rnd_w + lq_patchsize, :]

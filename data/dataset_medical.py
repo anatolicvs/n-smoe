@@ -1,24 +1,25 @@
+from email.policy import default
 import logging
 import os
 import pickle
 import random
 import xml.etree.ElementTree as etree
-
+from collections import defaultdict
+from itertools import chain
 from pathlib import Path
-from typing import Any, Dict, NamedTuple, Sequence
-from typing import List
+from typing import Any, Dict, List, NamedTuple, Sequence
+
+import cv2
 import h5py
 import nibabel
 import numpy as np
 import torch
+import torch.cuda.amp as amp
 from scipy.io import loadmat
-
-import cv2
 from torch.utils.data import Dataset
+
 import utils_n.utils_image as util
 from utils_n import utils_blindsr as blindsr
-from itertools import chain
-import torch.cuda.amp as amp
 
 
 class FastMRIRawDataSample(NamedTuple):
@@ -44,7 +45,9 @@ class MedicalDatasetSR(Dataset):
         self.phase = opt["phase"] if "phase" in opt else "train"
         self.h_size = opt["H_size"] if "H_size" in opt else 96
         self.lq_patchsize = opt["lq_patchsize"] if "lq_patchsize" in opt else 64
-        self.crop_method = opt.get("crop_method", "high_texture")
+        self.crop_method = (
+            opt["crop_method"] if "crop_method" in opt else "high_texture"
+        )
         self.phw = opt["phw"] if "phw" in opt else 32
         self.overlap = opt["overlap"] if "overlap" in opt else 4
 
@@ -81,54 +84,26 @@ class MedicalDatasetSR(Dataset):
         std_devs = []
         sample_indices = []
 
-        batch_size = 64
-        sub_batch_size = 16
         max_memory_usage = torch.cuda.get_device_properties(0).total_memory * 0.9
         scaler = amp.GradScaler(enabled=True)
 
-        i = 0
-
-        while i < len(samples):
+        for s in samples:
             try:
-                batch = samples[i : i + batch_size]
-                batch_img_tensors = []
-
-                for s in batch:
-                    img_data = self.load_image_data(str(s.fname), s.slice_ind)
-                    if img_data is not None:
-                        tensor = torch.from_numpy(img_data).float().unsqueeze(0)
-                        batch_img_tensors.append(tensor)
-
-                if batch_img_tensors:
-                    batch_tensor = torch.cat(batch_img_tensors, dim=0)
-                    num_splits = max(1, len(batch_img_tensors) // sub_batch_size)
+                img_data = self.load_image_data(str(s.fname), s.slice_ind)
+                if img_data is not None:
+                    tensor = torch.from_numpy(img_data).float().to("cuda")
 
                     with amp.autocast():
-                        sub_batches = torch.split(
-                            batch_tensor.to("cuda", non_blocking=True), sub_batch_size
-                        )
-                        for sub_batch in sub_batches:
-                            sub_batch_std_devs = torch.std(
-                                sub_batch, dim=(1, 2, 3), keepdim=False
-                            )
-                            std_devs.extend(sub_batch_std_devs.cpu().tolist())
-                            sample_indices.extend(batch[: len(sub_batch_std_devs)])
+                        std_dev = torch.std(tensor).item()
 
-                    del batch_tensor, sub_batches
-                    torch.cuda.empty_cache()
+                    std_devs.append(std_dev)
+                    sample_indices.append(s)
 
-                current_memory_usage = torch.cuda.memory_allocated()
-                if current_memory_usage > max_memory_usage:
-                    batch_size = max(1, batch_size // 2)
-                else:
-                    batch_size = min(len(samples) - i, batch_size * 2)
-
-                i += batch_size
+                torch.cuda.empty_cache()
 
             except RuntimeError as e:
                 if "out of memory" in str(e):
                     torch.cuda.empty_cache()
-                    batch_size = max(1, batch_size // 2)
                 else:
                     raise e
 
@@ -143,6 +118,78 @@ class MedicalDatasetSR(Dataset):
         ]
 
         return filtered_samples
+
+    def filter_low_content_images_(
+        self, samples: List[FastMRIRawDataSample]
+    ) -> List[FastMRIRawDataSample]:
+        std_devs = []
+        sample_indices = []
+
+        image_groups = defaultdict(list)
+        for s in samples:
+            img_data = self.load_image_data(str(s.fname), s.slice_ind)
+            if img_data is not None:
+                img_size = (img_data.shape[0], img_data.shape[1])
+                image_groups[img_size].append((s, img_data))
+
+        for img_size, group in image_groups.items():
+            if len(group) > 1:
+                try:
+                    self.process_group(group, std_devs, sample_indices)
+                except RuntimeError as e:
+                    if "out of memory" in str(e):
+                        torch.cuda.empty_cache()
+                        for sample_data in group:
+                            self.process_single_image(
+                                sample_data, std_devs, sample_indices
+                            )
+                    else:
+                        raise e
+            else:
+                self.process_single_image(group[0], std_devs, sample_indices)
+
+        if not std_devs:
+            return []
+
+        std_devs_tensor = torch.tensor(std_devs)
+        threshold = torch.quantile(std_devs_tensor, 0.25)
+
+        filtered_samples = [
+            s for s, std_dev in zip(sample_indices, std_devs) if std_dev >= threshold
+        ]
+
+        return filtered_samples
+
+    def process_group(self, group, std_devs, sample_indices):
+        batch_img_tensors = []
+        for sample, img_data in group:
+            tensor = torch.from_numpy(img_data).float().unsqueeze(0)
+            if tensor.ndim == 3:
+                tensor = tensor.unsqueeze(1)
+            batch_img_tensors.append((sample, tensor))
+
+        batch_tensors = torch.cat([x[1] for x in batch_img_tensors], dim=0)
+        with amp.autocast():
+            std_devs_batch = torch.std(batch_tensors, dim=(1, 2, 3)).cpu().tolist()
+
+        std_devs.extend(std_devs_batch)
+        sample_indices.extend([x[0] for x in batch_img_tensors])
+
+        torch.cuda.empty_cache()
+
+    def process_single_image(self, sample_data, std_devs, sample_indices):
+        sample, img_data = sample_data
+        tensor = torch.from_numpy(img_data).float().unsqueeze(0)
+        if tensor.ndim == 3:
+            tensor = tensor.unsqueeze(1)
+
+        with amp.autocast():
+            std_dev = torch.std(tensor).item()
+
+        std_devs.append(std_dev)
+        sample_indices.append(sample)
+
+        torch.cuda.empty_cache()
 
     def load_sample(self, fname):
         fname_path = Path(fname)
@@ -241,6 +288,7 @@ class MedicalDatasetSR(Dataset):
 
     def load_image_data(self, fname: str, slice_ind: int):
         try:
+            fname = str(fname)
             if not os.path.exists(fname):
                 logging.warning(f"File does not exist: {fname}")
                 return None
@@ -312,6 +360,14 @@ class MedicalDatasetSR(Dataset):
         start_x = max(center_x - crop_size // 2, 0)
         end_y = min(start_y + crop_size, img.shape[0])
         end_x = min(start_x + crop_size, img.shape[1])
+
+        if end_y - start_y < crop_size:
+            start_y = max(end_y - crop_size, 0)
+        if end_x - start_x < crop_size:
+            start_x = max(end_x - crop_size, 0)
+
+        end_y = start_y + crop_size
+        end_x = start_x + crop_size
 
         return img[start_y:end_y, start_x:end_x]
 
