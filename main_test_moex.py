@@ -19,6 +19,12 @@ import models.basicblock as B
 from data.select_dataset import define_Dataset
 from models.network_dpsr import MSRResNet_prior as dpsr
 from models.network_rrdb import RRDB as rrdb
+from models.network_unetmoex1 import (
+    Autoencoder,
+    AutoencoderConfig,
+    EncoderConfig,
+    MoEConfig,
+)
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_logger
@@ -30,6 +36,7 @@ if torch.cuda.get_device_properties(0).major >= 8:
     # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+
 
 """
 # --------------------------------------------
@@ -556,14 +563,92 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
                 collate_fn=util.custom_collate,
             )
 
-    model = define_Model(opt)
-    model.load()
-    if opt["rank"] == 0:
-        logger.info(model.info_network())
-        logger.info(model.info_params())
+    # model = define_Model(opt)
+    # model.load()
+    # if opt["rank"] == 0:
+    #     logger.info(model.info_network())
+    #     logger.info(model.info_params())
 
     esrgan_state_path = "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth"
     dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
+    moex1_state_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth"
+
+    json_moex1 = """
+    {
+        "netG": {
+            "net_type": "unet_moex1",
+            "kernel": 16,
+            "sharpening_factor": 1,
+            "model_channels": 64,
+            "num_res_blocks": 8,
+            "attention_resolutions": [16,8,4],
+            "dropout": 0.2,
+            "num_groups": 8,
+            "num_heads": 32,
+            "num_head_channels": 32,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "resblock_updown": false,
+            "channel_mult": [1,2,4,8],
+            "resample_2d": false,
+            "pool": "attention",
+            "activation": "GELU",
+            "resizer_num_layers": 2,
+            "resizer_avg_pool": false,
+            "init_type": "default",
+            "scale": 2,
+            "n_channels": 1,
+            "ang_res": 5,
+            "phw": 16,
+            "overlap": 15
+        }
+    }
+    """
+
+    netG_moex1 = json.loads(json_moex1)["netG"]
+    z = 2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
+
+    encoder_cfg = EncoderConfig(
+        model_channels=netG_moex1["model_channels"],
+        num_res_blocks=netG_moex1["num_res_blocks"],
+        attention_resolutions=netG_moex1["attention_resolutions"],
+        dropout=netG_moex1["dropout"],
+        num_groups=netG_moex1["num_groups"],
+        scale_factor=netG_moex1["scale"],
+        num_heads=netG_moex1["num_heads"],
+        num_head_channels=netG_moex1["num_head_channels"],
+        use_new_attention_order=netG_moex1["use_new_attention_order"],
+        use_checkpoint=netG_moex1["use_checkpoint"],
+        resblock_updown=netG_moex1["resblock_updown"],
+        channel_mult=netG_moex1["channel_mult"],
+        resample_2d=netG_moex1["resample_2d"],
+        pool=netG_moex1["pool"],
+        activation=netG_moex1["activation"],
+    )
+
+    decoder_cfg = MoEConfig(
+        kernel=netG_moex1["kernel"],
+        sharpening_factor=netG_moex1["sharpening_factor"],
+    )
+
+    autoenocer_cfg = AutoencoderConfig(
+        EncoderConfig=encoder_cfg,
+        DecoderConfig=decoder_cfg,
+        d_in=netG_moex1["n_channels"],
+        d_out=z,
+        phw=netG_moex1["phw"],
+        overlap=netG_moex1["overlap"],
+    )
+
+    model_moex1 = Autoencoder(cfg=autoenocer_cfg)
+
+    model_moex1.load_state_dict(
+        torch.load(moex1_state_path, weights_only=True), strict=True
+    )
+    model_moex1.eval()
+    for k, v in model_moex1.named_parameters():
+        v.requires_grad = False
+    model_moex1 = model_moex1.to(model.device)
 
     json_dpsr = """
         {
@@ -635,6 +720,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
        } 
     """
     netG_rrdb = json.loads(json_rrdb)["netG"]
+
     model_esrgan = rrdb(
         in_nc=netG_rrdb["in_nc"],
         out_nc=netG_rrdb["out_nc"],
@@ -664,14 +750,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     #     "N-SMoE",
     #     "DPSR",
     # ]
-
-    titles: list[str] = [
-        "Noisy Low Resolution Crop",
-        "Ground Truth Crop",
-        "N-SMoE",
-        "DPSR",
-        "ESRGAN",
-    ]
 
     # sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
     # model_cfg = "sam2_hiera_l.yaml"
@@ -725,19 +803,20 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         util.mkdir(img_dir)
 
         with torch.no_grad():
-            E_img_dpsr = model_dpsr(test_data["L"].to(model.device))
-            E_img_esrgan = model_esrgan(test_data["L"].to(model.device))
+            E_img_moex1 = model_moex1(test_data["L_p"].to(model_moex1.device))
+            E_img_dpsr = model_dpsr(test_data["L"].to(model_moex1.device))
+            E_img_esrgan = model_esrgan(test_data["L"].to(model_moex1.device))
 
-        model.feed_data(test_data)
-        model.test()
+        # model.feed_data(test_data)
+        # model.test()
 
         E_img_dpsr = util._tensor2uint(E_img_dpsr)
         E_img_esrgan = util._tensor2uint(E_img_esrgan)
-        visuals = model.current_visuals()
+        # visuals = model.current_visuals()
 
-        L_crop_img = util.tensor2uint(visuals["L"])
-        E_crop_img = util.tensor2uint(visuals["E"])
-        H_crop_img = util.tensor2uint(visuals["H"])
+        L_crop_img = util.tensor2uint(test_data["L"])
+        # E_crop_img = util.tensor2uint(visuals["E"])
+        H_crop_img = util.tensor2uint(test_data["H"])
 
         img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
         img_H = util.modcrop(img_H, border)
@@ -748,7 +827,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
             "H_img": img_H,
             "L_crop_img": L_crop_img,
             "H_crop_img": H_crop_img,
-            "E_SMoE_img": E_crop_img,
+            "E_SMoE_img": E_img_moex1,
             "E_DPSR_img": E_img_dpsr,
             "E_ESRGAN_img": E_img_esrgan,
             "Degradation_Model": degradation_model,
@@ -757,9 +836,19 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
         scipy.io.savemat(filename, images)
 
-        visualize_data(
-            [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr, E_img_esrgan], titles
-        )
+        titles: list[str] = [
+            "Noisy Low Resolution Crop",
+            "Ground Truth Crop",
+            "N-SMoE",
+            # "DPSR",
+            # "ESRGAN",
+        ]
+
+        # visualize_data(
+        #     [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr, E_img_esrgan], titles
+        # )
+
+        visualize_data([L_crop_img, H_crop_img, E_crop_img], titles)
 
         # visualize_with_segmentation(
         #     [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
