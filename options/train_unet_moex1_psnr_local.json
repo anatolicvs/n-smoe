@@ -42,11 +42,12 @@
           , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
           , "lq_patchsize": 256
           , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-          , "dataroot_H": ["/mnt/e/Medical/temca"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          , "exclude_dirs": ["/mnt/e/RGB/open-images/test"]
+          , "dataroot_H": ["/mnt/e/Medical/temca","/mnt/e/RGB/open-images/test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
-          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing_temca_v1.pkl"
-          , "H_size": 1024                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing_temca_rgb_v2.pkl"
+          , "H_size": 512                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 
         }

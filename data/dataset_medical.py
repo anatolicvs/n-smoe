@@ -31,26 +31,29 @@ class FastMRIRawDataSample(NamedTuple):
 
 class MedicalDatasetSR(Dataset):
     def __init__(self, opt):
-        self.n_channels = opt["n_channels"] if "n_channels" in opt else 3
-        self.roots = opt["dataroot_H"]
+        self.n_channels: int = opt["n_channels"] if "n_channels" in opt else 3
+        self.roots: list[str] = opt["dataroot_H"] if "dataroot_H" in opt else []
+        self.exclude_dirs: list[str] = (
+            opt["exclude_dirs"] if "exclude_dirs" in opt else []
+        )
         self.challenge = opt["challenge"] if "challenge" in opt else "multicoil"
-        self.use_dataset_cache = (
+        self.use_dataset_cache: bool = (
             opt["use_dataset_cache"] if "use_dataset_cache" in opt else True
         )
-        self.dataset_cache_file = (
+        self.dataset_cache_file: str = (
             opt["dataset_cache_file"]
             if "dataset_cache_file" in opt
             else "dataset_cache.pkl"
         )
-        self.sf = opt["scale"] if "scale" in opt else 2
-        self.phase = opt["phase"] if "phase" in opt else "train"
-        self.h_size = opt["H_size"] if "H_size" in opt else 96
-        self.lq_patchsize = opt["lq_patchsize"] if "lq_patchsize" in opt else 64
-        self.crop_method = (
+        self.sf: int = opt["scale"] if "scale" in opt else 2
+        self.phase: str = opt["phase"] if "phase" in opt else "train"
+        self.h_size: int = opt["H_size"] if "H_size" in opt else 96
+        self.lq_patchsize: int = opt["lq_patchsize"] if "lq_patchsize" in opt else 64
+        self.crop_method: str = (
             opt["crop_method"] if "crop_method" in opt else "high_texture"
         )
-        self.phw = opt["phw"] if "phw" in opt else 32
-        self.overlap = opt["overlap"] if "overlap" in opt else 4
+        self.phw: int = opt["phw"] if "phw" in opt else 32
+        self.overlap: int = opt["overlap"] if "overlap" in opt else 4
 
         # self.recons_keys = ["reconstruction_rss"]  # "kspace",
         self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
@@ -68,7 +71,7 @@ class MedicalDatasetSR(Dataset):
         files = [self.load_sample(f) for f in util.get_m_image_paths(self.roots)]
         samples = list(chain.from_iterable(filter(None, files)))
 
-        filtered_samples = self.filter_low_content_images(samples)
+        filtered_samples = self.filter_low_content_images(samples, self.exclude_dirs)
 
         if self.use_dataset_cache:
             try:
@@ -80,22 +83,31 @@ class MedicalDatasetSR(Dataset):
         return filtered_samples
 
     def filter_low_content_images(
-        self, samples: List[FastMRIRawDataSample]
+        self, samples: List[FastMRIRawDataSample], exclude_dirs: List[str] = None
     ) -> List[FastMRIRawDataSample]:
         std_devs = []
         sample_indices = []
 
         max_memory_usage = torch.cuda.get_device_properties(0).total_memory * 0.9
-        scaler = amp.GradScaler(enabled=True)
+        scaler = torch.amp.GradScaler(enabled=True)
+
+        filtered_samples = []
 
         for s in samples:
+            if exclude_dirs and any(
+                str(s.fname).startswith(exclude_dir.rstrip("/"))
+                for exclude_dir in exclude_dirs
+            ):
+                filtered_samples.append(s)
+                continue
+
             try:
                 img_data = self.load_image_data(str(s.fname), s.slice_ind)
                 if img_data is not None:
                     tensor = torch.from_numpy(img_data).float().to("cuda")
 
-                    with amp.autocast():
-                        std_dev: int | float | bool = torch.std(tensor).item()
+                    with torch.amp.autocast("cuda"):
+                        std_dev = torch.std(tensor).item()
 
                     std_devs.append(std_dev)
                     sample_indices.append(s)
@@ -108,15 +120,14 @@ class MedicalDatasetSR(Dataset):
                 else:
                     raise e
 
-        if not std_devs:
-            return []
-
-        std_devs_tensor: torch.Tensor = torch.tensor(std_devs)
-        threshold: torch.Tensor = torch.quantile(std_devs_tensor, 0.25)
-
-        filtered_samples = [
-            s for s, std_dev in zip(sample_indices, std_devs) if std_dev >= threshold
-        ]
+        if std_devs:
+            std_devs_tensor = torch.tensor(std_devs)
+            threshold = torch.quantile(std_devs_tensor, 0.25)
+            filtered_samples.extend(
+                s
+                for s, std_dev in zip(sample_indices, std_devs)
+                if std_dev >= threshold
+            )
 
         return filtered_samples
 
