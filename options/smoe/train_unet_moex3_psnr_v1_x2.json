@@ -26,10 +26,11 @@
             , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
             , "lq_patchsize": 64
             , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+            , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
             //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
             , "use_dataset_cache": true
-            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_new_v1.pkl"
+            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
             , "dataroot_L": null              // path of L training dataset
             , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
@@ -41,10 +42,11 @@
             , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
             , "lq_patchsize": 64
             , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+            , "exclude_dirs": ["/work/pb035507/dataset/rgb/test/"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
             , "dataroot_L": null              // path of L testing dataset
             , "use_dataset_cache": true
-            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_new_v1.pkl"
+            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
             , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4 
