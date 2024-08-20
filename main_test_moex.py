@@ -1,16 +1,16 @@
 import argparse
+import datetime
 import json
 import logging
 import math
 import os.path
 import random
+from typing import Any, List
 
-import datetime
-from typing import Any
 import numpy as np
+import scipy.io
 import torch
 import torch.nn as nn
-
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 from sam2.build_sam import build_sam2
 from torch.utils.data import DataLoader
@@ -24,8 +24,6 @@ from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
-import scipy.io
-
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -331,7 +329,7 @@ def visualize_with_segmentation(images, titles, mask_generator):
     plt.show()
 
 
-def visualize_data(images, titles):
+def visualize_data_pair(images, titles):
     import matplotlib
 
     matplotlib.use("TkAgg")
@@ -423,6 +421,84 @@ def visualize_data(images, titles):
     plt.show()
 
 
+def visualize_data(images: List[np.ndarray], titles: List[str]) -> None:
+    import matplotlib
+
+    matplotlib.use("TkAgg")
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from numpy.fft import fft2, fftshift
+    from skimage.metrics import peak_signal_noise_ratio as psnr
+    from skimage.metrics import structural_similarity as ssim
+
+    num_images = len(images)
+    fig = plt.figure(figsize=(18, 10), constrained_layout=True)
+    gs = GridSpec(5, num_images, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
+
+    axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
+    reference_title = "Ground Truth Crop"
+    low_res_title = "Noisy Low Resolution Crop"
+    reference_index = titles.index(reference_title)
+    reference_image = images[reference_index].squeeze()
+
+    psnr_values = {}
+    ssim_values = {}
+
+    for i, (img, title) in enumerate(zip(images, titles)):
+        ax_img = fig.add_subplot(gs[0, i])
+        ax_img.imshow(img, cmap="gray")
+        ax_img.axis("on")
+        for spine in ax_img.spines.values():
+            spine.set_color(axes_colors[i % len(axes_colors)])
+
+        if title != reference_title and title != low_res_title:
+            current_psnr = psnr(reference_image, img, data_range=img.max() - img.min())
+            current_ssim = ssim(reference_image, img, data_range=img.max() - img.min())
+            psnr_values[title] = current_psnr
+            ssim_values[title] = current_ssim
+            title += f"\nPSNR: {current_psnr:.2f} dB, SSIM: {current_ssim:.4f}"
+
+        ax_img.set_title(
+            title, fontsize=12, family="Times New Roman", fontweight="bold"
+        )
+
+        freq = fftshift(fft2(img))
+        freq_magnitude = np.log(np.abs(freq) + 1)
+
+        ax_x_spectrum = fig.add_subplot(gs[1, i])
+        ax_x_spectrum.plot(np.sum(freq_magnitude, axis=0), color="blue")
+        ax_x_spectrum.set_title(
+            "X-Spectrum", fontsize=12, family="Times New Roman", fontweight="bold"
+        )
+        ax_x_spectrum.set_xlabel(
+            "Frequency (pixels)", fontsize=11, family="Times New Roman"
+        )
+        ax_x_spectrum.set_yticklabels([])
+        ax_x_spectrum.tick_params(axis="both", which="major", labelsize=10)
+        ax_x_spectrum.grid(True)
+
+        ax_y_spectrum = fig.add_subplot(gs[2, i])
+        ax_y_spectrum.plot(np.sum(freq_magnitude, axis=1), color="blue")
+        ax_y_spectrum.set_title(
+            "Y-Spectrum", fontsize=12, family="Times New Roman", fontweight="bold"
+        )
+        ax_y_spectrum.set_xlabel(
+            "Frequency (pixels)", fontsize=11, family="Times New Roman"
+        )
+        ax_y_spectrum.set_yticklabels([])
+        ax_y_spectrum.tick_params(axis="both", which="major", labelsize=10)
+        ax_y_spectrum.grid(True)
+
+        ax_2d_spectrum = fig.add_subplot(gs[3, i])
+        ax_2d_spectrum.imshow(freq_magnitude, cmap="gray")
+        ax_2d_spectrum.set_title(
+            "2D Spectrum", fontsize=12, family="Times New Roman", fontweight="bold"
+        )
+        ax_2d_spectrum.axis("on")
+
+    plt.show()
+
+
 def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -486,7 +562,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    esrgan_state_path = ""
+    esrgan_state_path = "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth"
     dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
 
     json_dpsr = """
@@ -526,26 +602,38 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         act_mode=netG_dpsr["act_mode"],
         upsample_mode=netG_dpsr["upsample_mode"],
     )
+
+    model_dpsr.load_state_dict(
+        torch.load(dpsr_state_path, weights_only=True), strict=True
+    )
+    model_dpsr.eval()
+    for k, v in model_dpsr.named_parameters():
+        v.requires_grad = False
+    model_dpsr = model_dpsr.to(model.device)
+
     json_rrdb = """
+    {
         "netG": {
-        "net_type": "rrdb",
-        "in_nc": 1,
-        "out_nc": 1,
-        "nc": 64,
-        "nb": 23,
-        "gc": 32,
-        "ng": 2,
-        "reduction": 16,
-        "act_mode": "R",
-        "upsample_mode": "upconv",
-        "downsample_mode": "strideconv",
-        "init_type": "orthogonal",
-        "init_bn_type": "uniform",
-        "init_gain": 0.2,
-        "scale": 2,
-        "n_channels": 1,
-        "ang_res": 5
-    }"""
+            "net_type": "rrdb",
+            "in_nc": 1,
+            "out_nc": 1,
+            "nc": 64,
+            "nb": 23,
+            "gc": 32,
+            "ng": 2,
+            "reduction": 16,
+            "act_mode": "R",
+            "upsample_mode": "upconv",
+            "downsample_mode": "strideconv",
+            "init_type": "orthogonal",
+            "init_bn_type": "uniform",
+            "init_gain": 0.2,
+            "scale": 2,
+            "n_channels": 1,
+            "ang_res": 5
+        }
+       } 
+    """
     netG_rrdb = json.loads(json_rrdb)["netG"]
     model_esrgan = rrdb(
         in_nc=netG_rrdb["in_nc"],
@@ -566,15 +654,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         v.requires_grad = False
     model_esrgan = model_esrgan.to(model.device)
 
-    model_dpsr.load_state_dict(
-        torch.load(dpsr_state_path, weights_only=True), strict=True
-    )
-    model_dpsr.eval()
-    for k, v in model_dpsr.named_parameters():
-        v.requires_grad = False
-    model_dpsr = model_dpsr.to(model.device)
-
-
     avg_psnr = 0.0
     idx = 0
 
@@ -586,7 +665,13 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     #     "DPSR",
     # ]
 
-    titles = ["Noisy Low Resolution Crop", "Ground Truth Crop", "N-SMoE", "DPSR"]
+    titles: list[str] = [
+        "Noisy Low Resolution Crop",
+        "Ground Truth Crop",
+        "N-SMoE",
+        "DPSR",
+        "ESRGAN",
+    ]
 
     # sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
     # model_cfg = "sam2_hiera_l.yaml"
@@ -641,11 +726,15 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
 
         with torch.no_grad():
             E_img_dpsr = model_dpsr(test_data["L"].to(model.device))
-            model.feed_data(test_data)
-            model.test()
+            E_img_esrgan = model_esrgan(test_data["L"].to(model.device))
+
+        model.feed_data(test_data)
+        model.test()
 
         E_img_dpsr = util._tensor2uint(E_img_dpsr)
+        E_img_esrgan = util._tensor2uint(E_img_esrgan)
         visuals = model.current_visuals()
+
         L_crop_img = util.tensor2uint(visuals["L"])
         E_crop_img = util.tensor2uint(visuals["E"])
         H_crop_img = util.tensor2uint(visuals["H"])
@@ -661,13 +750,16 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
             "H_crop_img": H_crop_img,
             "E_SMoE_img": E_crop_img,
             "E_DPSR_img": E_img_dpsr,
+            "E_ESRGAN_img": E_img_esrgan,
             "Degradation_Model": degradation_model,
         }
 
         filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
         scipy.io.savemat(filename, images)
 
-        visualize_data([L_crop_img, H_crop_img, E_crop_img, E_img_dpsr], titles)
+        visualize_data(
+            [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr, E_img_esrgan], titles
+        )
 
         # visualize_with_segmentation(
         #     [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
