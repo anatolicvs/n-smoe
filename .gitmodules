@@ -3,4 +3,4 @@
 	url = https://github.com/nerfstudio-project/gsplat
 [submodule "stylegan3"]
 	path = stylegan3
-	url = ./stylegan3
+	url = https://github.com/NVlabs/stylegan3.git
