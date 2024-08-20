@@ -4,3 +4,6 @@
 [submodule "stylegan3"]
 	path = stylegan3
 	url = https://github.com/NVlabs/stylegan3.git
+[submodule "torch-splatting"]
+        path = torch-splatting
+        url = https://github.com/hbb1/torch-splatting.git
