@@ -487,9 +487,6 @@ class Encoder(Backbone[EncoderConfig]):
         self.latent: int = d_out
         self.phw = phw
 
-        if cfg.num_heads_upsample == -1:
-            cfg.num_heads_upsample = cfg.num_heads
-
         self.dtype = torch.float16 if cfg.use_fp16 else torch.float32
 
         if hasattr(nn, cfg.activation):

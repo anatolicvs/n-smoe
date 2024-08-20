@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 import models.basicblock as B
 from data.select_dataset import define_Dataset
 from models.network_dpsr import MSRResNet_prior as dpsr
+from models.network_rrdb import RRDB as rrdb
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_logger
@@ -485,9 +486,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    directory = "/home/ozkan/works/diff-smoe/zoo/"
-    esrgan = os.path.join(directory, "ESRGAN.pth")
-
+    esrgan_state_path = ""
     dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
 
     json_dpsr = """
@@ -527,6 +526,45 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         act_mode=netG_dpsr["act_mode"],
         upsample_mode=netG_dpsr["upsample_mode"],
     )
+    json_rrdb = """
+        "netG": {
+        "net_type": "rrdb",
+        "in_nc": 1,
+        "out_nc": 1,
+        "nc": 64,
+        "nb": 23,
+        "gc": 32,
+        "ng": 2,
+        "reduction": 16,
+        "act_mode": "R",
+        "upsample_mode": "upconv",
+        "downsample_mode": "strideconv",
+        "init_type": "orthogonal",
+        "init_bn_type": "uniform",
+        "init_gain": 0.2,
+        "scale": 2,
+        "n_channels": 1,
+        "ang_res": 5
+    }"""
+    netG_rrdb = json.loads(json_rrdb)["netG"]
+    model_esrgan = rrdb(
+        in_nc=netG_rrdb["in_nc"],
+        out_nc=netG_rrdb["out_nc"],
+        nc=netG_rrdb["nc"],
+        nb=netG_rrdb["nb"],
+        gc=netG_rrdb["gc"],
+        upscale=netG_rrdb["scale"],
+        act_mode=netG_rrdb["act_mode"],
+        upsample_mode=netG_rrdb["upsample_mode"],
+    )
+
+    model_esrgan.load_state_dict(
+        torch.load(esrgan_state_path, weights_only=True), strict=True
+    )
+    model_esrgan.eval()
+    for k, v in model_esrgan.named_parameters():
+        v.requires_grad = False
+    model_esrgan = model_esrgan.to(model.device)
 
     model_dpsr.load_state_dict(
         torch.load(dpsr_state_path, weights_only=True), strict=True
@@ -536,23 +574,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         v.requires_grad = False
     model_dpsr = model_dpsr.to(model.device)
 
-    model_esrgan = RRDB(
-        in_nc=3,
-        out_nc=3,
-        nc=64,
-        nb=23,
-        gc=32,
-        upscale=opt["scale"],
-        act_mode="L",
-        upsample_mode="upconv",
-    )
-    model_esrgan.load_state_dict(
-        torch.load(esrgan, weights_only=True), strict=False
-    )  # strict=False
-    model_esrgan.eval()
-    for k, v in model_esrgan.named_parameters():
-        v.requires_grad = False
-    model_esrgan = model_esrgan.to(model.device)
 
     avg_psnr = 0.0
     idx = 0
