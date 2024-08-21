@@ -31,12 +31,20 @@ def setup_logging(opt) -> logging.Logger | None:
         logger_name = "train"
         log_file = os.path.join(opt["path"]["log"], f"{logger_name}.log")
         logger = logging.getLogger(logger_name)
-        if not logger.handlers:
-            file_handler = logging.FileHandler(log_file)
-            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-            file_handler.setFormatter(formatter)
-            logger.addHandler(file_handler)
-            logger.setLevel(logging.INFO)
+
+        if logger.hasHandlers():
+            logger.handlers.clear()
+
+        file_handler = logging.FileHandler(log_file)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
+        logger.setLevel(logging.INFO)
+
+        logger.propagate = False
+
         logger.info(option.dict2str(opt))
     else:
         logger = None
@@ -173,6 +181,8 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
             (path for key, path in opt["path"].items() if "pretrained" not in key)
         )
 
+    logger: logging.Logger | None = setup_logging(opt)
+
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
         net_type="G",
@@ -213,7 +223,6 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
         option.save(opt)
 
     opt = option.dict_to_nonedict(opt)
-    logger: logging.Logger | None = setup_logging(opt)
     train_loader, test_loader = create_data_loaders(opt, logger)
     model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
         opt

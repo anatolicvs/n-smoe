@@ -55,7 +55,16 @@ class MedicalDatasetSR(Dataset):
         self.phw: int = opt["phw"] if "phw" in opt else 32
         self.overlap: int = opt["overlap"] if "overlap" in opt else 4
 
-        # self.recons_keys = ["reconstruction_rss"]  # "kspace",
+        self.length: int = opt["length"] if "length" in opt else -1
+
+        self.degradation_methods: List[str] = (
+            opt["degradation_methods"]
+            if "degradation_methods" in opt
+            else ["dpsr"]  # dpsr, bsrgan_plus, classic_sr, bicubic_degradation
+        )
+
+        # self.recons_keys = ["reconstruction_rss"]  # "kspace"
+
         self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
 
@@ -69,9 +78,13 @@ class MedicalDatasetSR(Dataset):
                 pass
 
         files = [self.load_sample(f) for f in util.get_m_image_paths(self.roots)]
+
         samples = list(chain.from_iterable(filter(None, files)))
 
         filtered_samples = self.filter_low_content_images(samples, self.exclude_dirs)
+
+        if self.length > 0 and len(filtered_samples) > self.length:
+            filtered_samples = random.sample(filtered_samples, self.length)
 
         if self.use_dataset_cache:
             try:
@@ -354,8 +367,7 @@ class MedicalDatasetSR(Dataset):
         return img_H
 
     def apply_degradation(self, img, fname):  # -> dict[str, Any]:
-        # "bicubic_degradation", "dpsr", "bsrgan_plus"
-        chosen_model = random.choice(["dpsr"])
+        chosen_model = random.choice(self.degradation_methods)
         kernel = self.select_kernel()
         img_L, img_H = {
             "dpsr": lambda x: blindsr.dpsr_degradation(

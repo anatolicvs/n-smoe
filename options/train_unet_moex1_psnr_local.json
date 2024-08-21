@@ -38,7 +38,7 @@
         } 
 
         , "test": {
-          "name": "test_dataset"            // just name
+             "name": "test_dataset"            // just name
           , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
           , "lq_patchsize": 256
           , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"

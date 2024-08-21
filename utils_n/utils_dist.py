@@ -9,7 +9,7 @@ import pickle
 
 
 def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
-    if mp.get_start_method(allow_none=True) is None:
+    if mp.get_start_method(allow_none=True) != "spawn":
         mp.set_start_method("spawn", force=True)
     if launcher == "pytorch":
         _init_dist_pytorch(backend, **kwargs)
@@ -17,7 +17,7 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
         _init_dist_slurm(backend, **kwargs)
     else:
         raise ValueError(f"Invalid launcher type: {launcher}")
-    
+
     torch.cuda.synchronize()
 
 

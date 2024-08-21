@@ -1,3 +1,5 @@
+# type: ignore
+
 import argparse
 import logging
 import math
@@ -23,8 +25,15 @@ def setup_logging(opt) -> logging.Logger | None:
     if opt["rank"] == 0:
         logger_name = "train"
         log_file = os.path.join(opt["path"]["log"], f"{logger_name}.log")
-        utils_logger.logger_info(logger_name, log_file)
         logger = logging.getLogger(logger_name)
+        if not logger.handlers:
+            file_handler = logging.FileHandler(log_file)
+            formatter = logging.Formatter(
+                "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+            )
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            logger.setLevel(logging.INFO)
         logger.info(option.dict2str(opt))
     else:
         logger = None
@@ -53,11 +62,17 @@ def create_data_loaders(
             train_batch_size = dataset_opt["dataloader_batch_size"]
             train_size = int(math.ceil(len(train_set) / train_batch_size))
             if opt["rank"] == 0:
-                logger.info(f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}")
+                logger.info(
+                    f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}"
+                )
             if opt["dist"] and train_batch_size % opt["num_gpu"] != 0:
-                train_batch_size = max(1, (train_batch_size // opt["num_gpu"]) * opt["num_gpu"])
+                train_batch_size = max(
+                    1, (train_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+                )
                 if opt["rank"] == 0:
-                    logger.info(f"Adjusted train batch size to {train_batch_size} for better GPU utilization")
+                    logger.info(
+                        f"Adjusted train batch size to {train_batch_size} for better GPU utilization"
+                    )
             if opt["dist"]:
                 train_sampler = DistributedSampler(
                     train_set,
@@ -91,11 +106,17 @@ def create_data_loaders(
             test_batch_size = dataset_opt["dataloader_batch_size"]
             test_size = int(math.ceil(len(test_set) / test_batch_size))
             if opt["rank"] == 0:
-                logger.info(f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}")
+                logger.info(
+                    f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}"
+                )
             if opt["dist"] and test_batch_size % opt["num_gpu"] != 0:
-                test_batch_size = max(1, (test_batch_size // opt["num_gpu"]) * opt["num_gpu"])
+                test_batch_size = max(
+                    1, (test_batch_size // opt["num_gpu"]) * opt["num_gpu"]
+                )
                 if opt["rank"] == 0:
-                    logger.info(f"Adjusted test batch size to {test_batch_size} for consistency")
+                    logger.info(
+                        f"Adjusted test batch size to {test_batch_size} for consistency"
+                    )
             if opt["dist"]:
                 test_sampler = DistributedSampler(
                     test_set,
@@ -126,7 +147,7 @@ def create_data_loaders(
         else:
             logger.error(f"Phase [{phase}] is not recognized.")
             raise NotImplementedError(f"Phase [{phase}] is not recognized.")
-    
+
     return train_loader, test_loader
 
 

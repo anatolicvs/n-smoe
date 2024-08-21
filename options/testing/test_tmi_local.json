@@ -1,0 +1,42 @@
+{
+    "task": "tmi_model_test" 
+    , "model": "plain" // "gan"
+    , "gpu_ids": [0]
+    
+    , "scale": 2       // broadcast to "netG" if SISR
+    , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
+    , "phw": 16  
+    , "overlap": 15
+    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
+    , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
+    , "merge_bn": false              // if no BN exists, set false
+    , "merge_bn_startpoint": 400000  // merge BN after N iterations
+        
+    , "path": {
+      "root": "/mnt/d/tmi_test_superresolution"
+      , "pretrained_netG": null 
+      , "pretrained_netD": null
+      , "pretrained_netE": null
+      }
+  
+      , "datasets": {
+         "test": {
+            "name": "amd"            
+          , "dataset_type": "medical_sr"            
+          , "lq_patchsize": 64
+          , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
+          , "exclude_dirs": []
+          , "length" : 50
+          , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/amd"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_amd_.pkl"
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1 
+        }
+      }
+  }
+  
