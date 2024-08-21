@@ -453,14 +453,16 @@ def visualize_data(images: List[np.ndarray], titles: List[str]) -> None:
 
     for i, (img, title) in enumerate(zip(images, titles)):
         ax_img = fig.add_subplot(gs[0, i])
-        ax_img.imshow(img, cmap="gray")
+        ax_img.imshow(img)
         ax_img.axis("on")
         for spine in ax_img.spines.values():
             spine.set_color(axes_colors[i % len(axes_colors)])
 
         if title != reference_title and title != low_res_title:
             current_psnr = psnr(reference_image, img, data_range=img.max() - img.min())
-            current_ssim = ssim(reference_image, img, data_range=img.max() - img.min())
+            current_ssim = ssim(
+                reference_image, img, channel_axis=-1, data_range=img.max() - img.min()
+            )
             psnr_values[title] = current_psnr
             ssim_values[title] = current_ssim
             title += f"\nPSNR: {current_psnr:.2f} dB, SSIM: {current_ssim:.4f}"
@@ -563,6 +565,8 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
                 collate_fn=util.custom_collate,
             )
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # model = define_Model(opt)
     # model.load()
     # if opt["rank"] == 0:
@@ -571,7 +575,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
 
     esrgan_state_path = "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth"
     dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
-    moex1_state_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth"
+    moex1_state_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth"  # RGB
 
     json_moex1 = """
     {
@@ -597,7 +601,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
             "resizer_avg_pool": false,
             "init_type": "default",
             "scale": 2,
-            "n_channels": 1,
+            "n_channels": 3,
             "ang_res": 5,
             "phw": 16,
             "overlap": 15
@@ -648,97 +652,97 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
     model_moex1.eval()
     for k, v in model_moex1.named_parameters():
         v.requires_grad = False
-    model_moex1 = model_moex1.to(model.device)
+    model_moex1 = model_moex1.to(device)
 
-    json_dpsr = """
-        {
-        "netG": {
-            "net_type": "dpsr",
-            "in_nc": 1,
-            "out_nc": 1,
-            "nc": 96,
-            "nb": 16,
-            "gc": 32,
-            "ng": 2,
-            "reduction": 16,
-            "act_mode": "R",
-            "upsample_mode": "pixelshuffle",
-            "downsample_mode": "strideconv",
-            "init_type": "orthogonal",
-            "init_bn_type": "uniform",
-            "init_gain": 0.2,
-            "scale": 2,
-            "n_channels": 1,
-            "ang_res": 5,
-            "phw": 16,
-            "overlap": 10
-            }
-         }
-        """
+    # json_dpsr = """
+    #     {
+    #     "netG": {
+    #         "net_type": "dpsr",
+    #         "in_nc": 1,
+    #         "out_nc": 1,
+    #         "nc": 96,
+    #         "nb": 16,
+    #         "gc": 32,
+    #         "ng": 2,
+    #         "reduction": 16,
+    #         "act_mode": "R",
+    #         "upsample_mode": "pixelshuffle",
+    #         "downsample_mode": "strideconv",
+    #         "init_type": "orthogonal",
+    #         "init_bn_type": "uniform",
+    #         "init_gain": 0.2,
+    #         "scale": 2,
+    #         "n_channels": 1,
+    #         "ang_res": 5,
+    #         "phw": 16,
+    #         "overlap": 10
+    #         }
+    #      }
+    #     """
 
-    netG_dpsr = json.loads(json_dpsr)["netG"]
+    # netG_dpsr = json.loads(json_dpsr)["netG"]
 
-    model_dpsr = dpsr(
-        in_nc=netG_dpsr["in_nc"],
-        out_nc=netG_dpsr["out_nc"],
-        nc=netG_dpsr["nc"],
-        nb=netG_dpsr["nb"],
-        upscale=netG_dpsr["scale"],
-        act_mode=netG_dpsr["act_mode"],
-        upsample_mode=netG_dpsr["upsample_mode"],
-    )
+    # model_dpsr = dpsr(
+    #     in_nc=netG_dpsr["in_nc"],
+    #     out_nc=netG_dpsr["out_nc"],
+    #     nc=netG_dpsr["nc"],
+    #     nb=netG_dpsr["nb"],
+    #     upscale=netG_dpsr["scale"],
+    #     act_mode=netG_dpsr["act_mode"],
+    #     upsample_mode=netG_dpsr["upsample_mode"],
+    # )
 
-    model_dpsr.load_state_dict(
-        torch.load(dpsr_state_path, weights_only=True), strict=True
-    )
-    model_dpsr.eval()
-    for k, v in model_dpsr.named_parameters():
-        v.requires_grad = False
-    model_dpsr = model_dpsr.to(model.device)
+    # model_dpsr.load_state_dict(
+    #     torch.load(dpsr_state_path, weights_only=True), strict=True
+    # )
+    # model_dpsr.eval()
+    # for k, v in model_dpsr.named_parameters():
+    #     v.requires_grad = False
+    # model_dpsr = model_dpsr.to(device)
 
-    json_rrdb = """
-    {
-        "netG": {
-            "net_type": "rrdb",
-            "in_nc": 1,
-            "out_nc": 1,
-            "nc": 64,
-            "nb": 23,
-            "gc": 32,
-            "ng": 2,
-            "reduction": 16,
-            "act_mode": "R",
-            "upsample_mode": "upconv",
-            "downsample_mode": "strideconv",
-            "init_type": "orthogonal",
-            "init_bn_type": "uniform",
-            "init_gain": 0.2,
-            "scale": 2,
-            "n_channels": 1,
-            "ang_res": 5
-        }
-       } 
-    """
-    netG_rrdb = json.loads(json_rrdb)["netG"]
+    # json_rrdb = """
+    # {
+    #     "netG": {
+    #         "net_type": "rrdb",
+    #         "in_nc": 1,
+    #         "out_nc": 1,
+    #         "nc": 64,
+    #         "nb": 23,
+    #         "gc": 32,
+    #         "ng": 2,
+    #         "reduction": 16,
+    #         "act_mode": "R",
+    #         "upsample_mode": "upconv",
+    #         "downsample_mode": "strideconv",
+    #         "init_type": "orthogonal",
+    #         "init_bn_type": "uniform",
+    #         "init_gain": 0.2,
+    #         "scale": 2,
+    #         "n_channels": 1,
+    #         "ang_res": 5
+    #     }
+    #    }
+    # """
+    # netG_rrdb = json.loads(json_rrdb)["netG"]
 
-    model_esrgan = rrdb(
-        in_nc=netG_rrdb["in_nc"],
-        out_nc=netG_rrdb["out_nc"],
-        nc=netG_rrdb["nc"],
-        nb=netG_rrdb["nb"],
-        gc=netG_rrdb["gc"],
-        upscale=netG_rrdb["scale"],
-        act_mode=netG_rrdb["act_mode"],
-        upsample_mode=netG_rrdb["upsample_mode"],
-    )
+    # model_esrgan = rrdb(
+    #     in_nc=netG_rrdb["in_nc"],
+    #     out_nc=netG_rrdb["out_nc"],
+    #     nc=netG_rrdb["nc"],
+    #     nb=netG_rrdb["nb"],
+    #     gc=netG_rrdb["gc"],
+    #     upscale=netG_rrdb["scale"],
+    #     act_mode=netG_rrdb["act_mode"],
+    #     upsample_mode=netG_rrdb["upsample_mode"],
+    # )
 
-    model_esrgan.load_state_dict(
-        torch.load(esrgan_state_path, weights_only=True), strict=True
-    )
-    model_esrgan.eval()
-    for k, v in model_esrgan.named_parameters():
-        v.requires_grad = False
-    model_esrgan = model_esrgan.to(model.device)
+    # model_esrgan.load_state_dict(
+    #     torch.load(esrgan_state_path, weights_only=True), strict=True
+    # )
+    # model_esrgan.eval()
+    # for k, v in model_esrgan.named_parameters():
+    #     v.requires_grad = False
+    # model_esrgan = model_esrgan.to(device)
 
     avg_psnr = 0.0
     idx = 0
@@ -803,15 +807,19 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         util.mkdir(img_dir)
 
         with torch.no_grad():
-            E_img_moex1 = model_moex1(test_data["L_p"].to(model_moex1.device))
-            E_img_dpsr = model_dpsr(test_data["L"].to(model_moex1.device))
-            E_img_esrgan = model_esrgan(test_data["L"].to(model_moex1.device))
+            print(test_data["L"].size())
+            E_img_moex1 = model_moex1(
+                test_data["L_p"].to(device), test_data["L"].size()
+            )
+            print(E_img_moex1.size())
+            # E_img_dpsr = model_dpsr(test_data["L"].to(device))
+            # E_img_esrgan = model_esrgan(test_data["L"].to(device))
 
         # model.feed_data(test_data)
         # model.test()
-
-        E_img_dpsr = util._tensor2uint(E_img_dpsr)
-        E_img_esrgan = util._tensor2uint(E_img_esrgan)
+        E_img_moex1 = util.tensor2uint(E_img_moex1)
+        # E_img_dpsr = util._tensor2uint(E_img_dpsr)
+        # E_img_esrgan = util._tensor2uint(E_img_esrgan)
         # visuals = model.current_visuals()
 
         L_crop_img = util.tensor2uint(test_data["L"])
@@ -823,18 +831,18 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
 
         timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         degradation_model = "bicubic downsampling + blur"
-        images: dict[str, Any] = {
-            "H_img": img_H,
-            "L_crop_img": L_crop_img,
-            "H_crop_img": H_crop_img,
-            "E_SMoE_img": E_img_moex1,
-            "E_DPSR_img": E_img_dpsr,
-            "E_ESRGAN_img": E_img_esrgan,
-            "Degradation_Model": degradation_model,
-        }
+        # images: dict[str, Any] = {
+        #     "H_img": img_H,
+        #     "L_crop_img": L_crop_img,
+        #     "H_crop_img": H_crop_img,
+        #     "E_SMoE_img": E_img_moex1,
+        #     "E_DPSR_img": E_img_dpsr,
+        #     "E_ESRGAN_img": E_img_esrgan,
+        #     "Degradation_Model": degradation_model,
+        # }
 
-        filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
-        scipy.io.savemat(filename, images)
+        # filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
+        # scipy.io.savemat(filename, images)
 
         titles: list[str] = [
             "Noisy Low Resolution Crop",
@@ -848,7 +856,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         #     [L_crop_img, H_crop_img, E_crop_img, E_img_dpsr, E_img_esrgan], titles
         # )
 
-        visualize_data([L_crop_img, H_crop_img, E_crop_img], titles)
+        visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
         # visualize_with_segmentation(
         #     [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
@@ -859,7 +867,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/train_unet_moex1_psnr_local
         save_img_path = os.path.join(
             img_dir, "{:s}_{:d}.png".format(img_name, current_step)
         )
-        util.imsave(E_crop_img, save_img_path)
+        util.imsave(E_img_moex1, save_img_path)
 
         current_psnr = util.calculate_psnr(E_crop_img, H_crop_img, border=border)
 

@@ -355,7 +355,7 @@ class MedicalDatasetSR(Dataset):
 
     def apply_degradation(self, img, fname):  # -> dict[str, Any]:
         # "bicubic_degradation", "dpsr", "bsrgan_plus"
-        chosen_model = random.choice(["dpsr", "bsrgan_plus"])
+        chosen_model = random.choice(["dpsr"])
         kernel = self.select_kernel()
         img_L, img_H = {
             "dpsr": lambda x: blindsr.dpsr_degradation(
