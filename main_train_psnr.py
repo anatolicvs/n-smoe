@@ -175,13 +175,12 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     opt["visualize"] = args.visualize
 
     opt = initialize_distributed(opt)
-
+    logger = None
     if opt["rank"] == 0:
         util.mkdirs(
             (path for key, path in opt["path"].items() if "pretrained" not in key)
         )
-
-    logger: logging.Logger | None = setup_logging(opt)
+        logger = setup_logging(opt)
 
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
@@ -223,6 +222,7 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
         option.save(opt)
 
     opt = option.dict_to_nonedict(opt)
+    
     train_loader, test_loader = create_data_loaders(opt, logger)
     model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
         opt

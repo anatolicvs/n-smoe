@@ -25,6 +25,8 @@
             "name": "train_dataset"           // just name
             , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
             , "lq_patchsize": 64
+            , "length" : -1
+            , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
             , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
@@ -41,6 +43,8 @@
             "name": "test_dataset"            // just name
             , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
             , "lq_patchsize": 64
+            , "length" : -1
+            , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
             , "exclude_dirs": ["/work/pb035507/dataset/rgb/test/"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
@@ -57,26 +61,21 @@
           "net_type": "unet_moex3",
           "kernel": 16,
           "sharpening_factor": 1,
-          "model_channels": 32,
-          "num_res_blocks": 4,
-          "attention_resolutions": [
-            16,
-            8,
-            4
-          ],
-          "dropout": 0.1,
-          "num_groups": 32,
+
+          "model_channels": 64,
+          "num_res_blocks": 6,
+          "attention_resolutions": [16,8,4],
+          "dropout": 0.2,
+          "num_groups": 16,
           "num_heads": 4,
-          "num_head_channels": 8,
+          "num_head_channels": 16,
           "use_new_attention_order": true,
           "use_checkpoint": true,
           "use_fp16": false,
-          "resblock_updown": true,
-          "channel_mult": [
-            2,4,8
-          ],
+          "resblock_updown": false,
+          "channel_mult": [2,4,8],
           "conv_resample": false,
-          "resample_2d": true,
+          "resample_2d": false,
           "attention_type": "cross_attention",
           "activation": "GELU",
           "rope_theta": 10000.0,
@@ -85,24 +84,24 @@
           "init_type": "default"
         }
 
-    , "train": {
-        "is_moe": true
-        , "G_lossfn_type": "l2sum"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
-        , "G_lossfn_weight": 1.0            // default
-    
-        , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-5            // learning rate
-        , "G_optimizer_clipgrad": null      // unused
-    
-        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
-        , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
-        , "G_scheduler_gamma": 0.5
-    
-        , "G_regularizer_orthstep": null    // unused
-        , "G_regularizer_clipstep": null    // unused
-    
-        , "checkpoint_test": 5000           // for testing
-        , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 200           // for print
-      }
+        , "train": {
+          "is_moe": true
+          , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+          , "G_lossfn_weight": 1.0            // default
+      
+          , "G_optimizer_type": "adam"        // fixed, adam is enough
+          , "G_optimizer_lr": 1e-4            // learning rate
+          , "G_optimizer_clipgrad": null      // unused
+      
+          , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
+          , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
+          , "G_scheduler_gamma": 0.5
+      
+          , "G_regularizer_orthstep": null    // unused
+          , "G_regularizer_clipstep": null    // unused
+      
+          , "checkpoint_test": 100000           // for testing
+          , "checkpoint_save": 5000           // for saving model
+          , "checkpoint_print": 500           // for print
+        }
   }
