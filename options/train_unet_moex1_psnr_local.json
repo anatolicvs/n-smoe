@@ -7,7 +7,7 @@
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 15
-    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
     , "merge_bn": false              // if no BN exists, set false
@@ -43,7 +43,8 @@
           , "lq_patchsize": 256
           , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
           , "exclude_dirs": ["/mnt/e/RGB/open-images/test"]
-          , "dataroot_H": ["/mnt/e/Medical/temca","/mnt/e/RGB/open-images/test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          //, "dataroot_H": ["/mnt/e/Medical/temca","/mnt/e/RGB/open-images/test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
+          , "dataroot_H": ["/mnt/e/RGB/open-images/test"]
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_testing_temca_rgb_v2.pkl"
