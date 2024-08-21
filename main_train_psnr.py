@@ -1,10 +1,7 @@
-# type: ignore
-
 import argparse
 import logging
 import math
 import os
-import random
 import sys
 
 from models.model_gan import ModelGAN
@@ -222,7 +219,7 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
         option.save(opt)
 
     opt = option.dict_to_nonedict(opt)
-    
+
     train_loader, test_loader = create_data_loaders(opt, logger)
     model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
         opt
@@ -244,7 +241,10 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
 
         for i, train_data in enumerate(train_loader):
             if train_data is None:
-                logger.warning(f"Train data is None at iteration {i} in epoch {epoch}")
+                if opt["rank"] == 0:
+                    logger.warning(
+                        f"Train data is None at iteration {i} in epoch {epoch}"
+                    )
                 continue
 
             current_step += 1
