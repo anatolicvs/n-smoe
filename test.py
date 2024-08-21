@@ -292,8 +292,8 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     encoder_cfg = EncoderConfig(
-        model_channels=32,
-        num_res_blocks=4,
+        model_channels=64,
+        num_res_blocks=8,
         attention_resolutions=[16, 8, 4],
         dropout=0.2,
         channel_mult=(2, 4, 8),
@@ -302,10 +302,10 @@ if __name__ == "__main__":
         use_checkpoint=True,
         use_fp16=False,
         num_heads=4,
-        num_head_channels=8,
+        num_head_channels=16,
         resblock_updown=False,
-        num_groups=32,
-        resample_2d=True,
+        num_groups=16,
+        resample_2d=False,
         scale_factor=1,
         resizer_num_layers=4,
         resizer_avg_pool=False,
