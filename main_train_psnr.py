@@ -3,22 +3,21 @@ import logging
 import math
 import os
 import sys
+from typing import Any, Dict, Optional, Tuple
 
+import numpy as np
+import torch
+import torch.distributed as dist
+from torch.utils.data import DataLoader, DistributedSampler
+
+from data.select_dataset import define_Dataset
 from models.model_gan import ModelGAN
 from models.model_plain import ModelPlain
 from models.model_plain2 import ModelPlain2
 from models.model_plain4 import ModelPlain4
 from models.model_vrt import ModelVRT
-import numpy as np
-import torch
-import torch.distributed as dist
-from torch.utils.data import DataLoader, DistributedSampler
-from typing import Optional, Tuple, Dict, Any
-
-from data.select_dataset import define_Dataset
 from models.select_model import define_Model
 from utils_n import utils_image as util
-from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
