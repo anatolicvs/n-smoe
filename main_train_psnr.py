@@ -30,8 +30,13 @@ def setup_logging(opt) -> logging.Logger | None:
     if opt["rank"] == 0:
         logger_name = "train"
         log_file = os.path.join(opt["path"]["log"], f"{logger_name}.log")
-        utils_logger.logger_info(logger_name, log_file)
         logger = logging.getLogger(logger_name)
+        if not logger.handlers:
+            file_handler = logging.FileHandler(log_file)
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+            file_handler.setFormatter(formatter)
+            logger.addHandler(file_handler)
+            logger.setLevel(logging.INFO)
         logger.info(option.dict2str(opt))
     else:
         logger = None
