@@ -26,10 +26,10 @@ while getopts ":m:o:a:dg:h" opt; do
       USE_APPTAINER=true
       ;;
     d)
-      DISTRIBUTED_TRAINING=true  
+      DISTRIBUTED_TRAINING=true
       ;;
     g)
-      GPUS=$OPTARG  
+      GPUS=$OPTARG
       ;;
     h)
       echo "Usage: $0 [-m model_name] [-o option_path] [-a] [-d] [-g num_gpus]"
@@ -60,7 +60,7 @@ if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -gt 1 ]; then
   DIST_FLAG="--dist"
 else
   DIST_FLAG=""
-  DISTRIBUTED_TRAINING=false  
+  DISTRIBUTED_TRAINING=false
 fi
 
 TODAYS_DATE=$(date +%d%m%Y%H%M)
@@ -106,11 +106,11 @@ export NCCL_DEBUG_SUBSYS=ALL
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG --slurm_jobid=$job_id
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG --slurm_jobid=$job_id
 fi
 
 echo "Job completed at: \$(date)"

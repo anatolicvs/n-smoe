@@ -24,7 +24,7 @@ from utils_n.utils_dist import init_dist
 def setup_logging(opt) -> Optional[logging.Logger]:
     if opt["rank"] == 0:
         logger_name = "train"
-        log_file = os.path.join(opt["path"]["log"], f"{logger_name}.log")
+        log_file = os.path.join(opt["path"]["log"], f"{logger_name}_slurm_{opt['slurm_jobid']}.log")
         logger = logging.getLogger(logger_name)
 
         if logger.hasHandlers():
@@ -40,6 +40,7 @@ def setup_logging(opt) -> Optional[logging.Logger]:
 
         logger.propagate = False
 
+        logger.info(f"SLURM Job ID: {opt['slurm_jobid']}")
         logger.info(option.dict2str(opt))
     else:
         logger = None
@@ -58,7 +59,7 @@ def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
 def build_loaders(
     opt: Dict[str, Any], logger: Optional[logging.Logger] = None
 ) -> Tuple[Optional[DataLoader], Optional[DataLoader]]:
-    
+
     def log_stats(phase: str, dataset: torch.utils.data.Dataset, batch_size: int):
         size = len(dataset)
         iters = math.ceil(size / batch_size)
@@ -91,36 +92,36 @@ def build_loaders(
     for phase, dataset_opt in opt["datasets"].items():
         dataset = define_Dataset(dataset_opt)
         batch_size = adjust_batch_size(dataset_opt["dataloader_batch_size"])
-        
+
         if phase == "train":
             log_stats(phase, dataset, batch_size)
             sampler = DistributedSampler(
-                dataset, num_replicas=opt["world_size"], rank=opt["rank"], 
+                dataset, num_replicas=opt["world_size"], rank=opt["rank"],
                 shuffle=dataset_opt["dataloader_shuffle"], drop_last=True
             ) if opt["dist"] else None
             train_loader = create_loader(
-                dataset, batch_size, 
-                shuffle=dataset_opt["dataloader_shuffle"], 
-                workers=dataset_opt["dataloader_num_workers"], 
+                dataset, batch_size,
+                shuffle=dataset_opt["dataloader_shuffle"],
+                workers=dataset_opt["dataloader_num_workers"],
                 sampler=sampler, drop_last=True
             )
-        
+
         elif phase == "test":
             log_stats(phase, dataset, batch_size)
             sampler = DistributedSampler(
-                dataset, num_replicas=opt["world_size"], rank=opt["rank"], 
+                dataset, num_replicas=opt["world_size"], rank=opt["rank"],
                 shuffle=False, drop_last=False
             ) if opt["dist"] else None
             test_loader = create_loader(
-                dataset, batch_size, 
-                shuffle=False, 
-                workers=dataset_opt["dataloader_num_workers"], 
+                dataset, batch_size,
+                shuffle=False,
+                workers=dataset_opt["dataloader_num_workers"],
                 sampler=sampler, drop_last=False
             )
-        
+
         else:
             raise NotImplementedError(f"Phase [{phase}] not recognized.")
-    
+
     return train_loader, test_loader
 
 def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
@@ -129,11 +130,13 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     parser.add_argument("--launcher", type=str, default="pytorch")
     parser.add_argument("--dist", action="store_true", default=False)
     parser.add_argument("--visualize", action="store_true", default=False)
+    parser.add_argument("--slurm_jobid", type=int, default=0)
 
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
     opt["visualize"] = args.visualize
+    opt["slurm_jobid"] = args.slurm_jobid
 
     opt = initialize_distributed(opt)
     logger = None

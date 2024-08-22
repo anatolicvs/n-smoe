@@ -1,8 +1,15 @@
+
+--extra-index-url https://download.pytorch.org/whl/nightly/cpu
+
+torch
+torchvision
+torchaudio
+
 pip
 pipenv
 setuptools
 wheel
-requests==2.28.1
+requests
 numpy
 scipy
 cython
@@ -68,10 +75,6 @@ holoviews
 hvplot
 jupyterlab
 mahotas
-
-torch
-torchvision
-torchaudio
 
 --find-links https://storage.googleapis.com/jax-releases/jax_releases.html
 jax[cpu]
