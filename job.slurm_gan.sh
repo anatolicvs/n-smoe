@@ -1,9 +1,5 @@
 #!/bin/bash
 
-USE_APPTAINER=true
-DISTRIBUTED_TRAINING=true
-GPUS=4
-
 # PARTITION
 # c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
 # c23mm: 160 total, 96 cores/node, 512 GB/node, Claix-2023 (medium memory partition)
@@ -13,6 +9,10 @@ GPUS=4
 # c18g: 54 total, 48 cores/node, 192 GB/node, 2 V100 gpus, request of volta gpu needed to submit to this partition
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
 # Has to be used without an project!
+
+USE_APPTAINER=true
+DISTRIBUTED_TRAINING=true
+GPUS=4
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -26,10 +26,10 @@ while getopts ":m:o:a:dg:h" opt; do
       USE_APPTAINER=true
       ;;
     d)
-      DISTRIBUTED_TRAINING=true  
+      DISTRIBUTED_TRAINING=true
       ;;
     g)
-      GPUS=$OPTARG  
+      GPUS=$OPTARG
       ;;
     h)
       echo "Usage: $0 [-m model_name] [-o option_path] [-a] [-d] [-g num_gpus]"
@@ -60,11 +60,11 @@ if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -gt 1 ]; then
   DIST_FLAG="--dist"
 else
   DIST_FLAG=""
-  DISTRIBUTED_TRAINING=false  
+  DISTRIBUTED_TRAINING=false
 fi
 
 TODAYS_DATE=$(date +%d%m%Y%H%M)
-JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}_JOBID_"
+JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}"
 
 NODES=1
 NTASKS=1
@@ -81,7 +81,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 
 PARTITION="c23g"
 
-sbatch <<-EOT
+job_id=$(sbatch <<-EOT | awk '{print $4}'
 #!/usr/bin/zsh
 
 #SBATCH -A p0021791
@@ -116,4 +116,4 @@ fi
 echo "Job completed at: \$(date)"
 EOT
 
-echo "Job submission complete."
+echo "Job submission complete. Job ID: $job_id"

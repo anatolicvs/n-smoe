@@ -24,7 +24,8 @@ from utils_n.utils_dist import init_dist
 def setup_logging(opt) -> Optional[logging.Logger]:
     if opt["rank"] == 0:
         logger_name = "train"
-        log_file = os.path.join(opt["path"]["log"], f"{logger_name}_slurm_{opt['slurm_jobid']}.log")
+        slurm_jobid = os.getenv("SLURM_JOB_ID", "0")
+        log_file = os.path.join(opt["path"]["log"], f"{logger_name}_slurm_{slurm_jobid}.log")
         logger = logging.getLogger(logger_name)
 
         if logger.hasHandlers():
@@ -40,7 +41,7 @@ def setup_logging(opt) -> Optional[logging.Logger]:
 
         logger.propagate = False
 
-        logger.info(f"SLURM Job ID: {opt['slurm_jobid']}")
+        logger.info(f"SLURM Job ID: {slurm_jobid}")
         logger.info(option.dict2str(opt))
     else:
         logger = None
@@ -124,19 +125,17 @@ def build_loaders(
 
     return train_loader, test_loader
 
-def main(json_path: str = "options/train_transformer_x2_gan_local.json"):
+def main(json_path: str = "options/train/train_selfattention_transformer_x2_gan.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
     parser.add_argument("--dist", action="store_true", default=False)
     parser.add_argument("--visualize", action="store_true", default=False)
-    parser.add_argument("--slurm_jobid", type=int, default=0)
 
     args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
     opt["visualize"] = args.visualize
-    opt["slurm_jobid"] = args.slurm_jobid
 
     opt = initialize_distributed(opt)
     logger = None

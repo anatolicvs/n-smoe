@@ -1,15 +1,6 @@
 #!/bin/bash
 
-# PARTITION
-# c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
-# c23mm: 160 total, 96 cores/node, 512 GB/node, Claix-2023 (medium memory partition)
-# c23ml: 2 total, 96 cores/node, 1024 GB/node, Claix-2023 (large memory partition)
-# c23g: 52 total, 96 cores/node, 256 GB/node, Claix-2023 GPU partition with four H100 GPUs per node
-# c18m: 1240 total, 48 cores/node, 192 GB/node, default partition for the "default" project
-# c18g: 54 total, 48 cores/node, 192 GB/node, 2 V100 gpus, request of volta gpu needed to submit to this partition
-# devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
-# Has to be used without an project!
-
+# SLURM job submission settings
 USE_APPTAINER=true
 DISTRIBUTED_TRAINING=true
 GPUS=4
@@ -106,11 +97,11 @@ export NCCL_DEBUG_SUBSYS=ALL
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG --slurm_jobid=$job_id
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG --slurm_jobid=$job_id
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
 fi
 
 echo "Job completed at: \$(date)"
