@@ -1,5 +1,5 @@
 {
-  "task": "swinir_sr_realworld_x2_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
+  "task": "swinir_sr_realworld_x4_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -8,9 +8,10 @@
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat"
   , "path": {
-      "root": "/hpcwork/p0021791/superresolution"           // "denoising" | "superresolution" | "dejpeg"
-    , "pretrained_netG": null      // path of pretrained model
-    , "pretrained_netE": null      // path of pretrained model
+        "root": "/hpcwork/p0021791/superresolution"
+      , "pretrained_netG": null
+      , "pretrained_netD": null 
+      , "pretrained_netE": null 
   }
 
   ,"datasets": {
@@ -27,7 +28,7 @@
         , "use_dataset_cache": true
         , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
         , "dataroot_L": null              // path of L training dataset
-        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 32
         , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
@@ -35,7 +36,7 @@
     , "test": {
         "name": "test_dataset"            // just name
         , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-        , "lq_patchsize": 32
+        , "lq_patchsize": 64
         , "length" : -1
         , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
         , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
@@ -44,7 +45,7 @@
         , "dataroot_L": null              // path of L testing dataset
         , "use_dataset_cache": true
         , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 32
         , "dataloader_batch_size": 4 
         }
