@@ -1,7 +1,8 @@
 {
   "task": "moex3_sr_plain_v1_x8_medical_mix_act_gelu" 
   , "model": "plain" // "gan"
-  , "gpu_ids": [0, 1, 2, 3]
+  , "gpu_ids": [0,1,2,3]
+  , "dist": true
   
   , "scale": 8       // broadcast to "netG" if SISR
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
