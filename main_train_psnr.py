@@ -3,7 +3,7 @@ import logging
 import math
 import os
 import sys
-from typing import Any, Dict, Optional, Tuple
+from typing import Dict, Any, Tuple, Optional
 
 import numpy as np
 import torch
@@ -21,8 +21,7 @@ from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
-
-def setup_logging(opt) -> logging.Logger | None:
+def setup_logging(opt) -> Optional[logging.Logger]:
     if opt["rank"] == 0:
         logger_name = "train"
         log_file = os.path.join(opt["path"]["log"], f"{logger_name}.log")
@@ -46,7 +45,6 @@ def setup_logging(opt) -> logging.Logger | None:
         logger = None
     return logger
 
-
 def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
     if opt["dist"]:
         init_dist("pytorch")
@@ -57,106 +55,73 @@ def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
 
-
-def create_data_loaders(
-    opt: Dict[str, Any], logger: logging.Logger
+def build_loaders(
+    opt: Dict[str, Any], logger: Optional[logging.Logger] = None
 ) -> Tuple[Optional[DataLoader], Optional[DataLoader]]:
+    
+    def log_stats(phase: str, dataset: torch.utils.data.Dataset, batch_size: int):
+        size = len(dataset)
+        iters = math.ceil(size / batch_size)
+        if opt["rank"] == 0:
+            logger.info(f"{phase.capitalize()}: {size:,d} imgs, {iters:,d} iters")
+        return size, iters
+
+    def create_loader(dataset, batch_size, shuffle, workers, sampler, drop_last):
+        return DataLoader(
+            dataset,
+            batch_size=batch_size,
+            shuffle=shuffle if sampler is None else False,
+            num_workers=workers,
+            drop_last=drop_last,
+            pin_memory=True,
+            sampler=sampler,
+            collate_fn=util.custom_collate,
+        )
+
+    def adjust_batch_size(batch_size: int) -> int:
+        if opt["dist"] and batch_size % opt["num_gpu"] != 0:
+            adjusted_size = max(1, (batch_size // opt["num_gpu"]) * opt["num_gpu"])
+            if opt["rank"] == 0:
+                logger.info(f"Adjusted batch size: {adjusted_size}")
+            return adjusted_size
+        return batch_size
+
     train_loader, test_loader = None, None
 
     for phase, dataset_opt in opt["datasets"].items():
+        dataset = define_Dataset(dataset_opt)
+        batch_size = adjust_batch_size(dataset_opt["dataloader_batch_size"])
+        
         if phase == "train":
-            train_set = define_Dataset(dataset_opt)
-            train_batch_size = dataset_opt["dataloader_batch_size"]
-            train_size = int(math.ceil(len(train_set) / train_batch_size))
-            if opt["rank"] == 0:
-                logger.info(
-                    f"Number of train images: {len(train_set):,d}, iters: {train_size:,d}"
-                )
-            if opt["dist"] and train_batch_size % opt["num_gpu"] != 0:
-                train_batch_size = max(
-                    1, (train_batch_size // opt["num_gpu"]) * opt["num_gpu"]
-                )
-                if opt["rank"] == 0:
-                    logger.info(
-                        f"Adjusted train batch size to {train_batch_size} for better GPU utilization"
-                    )
-            if opt["dist"]:
-                train_sampler = DistributedSampler(
-                    train_set,
-                    num_replicas=opt["world_size"],
-                    rank=opt["rank"],
-                    shuffle=dataset_opt["dataloader_shuffle"],
-                    drop_last=True,
-                )
-                train_loader = DataLoader(
-                    train_set,
-                    batch_size=train_batch_size // opt["num_gpu"],
-                    shuffle=False,
-                    num_workers=dataset_opt["dataloader_num_workers"] // opt["num_gpu"],
-                    drop_last=True,
-                    pin_memory=True,
-                    sampler=train_sampler,
-                    collate_fn=util.custom_collate,
-                )
-            else:
-                train_loader = DataLoader(
-                    train_set,
-                    batch_size=train_batch_size,
-                    shuffle=dataset_opt["dataloader_shuffle"],
-                    num_workers=dataset_opt["dataloader_num_workers"],
-                    drop_last=True,
-                    pin_memory=True,
-                    collate_fn=util.custom_collate,
-                )
+            log_stats(phase, dataset, batch_size)
+            sampler = DistributedSampler(
+                dataset, num_replicas=opt["world_size"], rank=opt["rank"], 
+                shuffle=dataset_opt["dataloader_shuffle"], drop_last=True
+            ) if opt["dist"] else None
+            train_loader = create_loader(
+                dataset, batch_size, 
+                shuffle=dataset_opt["dataloader_shuffle"], 
+                workers=dataset_opt["dataloader_num_workers"], 
+                sampler=sampler, drop_last=True
+            )
+        
         elif phase == "test":
-            test_set = define_Dataset(dataset_opt)
-            test_batch_size = dataset_opt["dataloader_batch_size"]
-            test_size = int(math.ceil(len(test_set) / test_batch_size))
-            if opt["rank"] == 0:
-                logger.info(
-                    f"Number of test images: {len(test_set):,d}, iters: {test_size:,d}"
-                )
-            if opt["dist"] and test_batch_size % opt["num_gpu"] != 0:
-                test_batch_size = max(
-                    1, (test_batch_size // opt["num_gpu"]) * opt["num_gpu"]
-                )
-                if opt["rank"] == 0:
-                    logger.info(
-                        f"Adjusted test batch size to {test_batch_size} for consistency"
-                    )
-            if opt["dist"]:
-                test_sampler = DistributedSampler(
-                    test_set,
-                    num_replicas=opt["world_size"],
-                    rank=opt["rank"],
-                    shuffle=False,
-                )
-                test_loader = DataLoader(
-                    test_set,
-                    batch_size=test_batch_size,
-                    shuffle=False,
-                    num_workers=dataset_opt["dataloader_num_workers"],
-                    drop_last=False,
-                    pin_memory=True,
-                    sampler=test_sampler,
-                    collate_fn=util.custom_collate,
-                )
-            else:
-                test_loader = DataLoader(
-                    test_set,
-                    batch_size=test_batch_size,
-                    shuffle=False,
-                    num_workers=dataset_opt["dataloader_num_workers"],
-                    drop_last=False,
-                    pin_memory=True,
-                    collate_fn=util.custom_collate,
-                )
+            log_stats(phase, dataset, batch_size)
+            sampler = DistributedSampler(
+                dataset, num_replicas=opt["world_size"], rank=opt["rank"], 
+                shuffle=False, drop_last=False
+            ) if opt["dist"] else None
+            test_loader = create_loader(
+                dataset, batch_size, 
+                shuffle=False, 
+                workers=dataset_opt["dataloader_num_workers"], 
+                sampler=sampler, drop_last=False
+            )
+        
         else:
-            logger.error(f"Phase [{phase}] is not recognized.")
-            raise NotImplementedError(f"Phase [{phase}] is not recognized.")
-
+            raise NotImplementedError(f"Phase [{phase}] not recognized.")
+    
     return train_loader, test_loader
-
 
 def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     parser = argparse.ArgumentParser()
@@ -219,35 +184,35 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
 
     opt = option.dict_to_nonedict(opt)
 
-    train_loader, test_loader = create_data_loaders(opt, logger)
-    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
-        opt
-    )
+    if opt["dist"]:
+        train_loader, test_loader = build_loaders(opt, logger)
+        dist.barrier()
+    else:
+        train_loader, test_loader = build_loaders(opt, logger)
 
+    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(opt)
     model.init_train()
+
     if opt["rank"] == 0:
         logger.info(model.info_network())
         logger.info(model.info_params())
 
-    for epoch in range(4000000):
-        if (
-            opt["dist"]
-            and train_loader is not None
-            and isinstance(train_loader.sampler, DistributedSampler)
-        ):
+    num_epochs = 4000000
+    checkpoint_interval = opt["train"].get("checkpoint_save", 1000)
+    test_interval = opt["train"].get("checkpoint_test", 1000)
+    log_interval = opt["train"].get("checkpoint_print", 100)
+
+    for epoch in range(num_epochs):
+        if opt["dist"] and train_loader is not None and isinstance(train_loader.sampler, DistributedSampler):
             train_loader.sampler.set_epoch(epoch)
-            dist.barrier()
 
         for i, train_data in enumerate(train_loader):
             if train_data is None:
                 if opt["rank"] == 0:
-                    logger.warning(
-                        f"Train data is None at iteration {i} in epoch {epoch}"
-                    )
+                    logger.warning(f"Train data is None at iteration {i} in epoch {epoch}")
                 continue
 
             current_step += 1
-
             model.feed_data(train_data)
 
             if opt["visualize"]:
@@ -256,81 +221,77 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
             model.optimize_parameters(current_step)
             model.update_learning_rate(current_step)
 
-            if (
-                current_step % opt["train"]["checkpoint_print"] == 0
-                and opt["rank"] == 0
-            ):
+            if i % log_interval == 0 and opt["rank"] == 0:
                 logs = model.current_log()
                 message = f"<epoch:{epoch:3d}, iter:{current_step:8,d}, lr:{model.current_learning_rate():.3e}>"
                 for k, v in logs.items():
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
-            if current_step % opt["train"]["checkpoint_save"] == 0 and opt["rank"] == 0:
-                logger.info("Saving the model.")
-                model.save(current_step)
+        if opt["dist"] and epoch % test_interval == 0:
+            local_psnr_sum = 0.0
+            local_count = 0
 
-            if current_step % opt["train"]["checkpoint_test"] == 0:
-                local_psnr_sum = 0.0
-                local_count = 0
+            for test_data in test_loader:
+                if test_data is None:
+                    continue
 
-                for test_data in test_loader:
-                    if test_data is None:
-                        continue
+                image_name_ext = os.path.basename(test_data["L_path"][0])
 
-                    image_name_ext = os.path.basename(test_data["L_path"][0])
+                model.feed_data(test_data)
+                model.test()
 
-                    model.feed_data(test_data)
-                    model.test()
+                visuals = model.current_visuals()
+                E_img = util.tensor2uint(visuals["E"])
+                H_img = util.tensor2uint(visuals["H"])
+                current_psnr = util.calculate_psnr(E_img, H_img, border)
 
-                    visuals = model.current_visuals()
-                    E_img = util.tensor2uint(visuals["E"])
-                    H_img = util.tensor2uint(visuals["H"])
-                    current_psnr = util.calculate_psnr(E_img, H_img, border)
+                local_psnr_sum += current_psnr
+                local_count += 1
 
-                    local_psnr_sum += current_psnr
-                    local_count += 1
-
-                    if opt["rank"] == 0:
-                        logger.info(
-                            f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
-                        )
-
-                if opt["dist"]:
-                    local_psnr_sum_tensor = torch.tensor(
-                        local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
+                if opt["rank"] == 0:
+                    logger.info(
+                        f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
                     )
-                    local_count_tensor = torch.tensor(
-                        local_count, device=torch.device(f"cuda:{opt['rank']}")
-                    )
-                    dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
-                    dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
-
-                    if local_count_tensor > 0:
-                        global_avg_psnr = (
-                            local_psnr_sum_tensor.item() / local_count_tensor.item()
-                        )
-                    else:
-                        global_avg_psnr = 0.0
-
-                    if opt["rank"] == 0:
-                        logger.info(
-                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
-                        )
-                else:
-                    if local_count > 0:
-                        avg_psnr = local_psnr_sum / local_count
-                    else:
-                        avg_psnr = 0.0
-
-                    if opt["rank"] == 0:
-                        logger.info(
-                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                        )
 
             if opt["dist"]:
-                dist.barrier()
+                local_psnr_sum_tensor = torch.tensor(
+                    local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
+                )
+                local_count_tensor = torch.tensor(
+                    local_count, device=torch.device(f"cuda:{opt['rank']}")
+                )
+                dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
+                dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
 
+                global_avg_psnr = (
+                    local_psnr_sum_tensor.item() / local_count_tensor.item()
+                ) if local_count_tensor.item() > 0 else 0.0
+
+                if opt["rank"] == 0:
+                    logger.info(
+                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
+                    )
+            else:
+                if local_count > 0:
+                    avg_psnr = local_psnr_sum / local_count
+                else:
+                    avg_psnr = 0.0
+
+                if opt["rank"] == 0:
+                    logger.info(
+                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
+                    )
+
+            model.train()
+
+        if opt["dist"] and epoch % checkpoint_interval == 0:
+            if opt["rank"] == 0:
+                model.save(current_step)
+            dist.barrier()
+
+    if opt["dist"]:
+        dist.barrier()
 
 if __name__ == "__main__":
     main()
