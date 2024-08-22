@@ -24,7 +24,6 @@
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
         , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
-        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "use_dataset_cache": true
         , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
         , "dataroot_L": null              // path of L training dataset

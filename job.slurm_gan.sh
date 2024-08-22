@@ -115,5 +115,6 @@ fi
 
 echo "Job completed at: \$(date)"
 EOT
+)
 
 echo "Job submission complete. Job ID: $job_id"
