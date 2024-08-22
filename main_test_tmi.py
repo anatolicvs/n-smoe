@@ -9,6 +9,8 @@ import os.path
 import random
 from typing import Any, List
 
+from matplotlib import figure
+from sklearn import metrics
 import numpy as np
 import scipy.io
 import torch
@@ -263,6 +265,7 @@ def visualize_with_segmentation(images, titles, mask_generator):
     matplotlib.use("TkAgg")
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
+    import cv2
 
     def show_anns(anns, borders=True):
         if len(anns) == 0:
@@ -270,7 +273,6 @@ def visualize_with_segmentation(images, titles, mask_generator):
         sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
         ax = plt.gca()
         ax.set_autoscale_on(False)
-
         img = np.ones(
             (
                 sorted_anns[0]["segmentation"].shape[0],
@@ -284,58 +286,72 @@ def visualize_with_segmentation(images, titles, mask_generator):
             color_mask = np.concatenate([np.random.random(3), [0.5]])
             img[m] = color_mask
             if borders:
-                import cv2
-
                 contours, _ = cv2.findContours(
                     m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
                 )
-                # Try to smooth contours
                 contours = [
                     cv2.approxPolyDP(contour, epsilon=0.01, closed=True)
                     for contour in contours
                 ]
                 cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
-
         ax.imshow(img)
 
-    # masks = mask_generator.generate(convert_to_3_channel(images[1:]))
-
-    fig = plt.figure(figsize=(15, 6))
+    fig = plt.figure(figsize=(20, 5))
     gs = GridSpec(
-        3, 5, height_ratios=[2, 2, 1], width_ratios=[2, 1, 1, 1, 1], hspace=0, wspace=0
+        3,
+        len(images) + 1,
+        height_ratios=[2, 2, 0.5],  # Adjusting the height ratios for better space usage
+        width_ratios=[2, 2, 1, 1, 1, 1, 1],
+        hspace=0.01,  # Reducing space between rows
+        wspace=0.01,  # Reducing space between columns
     )
 
-    ax_img = fig.add_subplot(gs[0:2, 0])
-    ax_img.imshow(images[0], cmap="gray")
-    ax_img.axis("off")
-    ax_img.set_title(titles[0], fontsize=15, weight="bold")
+    annotated_mask = mask_generator.generate(np.repeat(images[0][:, :, :], 3, axis=-1))
+    ax_annotated = fig.add_subplot(gs[0:2, 0])
+    ax_annotated.imshow(images[0], cmap="gray")
+    show_anns(annotated_mask)
+    ax_annotated.axis("off")
+    ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
+
+    ax_img_hr = fig.add_subplot(gs[0:2, 1])
+    ax_img_hr.imshow(images[0], cmap="gray")
+    ax_img_hr.axis("off")
+    ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
 
     for i in range(1, len(images)):
+        ax_img = fig.add_subplot(gs[0, i + 1])
+        ax_img.imshow(images[i], cmap="gray")
+        ax_img.axis("off")
 
-        if len(images[i].shape) == 2:
-            img_3c = np.repeat(images[i][:, :, None], 3, axis=-1)
-        else:
-            img_3c = images[i]
-
-        mask = mask_generator.generate(img_3c)
-
-        ax_crop = fig.add_subplot(gs[0, i])
-        ax_crop.imshow(images[i], cmap="gray")
-        ax_crop.axis("off")
-
-        ax_seg = fig.add_subplot(gs[1, i])
-        ax_seg.imshow(images[i])
+        mask = mask_generator.generate(np.repeat(images[i][:, :, None], 3, axis=-1))
+        ax_seg = fig.add_subplot(gs[1, i + 1])
+        ax_seg.imshow(images[i], cmap="gray")
         show_anns(mask)
         ax_seg.axis("off")
 
-        ax_title = fig.add_subplot(gs[2, i])
+        if len(titles[i]) > 20:
+            title_lines = titles[i].split(" ", 1)
+            display_title = "\n".join(title_lines)
+
+        else:
+            display_title = titles[i]
+
+        ax_title = fig.add_subplot(gs[2, i + 1])
         ax_title.text(
-            0.5, 0.2, titles[i], fontsize=12, weight="bold", va="center", ha="center"
+            0.5,
+            0.5,
+            display_title,
+            fontsize=10,
+            weight="bold",
+            va="center",
+            ha="center",
         )
         ax_title.axis("off")
 
-    plt.tight_layout(pad=0)
-    plt.subplots_adjust(wspace=0, hspace=0)
+    plt.tight_layout(pad=0.05)
+    plt.subplots_adjust(
+        wspace=0.02, hspace=0.02
+    )  # Further reduce space between figures
     plt.show()
 
 
@@ -435,6 +451,8 @@ def visualize_data(
     images: List[np.ndarray],
     titles: List[str],
     cmap: str = "gray",
+    save_path: str = None,
+    visualize: bool = True,
 ) -> None:
     import matplotlib
 
@@ -512,10 +530,12 @@ def visualize_data(
         )
         ax_2d_spectrum.axis("on")
 
-    plt.show()
+    plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
+    if visualize:
+        plt.show()
 
 
-def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json"):
+def main(json_path="options/testing/test_tmi_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--opt", type=str, default=json_path, help="Path to option JSON file."
@@ -523,9 +543,12 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     parser.add_argument("--launcher", default="pytorch", help="job launcher")
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--dist", default=False)
+    parser.add_argument("--visualize", action="store_true", default=False)
 
+    args = parser.parse_args()
     opt = option.parse(parser.parse_args().opt, is_train=True)
-    opt["dist"] = parser.parse_args().dist
+    opt["dist"] = args.dist
+    opt["visualize"] = args.visualize
 
     if opt["dist"]:
         init_dist("pytorch")
@@ -569,15 +592,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
             )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    esrgan_state_path = "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth"
-    dpsr_state_path = "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"
-
-    moex1_state_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth"  # Grayscale
-
-    moex1_old_state_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
-
-    # moex1_state_rgb_path = "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth"  # RGB
 
     json_moex1 = """
     {
@@ -646,7 +660,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     model_moex1 = Autoencoder(cfg=autoenocer_cfg)
 
     model_moex1.load_state_dict(
-        torch.load(moex1_state_path, weights_only=True), strict=True
+        torch.load(opt["pretrained_models"]["moex1"], weights_only=True), strict=True
     )
     model_moex1.eval()
     for k, v in model_moex1.named_parameters():
@@ -692,7 +706,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     )
 
     model_dpsr.load_state_dict(
-        torch.load(dpsr_state_path, weights_only=True), strict=True
+        torch.load(opt["pretrained_models"]["dpsr"], weights_only=True), strict=True
     )
     model_dpsr.eval()
     for k, v in model_dpsr.named_parameters():
@@ -736,7 +750,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     )
 
     model_esrgan.load_state_dict(
-        torch.load(esrgan_state_path, weights_only=True), strict=True
+        torch.load(opt["pretrained_models"]["esrgan"], weights_only=True), strict=True
     )
     model_esrgan.eval()
     for k, v in model_esrgan.named_parameters():
@@ -751,12 +765,14 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     #     "DPSR",
     # ]
 
-    # sam2_checkpoint = "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
-    # model_cfg = "sam2_hiera_l.yaml"
+    model_cfg = "sam2_hiera_l.yaml"
 
-    # sam2 = build_sam2(
-    #     model_cfg, sam2_checkpoint, device="cuda", apply_postprocessing=True
-    # )
+    sam2 = build_sam2(
+        model_cfg,
+        opt["pretrained_models"]["sam2"],
+        device="cuda",
+        apply_postprocessing=True,
+    )
 
     # mask_generator = SAM2AutomaticMaskGenerator(
     #     model=sam2,
@@ -777,19 +793,19 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     #     multimask_output=True,
     # )
 
-    # mask_generator = SAM2AutomaticMaskGenerator(
-    #     model=sam2,
-    #     points_per_side=64,
-    #     points_per_batch=128,
-    #     pred_iou_thresh=0.7,
-    #     stability_score_thresh=0.92,
-    #     stability_score_offset=0.7,
-    #     crop_n_layers=1,
-    #     box_nms_thresh=0.7,
-    #     crop_n_points_downscale_factor=2,
-    #     min_mask_region_area=25.0,
-    #     use_m2m=True,
-    # )
+    mask_generator = SAM2AutomaticMaskGenerator(
+        model=sam2,
+        # points_per_side=64,
+        # points_per_batch=128,
+        # pred_iou_thresh=0.7,
+        # stability_score_thresh=0.92,
+        # stability_score_offset=0.7,
+        # crop_n_layers=1,
+        # box_nms_thresh=0.7,
+        # crop_n_points_downscale_factor=2,
+        # min_mask_region_area=25.0,
+        # use_m2m=True,
+    )
 
     avg_psnr = 0.0
     idx = 0
@@ -815,10 +831,6 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
     H_img_size = opt["datasets"]["test"]["H_size"]
     scale: str = f'x{opt["scale"]}'
 
-    timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    filename: str = (
-        f'/mnt/e/Medical/sr_results_tmi_{timestamp.replace(" ", "_").replace(":", "-")}'
-    )
     methods: List[str] = ["DPSR", "ESRGAN", "N-SMoE"]
     for test_data in test_loader:
         if test_data is None:
@@ -830,6 +842,11 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
 
         img_dir = os.path.join(opt["path"]["images"], img_name)
         util.mkdir(img_dir)
+        timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        fname = os.path.join(
+            img_dir, img_name + "_" + timestamp.replace(" ", "_").replace(":", "-")
+        )
+        figure_path = f"{fname}.pdf"
 
         with torch.no_grad():
             E_img_moex1 = model_moex1(
@@ -905,21 +922,15 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
         dists_dpsr_list.append(dists_dpsr)
         dists_esrgan_list.append(dists_esrgan)
 
-        # print(
-        #     f"E_img_moex1 min():{E_img_moex.min()}, E_img_moex1 max():{E_img_moex.max()}"
-        # )
-
-        # print(f"piq E_img_moex1 PSNR:{piq.psnr(E_img_moex, gt_img, data_range=255)}")
-
         E_img_moex1 = util.tensor2uint(E_img_moex1)
-        # E_img_dpsr = util._tensor2uint(E_img_dpsr)
-        # E_img_esrgan = util._tensor2uint(E_img_esrgan)
+        E_img_dpsr = util._tensor2uint(E_img_dpsr)
+        E_img_esrgan = util._tensor2uint(E_img_esrgan)
 
-        # L_crop_img = util.tensor2uint(test_data["L"])
+        L_crop_img = util.tensor2uint(test_data["L"])
         H_crop_img = util.tensor2uint(test_data["H"])
 
-        # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
-        # img_H = util.modcrop(img_H, border)
+        img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
+        img_H = util.modcrop(img_H, border)
 
         # degradation_model = "bicubic downsampling + blur"
         # images: dict[str, Any] = {
@@ -935,31 +946,32 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
         # filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
         # scipy.io.savemat(filename, images)
 
-        # titles: list[str] = [
-        #     "Noisy Low Resolution Crop",
-        #     "Ground Truth Crop",
-        #     "N-SMoE",
-        #     "DPSR",
-        #     "ESRGAN",
-        # ]
-
         # visualize_data(
-        #     [L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan], titles
+        #     [L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
+        #     titles,
+        #     cmap="gray",
+        #     save_path=figure_path,
+        #     visualize=opt["visualize"],
         # )
 
         # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
-        # visualize_with_segmentation(
-        #     [img_H, L_crop_img, H_crop_img, E_crop_img, E_img_dpsr],
-        #     titles,
-        #     mask_generator,
-        # )
+        titles: list[str] = [
+            "High Resolution",
+            "Noisy Low Resolution Crop",
+            "Ground Truth Crop",
+            "N-SMoE",
+            "DPSR",
+            "ESRGAN",
+        ]
 
-        # save_img_path = os.path.join(img_dir, "{:s}_{:d}.png".format(img_name, 0))
-        # util.imsave(E_img_moex1, save_img_path)
+        visualize_with_segmentation(
+            [img_H, L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
+            titles,
+            mask_generator,
+        )
 
         current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
-
         logger.info(
             "{:->4d}--> {:>10s} | {:<4.2f}dB".format(idx, image_name_ext, current_psnr)
         )
@@ -1029,7 +1041,7 @@ def main(json_path="/home/ozkan/works/n-smoe/options/testing/test_tmi_local.json
         ssim_values[-1] - ssim for ssim in ssim_values[:-1]
     ]
 
-    with open((filename + "_metrics.csv"), "a", newline="") as csvfile:
+    with open((fname + "_metrics.csv"), "a", newline="") as csvfile:
         csvwriter = csv.writer(csvfile)
 
         csvwriter.writerow(

@@ -15,11 +15,14 @@
         
     , "path": {
       "root": "/mnt/d/tmi_test_superresolution"
-      , "pretrained_netG": null 
-      , "pretrained_netD": null
-      , "pretrained_netE": null
       }
-  
+      , "pretrained_models":{
+         "dpsr" : "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"   // rgb | grayscale
+        ,"esrgan": "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth" // rgb | grayscale
+        ,"moex1" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
+        ,"moex3" : null
+        ,"sam2":  "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
+      }
       , "datasets": {
          "test": {
             "name": "amd"            

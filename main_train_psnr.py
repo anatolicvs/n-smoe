@@ -21,11 +21,14 @@ from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
+
 def setup_logging(opt) -> Optional[logging.Logger]:
     if opt["rank"] == 0:
         logger_name = "train"
         slurm_jobid = os.getenv("SLURM_JOB_ID", "0")
-        log_file = os.path.join(opt["path"]["log"], f"{logger_name}_slurm_{slurm_jobid}.log")
+        log_file = os.path.join(
+            opt["path"]["log"], f"{logger_name}_slurm_{slurm_jobid}.log"
+        )
         logger = logging.getLogger(logger_name)
 
         if logger.hasHandlers():
@@ -47,6 +50,7 @@ def setup_logging(opt) -> Optional[logging.Logger]:
         logger = None
     return logger
 
+
 def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
     if opt["dist"]:
         init_dist("pytorch")
@@ -56,6 +60,7 @@ def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
+
 
 def build_loaders(
     opt: Dict[str, Any], logger: Optional[logging.Logger] = None
@@ -96,34 +101,53 @@ def build_loaders(
 
         if phase == "train":
             log_stats(phase, dataset, batch_size)
-            sampler = DistributedSampler(
-                dataset, num_replicas=opt["world_size"], rank=opt["rank"],
-                shuffle=dataset_opt["dataloader_shuffle"], drop_last=True
-            ) if opt["dist"] else None
+            sampler = (
+                DistributedSampler(
+                    dataset,
+                    num_replicas=opt["world_size"],
+                    rank=opt["rank"],
+                    shuffle=dataset_opt["dataloader_shuffle"],
+                    drop_last=True,
+                )
+                if opt["dist"]
+                else None
+            )
             train_loader = create_loader(
-                dataset, batch_size,
+                dataset,
+                batch_size,
                 shuffle=dataset_opt["dataloader_shuffle"],
                 workers=dataset_opt["dataloader_num_workers"],
-                sampler=sampler, drop_last=True
+                sampler=sampler,
+                drop_last=True,
             )
 
         elif phase == "test":
             log_stats(phase, dataset, batch_size)
-            sampler = DistributedSampler(
-                dataset, num_replicas=opt["world_size"], rank=opt["rank"],
-                shuffle=False, drop_last=False
-            ) if opt["dist"] else None
+            sampler = (
+                DistributedSampler(
+                    dataset,
+                    num_replicas=opt["world_size"],
+                    rank=opt["rank"],
+                    shuffle=False,
+                    drop_last=False,
+                )
+                if opt["dist"]
+                else None
+            )
             test_loader = create_loader(
-                dataset, batch_size,
+                dataset,
+                batch_size,
                 shuffle=False,
                 workers=dataset_opt["dataloader_num_workers"],
-                sampler=sampler, drop_last=False
+                sampler=sampler,
+                drop_last=False,
             )
 
         else:
             raise NotImplementedError(f"Phase [{phase}] not recognized.")
 
     return train_loader, test_loader
+
 
 def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     parser = argparse.ArgumentParser()
@@ -192,7 +216,9 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
-    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(opt)
+    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
+        opt
+    )
     model.init_train()
 
     if opt["rank"] == 0:
@@ -205,13 +231,19 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     log_interval = opt["train"].get("checkpoint_print", 100)
 
     for epoch in range(num_epochs):
-        if opt["dist"] and train_loader is not None and isinstance(train_loader.sampler, DistributedSampler):
+        if (
+            opt["dist"]
+            and train_loader is not None
+            and isinstance(train_loader.sampler, DistributedSampler)
+        ):
             train_loader.sampler.set_epoch(epoch)
 
         for i, train_data in enumerate(train_loader):
             if train_data is None:
                 if opt["rank"] == 0:
-                    logger.warning(f"Train data is None at iteration {i} in epoch {epoch}")
+                    logger.warning(
+                        f"Train data is None at iteration {i} in epoch {epoch}"
+                    )
                 continue
 
             current_step += 1
@@ -267,8 +299,10 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
                 dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
 
                 global_avg_psnr = (
-                    local_psnr_sum_tensor.item() / local_count_tensor.item()
-                ) if local_count_tensor.item() > 0 else 0.0
+                    (local_psnr_sum_tensor.item() / local_count_tensor.item())
+                    if local_count_tensor.item() > 0
+                    else 0.0
+                )
 
                 if opt["rank"] == 0:
                     logger.info(
@@ -294,6 +328,7 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
 
     if opt["dist"]:
         dist.barrier()
+
 
 if __name__ == "__main__":
     main()
