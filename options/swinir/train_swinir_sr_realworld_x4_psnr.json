@@ -1,10 +1,10 @@
 {
-  "task": "swinir_sr_realworld_x4_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
+  "task": "swinir_sr_realworld_x2_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
   , "gpu_ids": [0,1,2,3]
   , "dist": true
 
-  , "scale": 4       // broadcast to "datasets"
+  , "scale": 2       // broadcast to "datasets"
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat"
   , "path": {
