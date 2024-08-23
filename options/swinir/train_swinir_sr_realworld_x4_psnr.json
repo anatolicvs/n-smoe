@@ -1,5 +1,5 @@
 {
-  "task": "swinir_sr_realworld_x4_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
+  "task": "swinir_sr_realworld_x2_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
   , "gpu_ids": [0, 1, 2, 3]
 
@@ -52,7 +52,7 @@
 
   , "netG": {
     "net_type": "swinir"
-    , "upscale": 4
+    , "upscale": 2
     , "in_chans": 1
     , "img_size": 64
     , "window_size": 8

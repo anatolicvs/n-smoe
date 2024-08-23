@@ -218,7 +218,7 @@ def main(json_path="options://"):
 
     num_epochs = 4000000
     checkpoint_interval = opt["train"].get("checkpoint_save", 1000)
-    test_interval = opt["train"].get("checkpoint_test", 10000)
+    test_interval = opt["train"].get("checkpoint_test", 1000)
     log_interval = opt["train"].get("checkpoint_print", 500)
 
     for epoch in range(num_epochs):
@@ -240,9 +240,6 @@ def main(json_path="options://"):
             current_step += 1
             model.feed_data(train_data)
 
-            if opt["visualize"]:
-                model.visualize_data()
-
             model.optimize_parameters(current_step)
             model.update_learning_rate(current_step)
 
@@ -253,72 +250,70 @@ def main(json_path="options://"):
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
-        if epoch % test_interval == 0:
-            local_psnr_sum = 0.0
-            local_count = 0
-
-            for test_data in test_loader:
-                if test_data is None:
-                    continue
-
-                image_name_ext = os.path.basename(test_data["L_path"][0])
-
-                model.feed_data(test_data)
-                model.test()
-
-                visuals = model.current_visuals()
-                E_img = util.tensor2uint(visuals["E"])
-                H_img = util.tensor2uint(visuals["H"])
-                current_psnr = util.calculate_psnr(E_img, H_img, border)
-
-                local_psnr_sum += current_psnr
-                local_count += 1
-
-                if opt["rank"] == 0:
-                    logger.info(
-                        f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
-                    )
-
-            if opt["dist"]:
-                local_psnr_sum_tensor = torch.tensor(
-                    local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
-                )
-                local_count_tensor = torch.tensor(
-                    local_count, device=torch.device(f"cuda:{opt['rank']}")
-                )
-                dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
-                dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
-
-                global_avg_psnr = (
-                    (local_psnr_sum_tensor.item() / local_count_tensor.item())
-                    if local_count_tensor.item() > 0
-                    else 0.0
-                )
-
-                if opt["rank"] == 0:
-                    logger.info(
-                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
-                    )
-            else:
-                if local_count > 0:
-                    avg_psnr = local_psnr_sum / local_count
-                else:
-                    avg_psnr = 0.0
-
-                if opt["rank"] == 0:
-                    logger.info(
-                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                    )
-
-            model.train()
-
-        if epoch % checkpoint_interval == 0:
-            if opt["rank"] == 0:
+            if current_step % checkpoint_interval == 0 and opt['rank'] == 0:
+                logger.info('Saving the model.')
                 model.save(current_step)
-            if opt["dist"]:
-                dist.barrier()
+                if opt["dist"]:
+                    dist.barrier()
+            
+            if current_step % test_interval == 0:
+                local_psnr_sum = 0.0
+                local_count = 0
 
-    if opt["dist"]:
-        dist.barrier()
+                for test_data in test_loader:
+                    if test_data is None:
+                        continue
+
+                    image_name_ext = os.path.basename(test_data["L_path"][0])
+
+                    model.feed_data(test_data)
+                    model.test()
+
+                    visuals = model.current_visuals()
+                    E_img = util.tensor2uint(visuals["E"])
+                    H_img = util.tensor2uint(visuals["H"])
+                    current_psnr = util.calculate_psnr(E_img, H_img, border)
+
+                    local_psnr_sum += current_psnr
+                    local_count += 1
+
+                    if opt["rank"] == 0:
+                        logger.info(
+                            f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+                        )
+                if opt["dist"]:
+                    local_psnr_sum_tensor = torch.tensor(
+                        local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
+                    )
+                    local_count_tensor = torch.tensor(
+                        local_count, device=torch.device(f"cuda:{opt['rank']}")
+                    )
+                    dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
+                    dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
+
+                    global_avg_psnr = (
+                        (local_psnr_sum_tensor.item() / local_count_tensor.item())
+                        if local_count_tensor.item() > 0
+                        else 0.0
+                    )
+
+                    if opt["rank"] == 0:
+                        logger.info(
+                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
+                        )
+                else:
+                    if local_count > 0:
+                        avg_psnr = local_psnr_sum / local_count
+                    else:
+                        avg_psnr = 0.0
+
+                    if opt["rank"] == 0:
+                        logger.info(
+                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
+                        )
+                model.train()
+        
+        if opt["dist"]:
+            dist.barrier()
 if __name__ == "__main__":
     main()
