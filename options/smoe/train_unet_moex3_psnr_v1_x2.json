@@ -1,12 +1,12 @@
 {
-    "task": "unet_unet_unet_moex3_sr_plain_v1_x2_medical_mix_act_gelu" 
+    "task": "moex3_sr_plain_v1_x2_medical_mix_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 15
+    , "overlap": 14
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": null
+      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_unet_moex3_sr_plain_v1_x2_medical_mix_act_gelu/models/5000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -93,7 +93,9 @@
           , "G_optimizer_lr": 1e-4            // learning rate
           , "G_optimizer_clipgrad": null      // unused
       
-          , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
+        , "G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_T_max": 2000000
+        , "G_scheduler_eta_min": 1e-6
           , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
           , "G_scheduler_gamma": 0.5
       

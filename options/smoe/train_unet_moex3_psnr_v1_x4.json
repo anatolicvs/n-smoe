@@ -94,14 +94,16 @@
         , "G_optimizer_lr": 1e-4            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
-        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
+        , "G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_T_max": 2000000
+        , "G_scheduler_eta_min": 1e-6
         , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
         , "G_scheduler_gamma": 0.5
     
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 100000           // for testing
+        , "checkpoint_test": 5000           // for testing
         , "checkpoint_save": 5000           // for saving model
         , "checkpoint_print": 500           // for print
       }
