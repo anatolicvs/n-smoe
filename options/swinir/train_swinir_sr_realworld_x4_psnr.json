@@ -1,10 +1,9 @@
 {
-  "task": "swinir_sr_realworld_x2_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
+  "task": "swinir_sr_realworld_x4_medical_mix_psnr"     // real-world image sr. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
-  , "gpu_ids": [0,1,2,3]
-  , "dist": true
+  , "gpu_ids": [0, 1, 2, 3]
 
-  , "scale": 2       // broadcast to "datasets"
+  , "scale": 4       // broadcast to "datasets"
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat"
   , "path": {
@@ -16,7 +15,7 @@
 
   ,"datasets": {
     "train": {
-        "name": "train_dataset"           // just name
+        "name": "train_dataset"           
         , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
         , "lq_patchsize": 64
         , "length" : -1
@@ -24,16 +23,17 @@
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
         , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
         , "use_dataset_cache": true
         , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
         , "dataroot_L": null              // path of L training dataset
         , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_shuffle": true
         , "dataloader_num_workers": 32
-        , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+        , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
     , "test": {
-        "name": "test_dataset"            // just name
+        "name": "test_dataset"            
         , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
         , "lq_patchsize": 64
         , "length" : -1
@@ -90,8 +90,8 @@
     , "G_param_strict": true
     , "E_param_strict": true
 
-    , "checkpoint_test": 5000           // for testing
-    , "checkpoint_save": 5000           // for saving model
-    , "checkpoint_print": 200           // for print
+    , "checkpoint_test": 1000           // for testing
+    , "checkpoint_save": 1000           // for saving model
+    , "checkpoint_print": 50           // for print
   }
 }

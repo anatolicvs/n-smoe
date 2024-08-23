@@ -102,8 +102,8 @@
           , "G_regularizer_orthstep": null    // unused
           , "G_regularizer_clipstep": null    // unused
       
-          , "checkpoint_test": 100000           // for testing
+          , "checkpoint_test": 5000           // for testing
           , "checkpoint_save": 5000           // for saving model
-          , "checkpoint_print": 500           // for print
+          , "checkpoint_print": 50           // for print
         }
   }

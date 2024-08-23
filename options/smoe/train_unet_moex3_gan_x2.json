@@ -22,26 +22,27 @@
   
       ,"datasets": {
         "train": {
-            "name": "train_dataset"           // just name
+            "name": "train_dataset"           
             , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-            , "lq_patchsize": 32
+            , "lq_patchsize": 64
             , "length" : -1
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
             , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+            //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
             , "dataroot_L": null              // path of L training dataset
-            , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
         }
         , "test": {
-            "name": "test_dataset"            // just name
+            "name": "test_dataset"            
             , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-            , "lq_patchsize": 32
+            , "lq_patchsize": 64
             , "length" : -1
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
@@ -50,7 +51,7 @@
             , "dataroot_L": null              // path of L testing dataset
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-            , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4 
             }
@@ -97,10 +98,10 @@
 
     , "train": {
           "is_moe": true
-        , "G_lossfn_type": "l2sum"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+        , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
         , "G_lossfn_weight": 1
     
-        , "F_lossfn_type": "l2"  // "l1" | "l2"
+        , "F_lossfn_type": "l1"  // "l1" | "l2"
         , "F_lossfn_weight": 1
         , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
         , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
@@ -122,7 +123,9 @@
         , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
     
-        , "G_scheduler_type": "MultiStepLR"
+        ,"G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_T_max": 200000
+        , "G_scheduler_eta_min": 1e-6
         , "G_scheduler_max_lr": 1e-3
         , "G_scheduler_step_size_up": 30000
         , "G_scheduler_step_size_down": 30000
@@ -132,7 +135,9 @@
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
-        , "D_scheduler_type": "MultiStepLR"
+        , "D_scheduler_type": "CosineAnnealingLR"
+        , "D_scheduler_T_max": 200000
+        , "D_scheduler_eta_min": 1e-6
         , "D_scheduler_max_lr": 1e-3
         , "D_scheduler_step_size_up": 30000
         , "D_scheduler_step_size_down": 30000
@@ -147,7 +152,7 @@
         , "E_param_strict": true
     
         , "checkpoint_test": 10000           
-        , "checkpoint_save": 10000        
-        , "checkpoint_print": 500          
+        , "checkpoint_save": 5000        
+        , "checkpoint_print": 250          
       }
     }

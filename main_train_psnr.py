@@ -21,8 +21,7 @@ from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
-
-def setup_logging(opt) -> Optional[logging.Logger]:
+def setup_logging(opt):
     if opt["rank"] == 0:
         logger_name = "train"
         slurm_jobid = os.getenv("SLURM_JOB_ID", "0")
@@ -35,11 +34,16 @@ def setup_logging(opt) -> Optional[logging.Logger]:
             logger.handlers.clear()
 
         file_handler = logging.FileHandler(log_file)
+        console_handler = logging.StreamHandler(sys.stdout)
+
         formatter = logging.Formatter(
             "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
         file_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+
         logger.addHandler(file_handler)
+        logger.addHandler(console_handler)
         logger.setLevel(logging.INFO)
 
         logger.propagate = False
@@ -50,8 +54,7 @@ def setup_logging(opt) -> Optional[logging.Logger]:
         logger = None
     return logger
 
-
-def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
+def initialize_distributed(opt):
     if opt["dist"]:
         init_dist("pytorch")
         opt["world_size"] = dist.get_world_size()
@@ -61,12 +64,8 @@ def initialize_distributed(opt: Dict[str, Any]) -> Dict[str, Any]:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
 
-
-def build_loaders(
-    opt: Dict[str, Any], logger: Optional[logging.Logger] = None
-) -> Tuple[Optional[DataLoader], Optional[DataLoader]]:
-
-    def log_stats(phase: str, dataset: torch.utils.data.Dataset, batch_size: int):
+def build_loaders(opt, logger=None):
+    def log_stats(phase, dataset, batch_size):
         size = len(dataset)
         iters = math.ceil(size / batch_size)
         if opt["rank"] == 0:
@@ -85,7 +84,7 @@ def build_loaders(
             collate_fn=util.custom_collate,
         )
 
-    def adjust_batch_size(batch_size: int) -> int:
+    def adjust_batch_size(batch_size):
         if opt["dist"] and batch_size % opt["num_gpu"] != 0:
             adjusted_size = max(1, (batch_size // opt["num_gpu"]) * opt["num_gpu"])
             if opt["rank"] == 0:
@@ -148,8 +147,7 @@ def build_loaders(
 
     return train_loader, test_loader
 
-
-def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
+def main(json_path="options://"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
@@ -216,9 +214,7 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
-    model: ModelPlain2 | ModelPlain4 | ModelGAN | ModelPlain | ModelVRT = define_Model(
-        opt
-    )
+    model = define_Model(opt)
     model.init_train()
 
     if opt["rank"] == 0:
@@ -227,8 +223,8 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
 
     num_epochs = 4000000
     checkpoint_interval = opt["train"].get("checkpoint_save", 1000)
-    test_interval = opt["train"].get("checkpoint_test", 1000)
-    log_interval = opt["train"].get("checkpoint_print", 100)
+    test_interval = opt["train"].get("checkpoint_test", 10000)
+    log_interval = opt["train"].get("checkpoint_print", 500)
 
     for epoch in range(num_epochs):
         if (
@@ -255,14 +251,14 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
             model.optimize_parameters(current_step)
             model.update_learning_rate(current_step)
 
-            if i % log_interval == 0 and opt["rank"] == 0:
+            if current_step % log_interval == 0 and opt["rank"] == 0:
                 logs = model.current_log()
                 message = f"<epoch:{epoch:3d}, iter:{current_step:8,d}, lr:{model.current_learning_rate():.3e}>"
                 for k, v in logs.items():
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
-        if opt["dist"] and epoch % test_interval == 0:
+        if epoch % test_interval == 0:
             local_psnr_sum = 0.0
             local_count = 0
 
@@ -321,14 +317,14 @@ def main(json_path: str = "options/smoe/train_unet_moex3_psnr_local.json"):
 
             model.train()
 
-        if opt["dist"] and epoch % checkpoint_interval == 0:
+        if epoch % checkpoint_interval == 0:
             if opt["rank"] == 0:
                 model.save(current_step)
-            dist.barrier()
+            if opt["dist"]:
+                dist.barrier()
 
     if opt["dist"]:
         dist.barrier()
-
 
 if __name__ == "__main__":
     main()
