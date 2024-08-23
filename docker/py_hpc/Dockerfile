@@ -39,7 +39,7 @@ RUN source /opt/miniconda/bin/activate venv && \
     pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm && \
     pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124 && \
-    pip install --no-cache-dir pandas wandb -U scikit-learn timm lightning['extra'] tensorboard \
+    pip install --no-cache-dir pandas wandb -U scikit-learn timm lightning['extra'] tensorboard monailabel \
     pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
     torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
     "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch \

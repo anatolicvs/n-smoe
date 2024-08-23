@@ -19,24 +19,24 @@
       , "pretrained_models":{
          "dpsr" : "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"   // rgb | grayscale
         ,"esrgan": "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth" // rgb | grayscale
-        ,"moex1" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
+        ,"moex1" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
         ,"moex3" : null
         ,"sam2":  "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
       }
       , "datasets": {
          "test": {
-            "name": "amd"            
+            "name": "brain2"            
           , "dataset_type": "medical_sr"            
-          , "lq_patchsize": 64
+          , "lq_patchsize": 96
           , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
           , "exclude_dirs": []
           , "length" : 50
           , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
-          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/amd"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
-          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_amd_.pkl"
-          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_brain2_.pkl"
+          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 
         }

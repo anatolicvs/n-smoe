@@ -259,10 +259,18 @@ def convert_to_3_channel(images):
     ]
 
 
-def visualize_with_segmentation(images, titles, mask_generator):
+def visualize_with_segmentation(
+    images: List[np.ndarray],
+    titles: List[str],
+    mask_generator: SAM2AutomaticMaskGenerator,
+    cmap: str = "gray",
+    save_path: str = None,
+    visualize: bool = False,
+    backend: str = "TkAgg",
+):
     import matplotlib
 
-    matplotlib.use("TkAgg")
+    matplotlib.use(backend)
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
     import cv2
@@ -308,24 +316,24 @@ def visualize_with_segmentation(images, titles, mask_generator):
 
     annotated_mask = mask_generator.generate(np.repeat(images[0][:, :, :], 3, axis=-1))
     ax_annotated = fig.add_subplot(gs[0:2, 0])
-    ax_annotated.imshow(images[0], cmap="gray")
+    ax_annotated.imshow(images[0], cmap=cmap)
     show_anns(annotated_mask)
     ax_annotated.axis("off")
     ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
 
     ax_img_hr = fig.add_subplot(gs[0:2, 1])
-    ax_img_hr.imshow(images[0], cmap="gray")
+    ax_img_hr.imshow(images[0], cmap=cmap)
     ax_img_hr.axis("off")
     ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
 
     for i in range(1, len(images)):
         ax_img = fig.add_subplot(gs[0, i + 1])
-        ax_img.imshow(images[i], cmap="gray")
+        ax_img.imshow(images[i], cmap=cmap)
         ax_img.axis("off")
 
         mask = mask_generator.generate(np.repeat(images[i][:, :, None], 3, axis=-1))
         ax_seg = fig.add_subplot(gs[1, i + 1])
-        ax_seg.imshow(images[i], cmap="gray")
+        ax_seg.imshow(images[i], cmap=cmap)
         show_anns(mask)
         ax_seg.axis("off")
 
@@ -352,7 +360,11 @@ def visualize_with_segmentation(images, titles, mask_generator):
     plt.subplots_adjust(
         wspace=0.02, hspace=0.02
     )  # Further reduce space between figures
-    plt.show()
+
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
+    if visualize:
+        plt.show()
 
 
 def visualize_data_pair(images, titles):
@@ -453,10 +465,11 @@ def visualize_data(
     cmap: str = "gray",
     save_path: str = None,
     visualize: bool = True,
+    backend: str = "TkAgg",
 ) -> None:
     import matplotlib
 
-    matplotlib.use("TkAgg")
+    matplotlib.use(backend)
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
     from numpy.fft import fft2, fftshift
@@ -530,7 +543,8 @@ def visualize_data(
         )
         ax_2d_spectrum.axis("on")
 
-    plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
     if visualize:
         plt.show()
 
@@ -544,11 +558,13 @@ def main(json_path="options/testing/test_tmi_local.json"):
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--dist", default=False)
     parser.add_argument("--visualize", action="store_true", default=False)
+    parser.add_argument("--backend", default="TkAgg")
 
     args = parser.parse_args()
     opt = option.parse(parser.parse_args().opt, is_train=True)
     opt["dist"] = args.dist
     opt["visualize"] = args.visualize
+    opt["backend"] = args.backend
 
     if opt["dist"]:
         init_dist("pytorch")
@@ -831,7 +847,18 @@ def main(json_path="options/testing/test_tmi_local.json"):
     H_img_size = opt["datasets"]["test"]["H_size"]
     scale: str = f'x{opt["scale"]}'
 
+    timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     methods: List[str] = ["DPSR", "ESRGAN", "N-SMoE"]
+    csv_dir = os.path.join(opt["path"]["root"], dataset_name)
+    util.mkdir(csv_dir)
+    fmetric_name = os.path.join(
+        csv_dir,
+        degrdation
+        + "_"
+        + dataset_name
+        + "_"
+        + timestamp.replace(" ", "_").replace(":", "-"),
+    )
     for test_data in test_loader:
         if test_data is None:
             continue
@@ -842,12 +869,16 @@ def main(json_path="options/testing/test_tmi_local.json"):
 
         img_dir = os.path.join(opt["path"]["images"], img_name)
         util.mkdir(img_dir)
-        timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
         fname = os.path.join(
-            img_dir, img_name + "_" + timestamp.replace(" ", "_").replace(":", "-")
+            img_dir,
+            f"{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}",
         )
         figure_path = f"{fname}.pdf"
-
+        seg_figure_path = os.path.join(
+            img_dir,
+            f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+        )
         with torch.no_grad():
             E_img_moex1 = model_moex1(
                 test_data["L_p"].to(device), test_data["L"].size()
@@ -932,27 +963,19 @@ def main(json_path="options/testing/test_tmi_local.json"):
         img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
         img_H = util.modcrop(img_H, border)
 
-        # degradation_model = "bicubic downsampling + blur"
-        # images: dict[str, Any] = {
-        #     "H_img": img_H,
-        #     "L_crop_img": L_crop_img,
-        #     "H_crop_img": H_crop_img,
-        #     "E_SMoE_img": E_img_moex1,
-        #     "E_DPSR_img": E_img_dpsr,
-        #     "E_ESRGAN_img": E_img_esrgan,
-        #     "Degradation_Model": degradation_model,
-        # }
+        images: dict[str, Any] = {
+            "H_img": img_H,
+            "H_img_size": H_img_size,
+            "L_crop_img": L_crop_img,
+            "H_crop_img": H_crop_img,
+            "E_SMoE_img": E_img_moex1,
+            "E_DPSR_img": E_img_dpsr,
+            "E_ESRGAN_img": E_img_esrgan,
+            "Degradation_Model": degrdation,
+            "scale": scale,
+        }
 
-        # filename = f'/mnt/e/Medical/sr_results_for_{"dpsr"}_{timestamp.replace(" ", "_").replace(":", "-")}.mat'
-        # scipy.io.savemat(filename, images)
-
-        # visualize_data(
-        #     [L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
-        #     titles,
-        #     cmap="gray",
-        #     save_path=figure_path,
-        #     visualize=opt["visualize"],
-        # )
+        scipy.io.savemat(f"{fname}.mat", images)
 
         # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
@@ -969,6 +992,19 @@ def main(json_path="options/testing/test_tmi_local.json"):
             [img_H, L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
             titles,
             mask_generator,
+            cmap="gray",
+            save_path=seg_figure_path,
+            visualize=opt["visualize"],
+            backend=opt["backend"],
+        )
+
+        visualize_data(
+            [L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
+            titles[1:],
+            cmap="gray",
+            save_path=figure_path,
+            visualize=opt["visualize"],
+            backend=opt["backend"],
         )
 
         current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
@@ -1041,7 +1077,7 @@ def main(json_path="options/testing/test_tmi_local.json"):
         ssim_values[-1] - ssim for ssim in ssim_values[:-1]
     ]
 
-    with open((fname + "_metrics.csv"), "a", newline="") as csvfile:
+    with open((fmetric_name + "_metrics.csv"), "a", newline="") as csvfile:
         csvwriter = csv.writer(csvfile)
 
         csvwriter.writerow(
@@ -1076,7 +1112,7 @@ def main(json_path="options/testing/test_tmi_local.json"):
                     diff_ssim_values[i].item() if i < len(diff_ssim_values) else "N/A",
                 ]
             )
-        print(f"Results saved to CSV file: {filename}_metrics.csv")
+        print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 
 
 if __name__ == "__main__":
