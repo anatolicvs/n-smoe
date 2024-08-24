@@ -1,5 +1,3 @@
-# type: ignore
-
 import logging
 import os
 import pickle
@@ -19,6 +17,7 @@ import torch.cuda.amp as amp
 from scipy.io import loadmat
 from torch.utils.data import Dataset
 
+from PIL import Image
 import utils_n.utils_image as util
 from utils_n import utils_blindsr as blindsr
 
@@ -31,41 +30,24 @@ class FastMRIRawDataSample(NamedTuple):
 
 class MedicalDatasetSR(Dataset):
     def __init__(self, opt):
-        self.n_channels: int = opt["n_channels"] if "n_channels" in opt else 3
-        self.roots: list[str] = opt["dataroot_H"] if "dataroot_H" in opt else []
-        self.exclude_dirs: list[str] = (
-            opt["exclude_dirs"] if "exclude_dirs" in opt else []
+        self.n_channels: int = opt.get("n_channels", 3)
+        self.roots: list[str] = opt.get("dataroot_H", [])
+        self.exclude_dirs: list[str] = opt.get("exclude_dirs", [])
+        self.challenge = opt.get("challenge", "multicoil")
+        self.use_dataset_cache: bool = opt.get("use_dataset_cache", True)
+        self.dataset_cache_file: str = opt.get(
+            "dataset_cache_file", "dataset_cache.pkl"
         )
-        self.challenge = opt["challenge"] if "challenge" in opt else "multicoil"
-        self.use_dataset_cache: bool = (
-            opt["use_dataset_cache"] if "use_dataset_cache" in opt else True
-        )
-        self.dataset_cache_file: str = (
-            opt["dataset_cache_file"]
-            if "dataset_cache_file" in opt
-            else "dataset_cache.pkl"
-        )
-        self.sf: int = opt["scale"] if "scale" in opt else 2
-        self.phase: str = opt["phase"] if "phase" in opt else "train"
-        self.h_size: int = opt["H_size"] if "H_size" in opt else 96
-        self.lq_patchsize: int = opt["lq_patchsize"] if "lq_patchsize" in opt else 64
-        self.crop_method: str = (
-            opt["crop_method"] if "crop_method" in opt else "high_texture"
-        )
-        self.phw: int = opt["phw"] if "phw" in opt else 32
-        self.overlap: int = opt["overlap"] if "overlap" in opt else 4
-
-        self.length: int = opt["length"] if "length" in opt else -1
-
-        self.degradation_methods: List[str] = (
-            opt["degradation_methods"]
-            if "degradation_methods" in opt
-            else ["dpsr"]  # dpsr, bsrgan_plus, classic_sr, bicubic_degradation
-        )
-
-        # self.recons_keys = ["reconstruction_rss"]  # "kspace"
-
-        self.k = loadmat(opt["kernel_path"]) if "kernel_path" in opt else None
+        self.sf: int = opt.get("scale", 2)
+        self.phase: str = opt.get("phase", "train")
+        self.h_size: int = opt.get("H_size", 96)
+        self.lq_patchsize: int = opt.get("lq_patchsize", 64)
+        self.crop_method: str = opt.get("crop_method", "high_texture")
+        self.phw: int = opt.get("phw", 32)
+        self.overlap: int = opt.get("overlap", 4)
+        self.length: int = opt.get("length", -1)
+        self.degradation_methods: List[str] = opt.get("degradation_methods", ["dpsr"])
+        self.k = loadmat(opt.get("kernel_path")) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
 
     def load_samples(self) -> List[FastMRIRawDataSample]:
@@ -75,12 +57,9 @@ class MedicalDatasetSR(Dataset):
                     return pickle.load(f)
             except Exception as e:
                 logging.error(f"Error loading cached data: {e}")
-                pass
 
         files = [self.load_sample(f) for f in util.get_m_image_paths(self.roots)]
-
         samples = list(chain.from_iterable(filter(None, files)))
-
         filtered_samples = self.filter_low_content_images(samples, self.exclude_dirs)
 
         if self.length > 0 and len(filtered_samples) > self.length:
@@ -100,10 +79,6 @@ class MedicalDatasetSR(Dataset):
     ) -> List[FastMRIRawDataSample]:
         std_devs = []
         sample_indices = []
-
-        max_memory_usage = torch.cuda.get_device_properties(0).total_memory * 0.9
-        scaler = torch.amp.GradScaler(enabled=True)
-
         filtered_samples = []
 
         for s in samples:
@@ -119,19 +94,15 @@ class MedicalDatasetSR(Dataset):
                 if img_data is not None:
                     tensor = torch.from_numpy(img_data).float().to("cuda")
 
-                    with torch.amp.autocast("cuda"):
+                    with amp.autocast("cuda"):
                         std_dev = torch.std(tensor).item()
 
                     std_devs.append(std_dev)
                     sample_indices.append(s)
 
-                torch.cuda.empty_cache()
-
             except RuntimeError as e:
                 if "out of memory" in str(e):
                     torch.cuda.empty_cache()
-                else:
-                    raise e
 
         if std_devs:
             std_devs_tensor = torch.tensor(std_devs)
@@ -144,31 +115,28 @@ class MedicalDatasetSR(Dataset):
 
         return filtered_samples
 
-        sample, img_data = sample_data
-        tensor = torch.from_numpy(img_data).float().unsqueeze(0)
-        if tensor.ndim == 3:
-            tensor = tensor.unsqueeze(1)
-
-        with amp.autocast():
-            std_dev = torch.std(tensor).item()
-
-        std_devs.append(std_dev)
-        sample_indices.append(sample)
-
-        torch.cuda.empty_cache()
-
     def load_sample(self, fname) -> None | List[FastMRIRawDataSample]:
         fname_path = Path(fname)
+
         if not fname_path.exists() or not os.access(fname, os.R_OK):
             logging.warning(f"Access issue with file: {fname}")
             return None
 
         try:
+            if fname_path.suffix.lower() in [".jpg", ".jpeg"]:
+                with Image.open(fname_path) as img:
+                    img.verify()
+
             if fname_path.suffix in [".h5", ".gz", ".npy"]:
                 return self.handle_special_formats(fname)
+
             return [FastMRIRawDataSample(fname, 0, {})]
-        except Exception as e:
+
+        except (OSError, ValueError) as e:
             logging.error(f"Error processing file {fname}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error processing file {fname}: {e}")
             return None
 
     def handle_special_formats(self, fname_path) -> List[FastMRIRawDataSample] | None:
@@ -192,7 +160,7 @@ class MedicalDatasetSR(Dataset):
         prefix = "ismrmrd_namespace"
         ns = {prefix: namespace}
         for el in qlist:
-            s = s + f"//{prefix}:{el}"
+            s += f"//{prefix}:{el}"
         value = root.find(s, ns)
         if value is None:
             raise RuntimeError("Element not found")
@@ -276,14 +244,15 @@ class MedicalDatasetSR(Dataset):
             else:
                 img = util.imread_uint(fname, self.n_channels)
                 img = util.uint2single(img)
+
+            return img if img is not None and img.ndim >= 2 else None
+
         except PermissionError as e:
             logging.warning(f"Skipping file {fname} due to PermissionError: {e}")
             return None
         except Exception as e:
             logging.warning(f"Skipping file {fname} due to error: {e}")
             return None
-
-        return img if img is not None and img.ndim >= 2 else None
 
     def _get_best_slice(self, volume):
         variances = [np.var(volume[:, :, i]) for i in range(volume.shape[2])]
@@ -296,8 +265,7 @@ class MedicalDatasetSR(Dataset):
         start_y = max(center_y - crop_half, 0)
         end_x = min(start_x + crop_size, img.shape[1])
         end_y = min(start_y + crop_size, img.shape[0])
-        cropped_img = img[start_y:end_y, start_x:end_x]
-        return cropped_img
+        return img[start_y:end_y, start_x:end_x]
 
     def crop_high_texture(self, img, crop_size):
         img = np.squeeze(img)
@@ -366,7 +334,7 @@ class MedicalDatasetSR(Dataset):
 
         return img_H
 
-    def apply_degradation(self, img, fname):  # -> dict[str, Any]:
+    def apply_degradation(self, img, fname):
         chosen_model = random.choice(self.degradation_methods)
         kernel = self.select_kernel()
         img_L, img_H = {
@@ -400,9 +368,7 @@ class MedicalDatasetSR(Dataset):
             return self.k["kernels"][0][kernel_index]
         else:
             logging.warning("No kernels found, using default kernel")
-            return (
-                np.ones((5, 5), dtype=np.float32) / 25
-            )  # Default to average blur kernel
+            return np.ones((5, 5), dtype=np.float32) / 25
 
     @staticmethod
     def extract_blocks(img_tensor, block_size, overlap) -> torch.Tensor:

@@ -12,7 +12,7 @@
 
 USE_APPTAINER=true
 DISTRIBUTED_TRAINING=true
-GPUS=4
+GPUS=${GPUS:-4}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -37,7 +37,7 @@ while getopts ":m:o:a:dg:h" opt; do
       echo "  -o: Path to options file"
       echo "  -a: Use Apptainer"
       echo "  -d: Enable distributed training (only effective if GPUs > 1)"
-      echo "  -g: Number of GPUs to use (default 1)"
+      echo "  -g: Number of GPUs to use (default 4)"
       exit 0
       ;;
     \?)
@@ -56,11 +56,14 @@ if [ "$GPUS" -lt 1 ]; then
   exit 1
 fi
 
-if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -gt 1 ]; then
-  DIST_FLAG="--dist"
-else
-  DIST_FLAG=""
+if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -le 1 ]; then
+  echo "Warning: Distributed training is enabled but only 1 GPU is specified. Disabling distributed training."
   DISTRIBUTED_TRAINING=false
+fi
+
+if [ -z "$MODEL_NAME" ]; then
+  echo "Error: MODEL_NAME must be specified." >&2
+  exit 1
 fi
 
 TODAYS_DATE=$(date +%d%m%Y%H%M)
@@ -77,6 +80,7 @@ MAIL_USER="aytac@linux.com"
 OUTPUT_DIR="/home/p0021791/slurm/output"
 ERROR_DIR="/home/p0021791/slurm/error"
 WORKDIR="/hpcwork/p0021791"
+
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
 
 PARTITION="c23g"
@@ -103,6 +107,7 @@ nvidia-smi
 
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \

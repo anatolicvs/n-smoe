@@ -1,9 +1,8 @@
-#!/bin/bash
+#!/usr/bin/zsh
 
-# SLURM job submission settings
 USE_APPTAINER=true
 DISTRIBUTED_TRAINING=true
-GPUS=4
+GPUS=${GPUS:-1}  # Default to 1 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -47,11 +46,14 @@ if [ "$GPUS" -lt 1 ]; then
   exit 1
 fi
 
-if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -gt 1 ]; then
-  DIST_FLAG="--dist"
-else
-  DIST_FLAG=""
+if [ "$DISTRIBUTED_TRAINING" = true ] && [ "$GPUS" -le 1 ]; then
+  echo "Warning: Distributed training is enabled but only 1 GPU is specified. Disabling distributed training."
   DISTRIBUTED_TRAINING=false
+fi
+
+if [ -z "$MODEL_NAME" ]; then
+  echo "Error: MODEL_NAME must be specified." >&2
+  exit 1
 fi
 
 TODAYS_DATE=$(date +%d%m%Y%H%M)
@@ -68,11 +70,18 @@ MAIL_USER="aytac@linux.com"
 OUTPUT_DIR="/home/p0021791/slurm/output"
 ERROR_DIR="/home/p0021791/slurm/error"
 WORKDIR="/hpcwork/p0021791"
-mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; exit 1; }
+
+if [ ! -w "$OUTPUT_DIR" ] || [ ! -w "$ERROR_DIR" ]; then
+  echo "Error: Output or error directory is not writable." >&2
+  exit 1
+fi
+
+mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
 
 PARTITION="c23g"
 
-job_id=$(sbatch <<-EOT | awk '{print $4}'
+JOB_SCRIPT=$(mktemp)
+cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
 #SBATCH -A p0021791
@@ -94,18 +103,24 @@ nvidia-smi
 
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
+  if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then
+      echo "Error: Required environment variables (HPCWORK, WORK, WORKDIR) are not set." >&2
+      exit 1
+  fi
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH $DIST_FLAG
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_psnr.py --opt=$OPTION_PATH --dist
 fi
 
 echo "Job completed at: \$(date)"
 EOT
-)
+
+job_id=$(sbatch "$JOB_SCRIPT" | awk '{print $4}')
 
 echo "Job submission complete. Job ID: $job_id"
