@@ -68,7 +68,7 @@ holoviews
 hvplot
 jupyterlab
 mahotas
-
+monailabel
 
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
