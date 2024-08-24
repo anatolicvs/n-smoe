@@ -2,20 +2,19 @@ import math
 from dataclasses import dataclass
 from typing import Any, Generic, Optional, Tuple, TypeVar
 
-import cv2
-from grpc import StatusCode
 import numpy as np
 import torch
-import torch.fft
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-import cupy as cp
 
 from utils_n.nn import avg_pool_nd, checkpoint, conv_nd, zero_module, GroupNorm32
 
-
 T = TypeVar("T")
+
+DEFAULT_NUM_GROUPS = 32
+DEFAULT_KERNEL_SIZE = 3
+DEFAULT_DIMS = 2
 
 
 class Backbone(nn.Module, Generic[T]):
@@ -32,16 +31,14 @@ class Backbone(nn.Module, Generic[T]):
 
 
 class Upsample(nn.Module):
-    """
-    An upsampling layer with an optional convolution.
-
-    :param channels: channels in the inputs and outputs.
-    :param use_conv: a bool determining if a convolution is applied.
-    :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
-                 upsampling occurs in the inner-two dimensions.
-    """
-
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, resample_2d=True):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool,
+        dims: int = DEFAULT_DIMS,
+        out_channels: Optional[int] = None,
+        resample_2d: bool = True,
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -49,10 +46,14 @@ class Upsample(nn.Module):
         self.dims = dims
         self.resample_2d = resample_2d
         if use_conv:
-            self.conv = conv_nd(dims, self.channels, self.out_channels, 3, padding=1)
+            self.conv = conv_nd(
+                dims, self.channels, self.out_channels, DEFAULT_KERNEL_SIZE, padding=1
+            )
 
-    def forward(self, x):
-        assert x.shape[1] == self.channels
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert (
+            x.shape[1] == self.channels
+        ), f"Expected {self.channels} channels, got {x.shape[1]}"
         if self.dims == 3 and self.resample_2d:
             x = F.interpolate(
                 x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
@@ -65,16 +66,14 @@ class Upsample(nn.Module):
 
 
 class Downsample(nn.Module):
-    """
-    A downsampling layer with an optional convolution.
-
-    :param channels: channels in the inputs and outputs.
-    :param use_conv: a bool determining if a convolution is applied.
-    :param dims: determines if the signal is 1D, 2D, or 3D. If 3D, then
-                 downsampling occurs in the inner-two dimensions.
-    """
-
-    def __init__(self, channels, use_conv, dims=2, out_channels=None, resample_2d=True):
+    def __init__(
+        self,
+        channels: int,
+        use_conv: bool,
+        dims: int = DEFAULT_DIMS,
+        out_channels: Optional[int] = None,
+        resample_2d: bool = True,
+    ):
         super().__init__()
         self.channels = channels
         self.out_channels = out_channels or channels
@@ -83,24 +82,33 @@ class Downsample(nn.Module):
         stride = (1, 2, 2) if dims == 3 and resample_2d else 2
         if use_conv:
             self.op = conv_nd(
-                dims, self.channels, self.out_channels, 3, stride=stride, padding=1
+                dims,
+                self.channels,
+                self.out_channels,
+                DEFAULT_KERNEL_SIZE,
+                stride=stride,
+                padding=1,
             )
         else:
-            assert self.channels == self.out_channels
+            assert (
+                self.channels == self.out_channels
+            ), "Channels must match for avg pooling"
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
 
-    def forward(self, x):
-        assert x.shape[1] == self.channels
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        assert (
+            x.shape[1] == self.channels
+        ), f"Expected {self.channels} channels, got {x.shape[1]}"
         return self.op(x)
 
 
 class AttentionPool2d(nn.Module):
     def __init__(
-        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int
+        self, spatial_dim: int, embed_dim: int, num_heads: int, output_dim: int
     ):
         super().__init__()
         self.positional_embedding = nn.Parameter(
-            torch.randn(spacial_dim + 1, embed_dim) / embed_dim**0.5
+            torch.randn(spatial_dim + 1, embed_dim) / embed_dim**0.5
         )
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.q_proj = nn.Linear(embed_dim, embed_dim)
@@ -108,7 +116,7 @@ class AttentionPool2d(nn.Module):
         self.c_proj = nn.Linear(embed_dim, output_dim or embed_dim)
         self.num_heads = num_heads
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = x.flatten(start_dim=2).permute(2, 0, 1)  # NCHW -> (HW)NC
         x = torch.cat([x.mean(dim=0, keepdim=True), x], dim=0)  # (HW+1)NC
         x = x + self.positional_embedding[:, None, :].to(x.dtype)  # (HW+1)NC
@@ -138,55 +146,31 @@ class AttentionPool2d(nn.Module):
         return x.squeeze(0)
 
 
-def normalization(channels, groups) -> GroupNorm32:
-
+def normalization(channels: int, groups: int) -> GroupNorm32:
     return GroupNorm32(groups, channels)
 
 
 def count_flops_attn(model, _x, y):
-    """
-    A counter for the `thop` package to count the operations in an
-    attention operation.
-    Meant to be used like:
-        macs, params = thop.profile(
-            model,
-            inputs=(inputs, timestamps),
-            custom_ops={QKVAttention: QKVAttention.count_flops},
-        )
-    """
     b, c, *spatial = y[0].shape
     num_spatial = int(np.prod(spatial))
-    # We perform two matmuls with the same number of ops.
-    # The first computes the weight matrix, the second computes
-    # the combination of the value vectors.
     matmul_ops = 2 * b * (num_spatial**2) * c
     model.total_ops += torch.DoubleTensor([matmul_ops])
 
 
 class QKVAttentionLegacy(nn.Module):
-    """
-    A module which performs QKV attention. Matches legacy QKVAttention + input/ouput heads shaping
-    """
-
-    def __init__(self, n_heads):
+    def __init__(self, n_heads: int):
         super().__init__()
         self.n_heads = n_heads
 
-    def forward(self, qkv):
-        """
-        Apply QKV attention.
-
-        :param qkv: an [N x (H * 3 * C) x T] tensor of Qs, Ks, and Vs.
-        :return: an [N x (H * C) x T] tensor after attention.
-        """
+    def forward(self, qkv: torch.Tensor) -> torch.Tensor:
         bs, width, length = qkv.shape
-        assert width % (3 * self.n_heads) == 0
+        assert (
+            width % (3 * self.n_heads) == 0
+        ), f"Width {width} is not divisible by {3 * self.n_heads}"
         ch = width // (3 * self.n_heads)
         q, k, v = qkv.reshape(bs * self.n_heads, ch * 3, length).split(ch, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
-        weight = torch.einsum(
-            "bct,bcs->bts", q * scale, k * scale
-        )  # More stable with f16 than dividing afterwards
+        weight = torch.einsum("bct,bcs->bts", q * scale, k * scale)
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
         a = torch.einsum("bts,bcs->bct", weight, v)
         return a.reshape(bs, -1, length)
@@ -197,23 +181,15 @@ class QKVAttentionLegacy(nn.Module):
 
 
 class QKVAttention(nn.Module):
-    """
-    A module which performs QKV attention and splits in a different order.
-    """
-
-    def __init__(self, n_heads):
+    def __init__(self, n_heads: int):
         super().__init__()
         self.n_heads = n_heads
 
-    def forward(self, qkv):
-        """
-        Apply QKV attention.
-
-        :param qkv: an [N x (3 * H * C) x T] tensor of Qs, Ks, and Vs.
-        :return: an [N x (H * C) x T] tensor after attention.
-        """
+    def forward(self, qkv: torch.Tensor) -> torch.Tensor:
         bs, width, length = qkv.shape
-        assert width % (3 * self.n_heads) == 0
+        assert (
+            width % (3 * self.n_heads) == 0
+        ), f"Width {width} is not divisible by {3 * self.n_heads}"
         ch = width // (3 * self.n_heads)
         q, k, v = qkv.chunk(3, dim=1)
         scale = 1 / math.sqrt(math.sqrt(ch))
@@ -221,7 +197,7 @@ class QKVAttention(nn.Module):
             "bct,bcs->bts",
             (q * scale).view(bs * self.n_heads, ch, length),
             (k * scale).view(bs * self.n_heads, ch, length),
-        )  # More stable with f16 than dividing afterwards
+        )
         weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
         a = torch.einsum(
             "bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length)
@@ -239,11 +215,11 @@ class ResBlockConfig:
     dropout: float = 0.0
     out_channels: Optional[int] = None
     use_conv: bool = False
-    dims: int = 2
+    dims: int = DEFAULT_DIMS
     use_checkpoint: bool = False
     up: bool = False
     down: bool = False
-    num_groups: int = 32
+    num_groups: int = DEFAULT_NUM_GROUPS
     resample_2d: bool = True
 
     def __post_init__(self):
@@ -251,16 +227,16 @@ class ResBlockConfig:
 
 
 class ResBlock(Backbone[ResBlockConfig]):
-
     def __init__(self, cfg: ResBlockConfig, activation: nn.Module = nn.GELU()):
         super().__init__(cfg=cfg)
-
         self.activation = activation
 
         self.in_layers = nn.Sequential(
             normalization(cfg.channels, cfg.num_groups),
             self.activation,
-            conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1),
+            conv_nd(
+                cfg.dims, cfg.channels, cfg.out_channels, DEFAULT_KERNEL_SIZE, padding=1
+            ),
         )
 
         self.updown = cfg.up or cfg.down
@@ -287,7 +263,13 @@ class ResBlock(Backbone[ResBlockConfig]):
             self.activation,
             nn.Dropout(p=cfg.dropout),
             zero_module(
-                conv_nd(cfg.dims, cfg.out_channels, cfg.out_channels, 3, padding=1)
+                conv_nd(
+                    cfg.dims,
+                    cfg.out_channels,
+                    cfg.out_channels,
+                    DEFAULT_KERNEL_SIZE,
+                    padding=1,
+                )
             ),
         )
 
@@ -295,17 +277,17 @@ class ResBlock(Backbone[ResBlockConfig]):
             self.skip_connection = nn.Identity()
         elif cfg.use_conv:
             self.skip_connection = conv_nd(
-                cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1
+                cfg.dims, cfg.channels, cfg.out_channels, DEFAULT_KERNEL_SIZE, padding=1
             )
         else:
             self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 1)
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return checkpoint(
             self._forward, (x,), self.parameters(), self.cfg.use_checkpoint
         )
 
-    def _forward(self, x):
+    def _forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.updown:
             in_rest, in_conv = self.in_layers[:-1], self.in_layers[-1]
             h = in_rest(x)
@@ -330,7 +312,7 @@ class AttentionBlockConfig:
     num_head_channels: int = -1
     use_checkpoint: bool = False
     use_new_attention_order: bool = False
-    num_groups: int = 32
+    num_groups: int = DEFAULT_NUM_GROUPS
 
 
 class AttentionBlock(Backbone[AttentionBlockConfig]):
@@ -346,16 +328,17 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
 
         self.norm = normalization(cfg.channels, cfg.num_groups)
         self.qkv = conv_nd(1, cfg.channels, cfg.channels * 3, 1)
-        if cfg.use_new_attention_order:
-            self.attention = QKVAttention(self.num_heads)
-        else:
-            self.attention = QKVAttentionLegacy(self.num_heads)
+        self.attention = (
+            QKVAttention(self.num_heads)
+            if not cfg.use_new_attention_order
+            else QKVAttentionLegacy(self.num_heads)
+        )
         self.proj_out = zero_module(conv_nd(1, cfg.channels, cfg.channels, 1))
 
-    def forward(self, x):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         return checkpoint(self._forward, (x,), self.parameters(), True)
 
-    def _forward(self, x):
+    def _forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, *spatial = x.shape
         x = x.reshape(b, c, -1)
         qkv = self.qkv(self.norm(x))
@@ -414,7 +397,7 @@ class MullerResizer(nn.Module):
 
         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
 
-    def create_gaussian_kernel(self, kernel_size, stddev):
+    def create_gaussian_kernel(self, kernel_size: int, stddev: float) -> torch.Tensor:
         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
         gaussian_kernel = torch.exp(-t.pow(2) / (2 * stddev**2))
         gaussian_kernel /= gaussian_kernel.sum()
@@ -424,14 +407,13 @@ class MullerResizer(nn.Module):
         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
         return gaussian_kernel
 
-    def _apply_gaussian_blur(self, x):
+    def _apply_gaussian_blur(self, x: torch.Tensor) -> torch.Tensor:
         padding = self.kernel_size // 2
         x = F.pad(x, (padding, padding, padding, padding), mode="reflect")
-        # Move the kernel to the same device as the input tensor
         gaussian_kernel = self.gaussian_kernel.to(x.device)
         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
 
-    def forward(self, x, target_size):
+    def forward(self, x: torch.Tensor, target_size: Tuple[int, int]) -> torch.Tensor:
         x = x.to(dtype=self.dtype)
         if self.avg_pool:
             x = F.avg_pool2d(x, kernel_size=2, stride=2)
@@ -462,7 +444,7 @@ class EncoderConfig:
     dropout: float = 0
     channel_mult: tuple = (1, 2, 4, 8)
     conv_resample: bool = True
-    dims: int = 2
+    dims: int = DEFAULT_DIMS
     use_checkpoint: bool = False
     use_fp16: bool = False
     num_heads: int = 4
@@ -472,7 +454,7 @@ class EncoderConfig:
     resblock_updown: bool = False
     use_new_attention_order: bool = False
     pool: str = "adaptive"
-    num_groups: int = 32
+    num_groups: int = DEFAULT_NUM_GROUPS
     resample_2d: bool = True
     scale_factor: int = 2
     resizer_num_layers: int = 2
@@ -495,7 +477,13 @@ class Encoder(Backbone[EncoderConfig]):
         self.input_blocks = nn.ModuleList(
             [
                 nn.Sequential(
-                    conv_nd(cfg.dims, self.d_in, cfg.model_channels, 3, padding=1)
+                    conv_nd(
+                        cfg.dims,
+                        self.d_in,
+                        cfg.model_channels,
+                        DEFAULT_KERNEL_SIZE,
+                        padding=1,
+                    )
                 )
             ]
         )
@@ -630,7 +618,6 @@ class Encoder(Backbone[EncoderConfig]):
         elif cfg.pool == "spatial":
             self.out = nn.Linear(256, self.d_in * self.latent)
         elif cfg.pool == "spatial_v2":
-            print(f"feture size: {self._feature_size}")
             self.out = nn.Sequential(
                 nn.Linear(self._feature_size, 2048),
                 normalization(2048, cfg.num_groups),
@@ -650,7 +637,7 @@ class Encoder(Backbone[EncoderConfig]):
             avg_pool=cfg.resizer_avg_pool,
         )
 
-    def _interpolate(self, x, scale_factor):
+    def _interpolate(self, x: torch.Tensor, scale_factor: int) -> torch.Tensor:
         B, C, H, W = x.size()
         target_h = int(H * scale_factor)
         target_w = int(W * scale_factor)
@@ -716,14 +703,16 @@ class MoE(Backbone[MoEConfig]):
         self.kernel = cfg.kernel
         self.alpha = cfg.sharpening_factor
 
-    def grid(self, height, width):
+    def grid(self, height: int, width: int) -> torch.Tensor:
         xx = torch.linspace(0.0, 1.0, width)
         yy = torch.linspace(0.0, 1.0, height)
         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
         grid = torch.stack((grid_x, grid_y), -1).float()
         return grid
 
-    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
+    def cov_mat_2d(
+        self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4
+    ) -> torch.Tensor:
         R = self.ang_to_rot_mat(theta)
         S = torch.diag_embed(scale) + epsilon * torch.eye(
             scale.size(-1), device=scale.device
@@ -733,7 +722,7 @@ class MoE(Backbone[MoEConfig]):
         Sigma = RS @ RS.transpose(-2, -1)
         return Sigma
 
-    def ang_to_rot_mat(self, theta: torch.Tensor):
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
         cos_theta = torch.cos(theta).unsqueeze(-1)
         sin_theta = torch.sin(theta).unsqueeze(-1)
         R = torch.cat([cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1)
@@ -756,7 +745,7 @@ class MoE(Backbone[MoEConfig]):
 
         return Gaussians(mu, cov_matrix, w)
 
-    def forward(self, height, width, params):
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
         batch_size, num_channels, _ = params.shape
         gauss = self.extract_parameters(params, self.kernel, num_channels)
 
@@ -833,30 +822,36 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         step = block_size - overlap
         device = blocks.device
 
-        recon_images = torch.zeros(batch_size, num_channels, height, width).to(device)
-        count_matrix = torch.zeros(batch_size, num_channels, height, width).to(device)
+        recon_images = torch.zeros(
+            batch_size, num_channels, height, width, device=device
+        )
+        count_matrix = torch.zeros(
+            batch_size, num_channels, height, width, device=device
+        )
 
-        num_blocks_per_row = (width - block_size) // step + 1
-        num_blocks_per_column = (height - block_size) // step + 1
-        num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
+        num_blocks_per_row = max((width - block_size) // step + 1, 1)
+        num_blocks_per_column = max((height - block_size) // step + 1, 1)
 
         for b in range(batch_size):
+            num_blocks_per_image = num_blocks_per_row * num_blocks_per_column
             idx_start = b * num_blocks_per_image
             current_blocks = blocks[idx_start : idx_start + num_blocks_per_image]
+
             idx = 0
             for i in range(0, height - block_size + 1, step):
                 for j in range(0, width - block_size + 1, step):
-                    recon_images[
-                        b, :, i : i + block_size, j : j + block_size
-                    ] += current_blocks[idx]
-                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
+                    if idx < current_blocks.size(0):
+                        recon_images[
+                            b, :, i : i + block_size, j : j + block_size
+                        ] += current_blocks[idx]
+                        count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
                     idx += 1
 
         recon_images /= count_matrix.clamp(min=1)
         return recon_images
 
     @staticmethod
-    def mem_lim():
+    def mem_lim() -> int:
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
             device = torch.cuda.current_device()
