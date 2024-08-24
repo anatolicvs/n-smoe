@@ -18,6 +18,7 @@ from scipy.io import loadmat
 from torch.utils.data import Dataset
 
 from PIL import Image
+from PIL import Image
 import utils_n.utils_image as util
 from utils_n import utils_blindsr as blindsr
 
@@ -37,7 +38,24 @@ class MedicalDatasetSR(Dataset):
         self.use_dataset_cache: bool = opt.get("use_dataset_cache", True)
         self.dataset_cache_file: str = opt.get(
             "dataset_cache_file", "dataset_cache.pkl"
+        self.n_channels: int = opt.get("n_channels", 3)
+        self.roots: list[str] = opt.get("dataroot_H", [])
+        self.exclude_dirs: list[str] = opt.get("exclude_dirs", [])
+        self.challenge = opt.get("challenge", "multicoil")
+        self.use_dataset_cache: bool = opt.get("use_dataset_cache", True)
+        self.dataset_cache_file: str = opt.get(
+            "dataset_cache_file", "dataset_cache.pkl"
         )
+        self.sf: int = opt.get("scale", 2)
+        self.phase: str = opt.get("phase", "train")
+        self.h_size: int = opt.get("H_size", 96)
+        self.lq_patchsize: int = opt.get("lq_patchsize", 64)
+        self.crop_method: str = opt.get("crop_method", "high_texture")
+        self.phw: int = opt.get("phw", 32)
+        self.overlap: int = opt.get("overlap", 4)
+        self.length: int = opt.get("length", -1)
+        self.degradation_methods: List[str] = opt.get("degradation_methods", ["dpsr"])
+        self.k = loadmat(opt.get("kernel_path")) if "kernel_path" in opt else None
         self.sf: int = opt.get("scale", 2)
         self.phase: str = opt.get("phase", "train")
         self.h_size: int = opt.get("H_size", 96)
@@ -95,6 +113,7 @@ class MedicalDatasetSR(Dataset):
                     tensor = torch.from_numpy(img_data).float().to("cuda")
 
                     with amp.autocast("cuda"):
+                    with amp.autocast("cuda"):
                         std_dev = torch.std(tensor).item()
 
                     std_devs.append(std_dev)
@@ -118,6 +137,7 @@ class MedicalDatasetSR(Dataset):
     def load_sample(self, fname) -> None | List[FastMRIRawDataSample]:
         fname_path = Path(fname)
 
+
         if not fname_path.exists() or not os.access(fname, os.R_OK):
             logging.warning(f"Access issue with file: {fname}")
             return None
@@ -127,13 +147,23 @@ class MedicalDatasetSR(Dataset):
                 with Image.open(fname_path) as img:
                     img.verify()
 
+            if fname_path.suffix.lower() in [".jpg", ".jpeg"]:
+                with Image.open(fname_path) as img:
+                    img.verify()
+
             if fname_path.suffix in [".h5", ".gz", ".npy"]:
                 return self.handle_special_formats(fname)
+
 
             return [FastMRIRawDataSample(fname, 0, {})]
 
         except (OSError, ValueError) as e:
+
+        except (OSError, ValueError) as e:
             logging.error(f"Error processing file {fname}: {e}")
+            return None
+        except Exception as e:
+            logging.error(f"Unexpected error processing file {fname}: {e}")
             return None
         except Exception as e:
             logging.error(f"Unexpected error processing file {fname}: {e}")
@@ -160,6 +190,7 @@ class MedicalDatasetSR(Dataset):
         prefix = "ismrmrd_namespace"
         ns = {prefix: namespace}
         for el in qlist:
+            s += f"//{prefix}:{el}"
             s += f"//{prefix}:{el}"
         value = root.find(s, ns)
         if value is None:
@@ -247,6 +278,9 @@ class MedicalDatasetSR(Dataset):
 
             return img if img is not None and img.ndim >= 2 else None
 
+
+            return img if img is not None and img.ndim >= 2 else None
+
         except PermissionError as e:
             logging.warning(f"Skipping file {fname} due to PermissionError: {e}")
             return None
@@ -265,6 +299,7 @@ class MedicalDatasetSR(Dataset):
         start_y = max(center_y - crop_half, 0)
         end_x = min(start_x + crop_size, img.shape[1])
         end_y = min(start_y + crop_size, img.shape[0])
+        return img[start_y:end_y, start_x:end_x]
         return img[start_y:end_y, start_x:end_x]
 
     def crop_high_texture(self, img, crop_size):
@@ -335,6 +370,7 @@ class MedicalDatasetSR(Dataset):
         return img_H
 
     def apply_degradation(self, img, fname):
+    def apply_degradation(self, img, fname):
         chosen_model = random.choice(self.degradation_methods)
         kernel = self.select_kernel()
         img_L, img_H = {
@@ -368,6 +404,7 @@ class MedicalDatasetSR(Dataset):
             return self.k["kernels"][0][kernel_index]
         else:
             logging.warning("No kernels found, using default kernel")
+            return np.ones((5, 5), dtype=np.float32) / 25
             return np.ones((5, 5), dtype=np.float32) / 25
 
     @staticmethod

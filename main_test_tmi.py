@@ -557,7 +557,7 @@ def main(json_path="options/testing/test_tmi_local.json"):
     parser.add_argument("--launcher", default="pytorch", help="job launcher")
     parser.add_argument("--local_rank", type=int, default=0)
     parser.add_argument("--dist", default=False)
-    parser.add_argument("--visualize", action="store_true", default=False)
+    parser.add_argument("--visualize", action="store_true", default=True)
     parser.add_argument("--backend", default="TkAgg")
 
     args = parser.parse_args()
