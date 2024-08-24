@@ -242,9 +242,6 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
     model = define_Model(opt)
     model.init_train()
 
-    if opt["dist"]:
-        model = DDP(model, device_ids=[opt["rank"]], output_device=opt["rank"])
-
     if opt["rank"] == 0:
         logger.info(model.info_network())
         logger.info(model.info_params())

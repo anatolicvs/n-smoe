@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_gan_v2_x4_mri_rgb_act_gelu" 
+    "task": "moex1_sr_gan_v3_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/30000_G.pth"
+      , "pretrained_netG": null //"/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/30000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -24,7 +24,7 @@
         "train": {
             "name": "train_dataset"           
             , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-            , "lq_patchsize": 64
+            , "lq_patchsize": 32
             , "length" : -1
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
@@ -42,7 +42,7 @@
         , "test": {
             "name": "test_dataset"            
             , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-            , "lq_patchsize": 64
+            , "lq_patchsize": 32
             , "length" : -1
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
@@ -77,8 +77,8 @@
       
           , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
           , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
-          ,"resizer_num_layers": 2
-          ,"resizer_avg_pool": false
+          ,"resizer_num_layers": 4
+          ,"resizer_avg_pool": true
        
           , "init_type": "default"         
     }

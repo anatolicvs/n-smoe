@@ -193,6 +193,8 @@ def define_G(opt):
             resample_2d=opt_net["resample_2d"],
             pool=opt_net["pool"],
             activation=opt_net["activation"],
+            resizer_num_layers=opt_net["resizer_num_layers"],
+            resizer_avg_pool=opt_net["resizer_avg_pool"]
         )
 
         decoder_cfg = MoEConfig(

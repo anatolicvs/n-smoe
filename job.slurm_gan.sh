@@ -111,11 +111,11 @@ export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH $DIST_FLAG
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH $DIST_FLAG
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
 fi
 
 echo "Job completed at: \$(date)"

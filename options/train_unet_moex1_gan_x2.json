@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_gan_v4_x2_rgb_act_gelu" 
+    "task": "moex1_sr_gan_v5_x2_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
+      , "pretrained_netG": null //"/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -42,7 +42,7 @@
         , "test": {
             "name": "test_dataset"            
             , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-            , "lq_patchsize": 64
+            , "lq_patchsize": 32
             , "length" : -1
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
@@ -77,16 +77,16 @@
     
           , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
           , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
-          ,"resizer_num_layers": 2
-          ,"resizer_avg_pool": false
+          ,"resizer_num_layers": 4
+          ,"resizer_avg_pool": true
        
           , "init_type": "default"         
     }
 
     , "netD": {
-        "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet"
+        "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
-        , "base_nc": 64
+        , "base_nc": 128
         , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
     

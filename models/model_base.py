@@ -117,9 +117,10 @@ class ModelBase:
         for name, param in network.state_dict().items():
             if not "num_batches_tracked" in name:
                 v = param.data.clone().float()
+                std_value = v.std().item() if v.numel() > 1 else float('nan')
                 msg += (
                     " | {:>6.3f} | {:>6.3f} | {:>6.3f} | {:>6.3f} | {} || {:s}".format(
-                        v.mean(), v.min(), v.max(), v.std(), v.shape, name
+                        v.mean().item(), v.min().item(), v.max().item(), std_value, v.shape, name
                     )
                     + "\n"
                 )
@@ -165,6 +166,7 @@ class ModelBase:
                 map_location=lambda storage, loc: storage.cuda(
                     torch.cuda.current_device()
                 ),
+                weights_only=True
             )
         )
 

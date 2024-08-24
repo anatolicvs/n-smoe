@@ -2,7 +2,7 @@
 
 USE_APPTAINER=true
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-1}  # Default to 1 if not set
+GPUS=${GPUS:-4}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
