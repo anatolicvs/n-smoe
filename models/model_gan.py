@@ -172,8 +172,7 @@ class ModelGAN(ModelBase):
         # ------------------------------------
         # 3) D_loss
         # ------------------------------------
-        self.D_lossfn = GANLoss(
-            self.opt_train["gan_type"], 1.0, 0.0).to(self.device)
+        self.D_lossfn = GANLoss(self.opt_train["gan_type"], 1.0, 0.0).to(self.device)
         self.D_lossfn_weight = self.opt_train["D_lossfn_weight"]
 
         self.D_update_ratio = (
@@ -201,9 +200,6 @@ class ModelGAN(ModelBase):
             self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=0
         )
 
-    # ----------------------------------------
-    # define scheduler, only "MultiStepLR"
-    # ----------------------------------------
     def define_scheduler(self):
         g_scheduler_type = self.opt_train["G_scheduler_type"]
         d_scheduler_type = self.opt_train["D_scheduler_type"]
@@ -230,7 +226,6 @@ class ModelGAN(ModelBase):
                     base_momentum=0.8,
                     max_momentum=0.9,
                     last_epoch=-1,
-                    verbose=False,
                 )
             )
 
@@ -249,7 +244,6 @@ class ModelGAN(ModelBase):
                     mode="min",
                     patience=self.opt_train["G_scheduler_lr_patience"],
                     factor=self.opt_train["G_scheduler_lr_factor"],
-                    verbose=True,
                     min_lr=self.opt_train["G_scheduler_lr_min"],
                 )
             )
@@ -277,7 +271,6 @@ class ModelGAN(ModelBase):
                     base_momentum=0.8,
                     max_momentum=0.9,
                     last_epoch=-1,
-                    verbose=False,
                 )
             )
 
@@ -296,7 +289,6 @@ class ModelGAN(ModelBase):
                     mode="min",
                     patience=self.opt_train["D_scheduler_lr_patience"],
                     factor=0.1,
-                    verbose=True,
                     min_lr=self.opt_train["D_scheduler_lr_min"],
                 )
             )
@@ -345,7 +337,9 @@ class ModelGAN(ModelBase):
 
         self.H = self.H.to(self.E.device)
 
-        if (current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters):  # updata D first
+        if (
+            current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters
+        ):  # updata D first
             if self.opt_train["G_lossfn_weight"] > 0:
                 G_loss = self.G_lossfn_weight * self.G_lossfn(self.E, self.H)
                 loss_G_total += G_loss  # 1) pixel loss
@@ -355,8 +349,7 @@ class ModelGAN(ModelBase):
 
             if self.opt["train"]["gan_type"] in ["gan", "lsgan", "wgan", "softplusgan"]:
                 pred_g_fake = self.netD(self.E)
-                D_loss = self.D_lossfn_weight * \
-                    self.D_lossfn(pred_g_fake, True)
+                D_loss = self.D_lossfn_weight * self.D_lossfn(pred_g_fake, True)
             elif self.opt["train"]["gan_type"] == "ragan":
                 pred_d_real = self.netD(self.H).detach()
                 pred_g_fake = self.netD(self.E)
@@ -364,12 +357,10 @@ class ModelGAN(ModelBase):
                     self.D_lossfn_weight
                     * (
                         self.D_lossfn(
-                            pred_d_real -
-                            torch.mean(pred_g_fake, 0, True), False
+                            pred_d_real - torch.mean(pred_g_fake, 0, True), False
                         )
                         + self.D_lossfn(
-                            pred_g_fake -
-                            torch.mean(pred_d_real, 0, True), True
+                            pred_g_fake - torch.mean(pred_d_real, 0, True), True
                         )
                     )
                     / 2

@@ -25,9 +25,11 @@
             "name": "train_dataset"           // just name
           , "dataset_type": "medical_sr"          // "mri_sr" | blindsr
           , "lq_patchsize": 64
-          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "degradation_type" : "bsrgan_plus"
+          , "exclude_dirs": []
+          , "length" : -1
+          , "degradation_methods" : ["bsrgan_plus"] 
           , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train"]// local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train, "/mnt/e/Medical/mri/data_for_train/"
-          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/e/Medical/dataset_cache_training_v4.pkl"
           , "dataroot_L": null              // path of L training dataset
@@ -41,7 +43,9 @@
           "name": "test_dataset"            // just name
           , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
           , "lq_patchsize": 256
-          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+          , "length" : -1
+          , "degradation_methods" : ["bsrgan_plus"] 
           , "exclude_dirs": ["/mnt/e/RGB/open-images/test"]
           , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test","/mnt/e/RGB/open-images/test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test "/mnt/d/RGB/open-images/test/"
           , "dataroot_L": null              // path of L testing dataset
@@ -57,26 +61,21 @@
         "net_type": "unet_moex3",
         "kernel": 16,
         "sharpening_factor": 1,
-        "model_channels": 32,
-        "num_res_blocks": 4,
-        "attention_resolutions": [
-          16,
-          8,
-          4
-        ],
-        "dropout": 0.1,
-        "num_groups": 32,
+
+        "model_channels": 64,
+        "num_res_blocks": 6,
+        "attention_resolutions": [16,8,4],
+        "dropout": 0.2,
+        "num_groups": 16,
         "num_heads": 4,
-        "num_head_channels": 8,
+        "num_head_channels": 16,
         "use_new_attention_order": true,
         "use_checkpoint": true,
         "use_fp16": false,
-        "resblock_updown": true,
-        "channel_mult": [
-          2,4,8
-        ],
+        "resblock_updown": false,
+        "channel_mult": [2,4,8],
         "conv_resample": false,
-        "resample_2d": true,
+        "resample_2d": false,
         "attention_type": "cross_attention",
         "activation": "GELU",
         "rope_theta": 10000.0,
