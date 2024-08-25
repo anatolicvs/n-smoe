@@ -317,8 +317,6 @@ def main(json_path="options/"):
                             )
 
                     if opt["dist"] and dist.is_initialized():
-                        dist.barrier()
-
                         local_psnr_sum_tensor = torch.tensor(
                             local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
                         )
