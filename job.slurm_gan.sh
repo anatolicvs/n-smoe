@@ -1,4 +1,4 @@
-#!/usr/bin/zsh
+#!/usr/bin/bash
 
 # PARTITION
 # c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
@@ -12,7 +12,7 @@
 
 USE_APPTAINER=true
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-4}  # Default to 4 if not set
+GPUS=${GPUS:-4}
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -73,7 +73,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="48:00:00"
+TIME="32:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -86,7 +86,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create directories"; ex
 PARTITION="c23g"
 
 job_id=$(sbatch <<-EOT | awk '{print $4}'
-#!/usr/bin/zsh
+#!/usr/bin/bash
 
 #SBATCH -A p0021791
 #SBATCH --time=$TIME
@@ -102,14 +102,17 @@ job_id=$(sbatch <<-EOT | awk '{print $4}'
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
+r_wlm_usage -p p0021791
+
 echo "Starting job at: \$(date)"
 nvidia-smi
+echo "GPUs available: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
-export NCCL_BLOCKING_WAIT=1
-export NCCL_ASYNC_ERROR_HANDLING=1
+export TORCH_NCCL_BLOCKING_WAIT=1
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=2400
+export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \

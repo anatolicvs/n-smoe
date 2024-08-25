@@ -99,7 +99,7 @@ def parse(opt_path, is_train=True):
     # ----------------------------------------
     gpu_list = ",".join(str(x) for x in opt["gpu_ids"])
     os.environ["CUDA_VISIBLE_DEVICES"] = gpu_list
-    print("export CUDA_VISIBLE_DEVICES=" + gpu_list)
+    # print("export CUDA_VISIBLE_DEVICES=" + gpu_list)
 
     # ----------------------------------------
     # default setting for distributeddataparallel
@@ -111,7 +111,7 @@ def parse(opt_path, is_train=True):
     if "dist" not in opt:
         opt["dist"] = False
     opt["num_gpu"] = len(opt["gpu_ids"])
-    print("number of GPUs is: " + str(opt["num_gpu"]))
+    # print("number of GPUs is: " + str(opt["num_gpu"]))
 
     # ----------------------------------------
     # default setting for perceptual loss

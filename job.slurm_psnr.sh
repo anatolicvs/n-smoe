@@ -63,7 +63,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="48:00:00"
+TIME="32:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -100,12 +100,13 @@ cat <<-EOT > "$JOB_SCRIPT"
 
 echo "Starting job at: \$(date)"
 nvidia-smi
+echo "GPUs available: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
-export NCCL_BLOCKING_WAIT=1
-export NCCL_ASYNC_ERROR_HANDLING=1
+export TORCH_NCCL_BLOCKING_WAIT=1
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=2400
+export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
   if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then
