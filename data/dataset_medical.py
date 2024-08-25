@@ -674,6 +674,8 @@ class MedicalDatasetSR(Dataset):
             return None
         except Exception as e:
             logging.warning(f"Skipping file {fname} due to error: {e}")
+            if "out of memory" in str(e):
+                torch.cuda.empty_cache()
             return None
 
     def _get_best_slice(self, volume):

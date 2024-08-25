@@ -317,14 +317,13 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                             )
 
                     if opt["dist"] and dist.is_initialized():
-                        dist.barrier()
-
                         local_psnr_sum_tensor = torch.tensor(
                             local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
                         )
                         local_count_tensor = torch.tensor(
                             local_count, device=torch.device(f"cuda:{opt['rank']}")
                         )
+
                         dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
                         dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
 

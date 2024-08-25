@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/zsh
 
 # PARTITION
 # c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
@@ -105,17 +105,19 @@ job_id=$(sbatch <<-EOT | awk '{print $4}'
 echo "Starting job at: \$(date)"
 nvidia-smi
 
+export NCCL_BLOCKING_WAIT=1
+export NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=1200
+export NCCL_TIMEOUT=2400
 
 if [ "$USE_APPTAINER" = true ]; then
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH --dist
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
 fi
 
 echo "Job completed at: \$(date)"
