@@ -84,9 +84,11 @@ def initialize_distributed(opt):
         opt["rank"], opt["world_size"] = 0, 1
     return opt
 
+
 def synchronize():
     if dist.is_initialized():
         dist.barrier()
+
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -315,7 +317,7 @@ def main(json_path="options/"):
                 try:
                     if opt["rank"] == 0:
                         logger.info("Saving the model.")
-                        model.module.save(current_step)
+                        model.save(current_step)
                     synchronize()
                 except Exception as e:
                     if opt["rank"] == 0:
