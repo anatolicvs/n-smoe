@@ -22,6 +22,19 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
+import random
+
+
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+
+
+set_seed(2024)
 
 
 def setup_logging(opt):
@@ -82,9 +95,8 @@ def build_loaders(opt, logger=None):
 
     def adjust_batch_size(batch_size, opt, logger=None):
         if opt["dist"]:
-            gpu_ids = opt.get("gpu_ids", [0])  # Default to [0] if "gpu_ids" is not set
+            gpu_ids = opt.get("gpu_ids", [0])
             num_gpu = len(gpu_ids)
-
             if num_gpu <= 0:
                 if logger and opt["rank"] == 0:
                     logger.error("No valid GPUs found. Defaulting to 1.")
@@ -102,21 +114,32 @@ def build_loaders(opt, logger=None):
     def create_loader(
         dataset, batch_size, shuffle, workers, sampler, drop_last, pin_memory
     ):
-        return DataLoader(
-            dataset,
-            batch_size=batch_size,
-            shuffle=shuffle if sampler is None else False,
-            num_workers=workers or os.cpu_count(),
-            drop_last=drop_last,
-            pin_memory=pin_memory,
-            sampler=sampler,
-            collate_fn=util.custom_collate,
-        )
+        try:
+            loader = DataLoader(
+                dataset,
+                batch_size=batch_size,
+                shuffle=shuffle if sampler is None else False,
+                num_workers=workers or os.cpu_count(),
+                drop_last=drop_last,
+                pin_memory=pin_memory,
+                sampler=sampler,
+                collate_fn=util.custom_collate,
+            )
+            return loader
+        except Exception as e:
+            if logger and opt["rank"] == 0:
+                logger.error(f"Failed to create DataLoader: {e}")
+            return None
 
     train_loader, test_loader = None, None
 
     for phase, dataset_opt in opt["datasets"].items():
         dataset = define_Dataset(dataset_opt)
+        if dataset is None:
+            if logger and opt["rank"] == 0:
+                logger.error(f"Failed to create dataset for phase: {phase}")
+            continue
+
         batch_size = adjust_batch_size(
             dataset_opt["dataloader_batch_size"], opt, logger
         )
@@ -143,6 +166,8 @@ def build_loaders(opt, logger=None):
                 drop_last=True,
                 pin_memory=torch.cuda.is_available(),
             )
+            if train_loader is None and logger and opt["rank"] == 0:
+                logger.error("Train loader creation failed.")
 
         elif phase == "test":
             log_stats(phase, dataset, batch_size, logger)
@@ -166,10 +191,12 @@ def build_loaders(opt, logger=None):
                 drop_last=False,
                 pin_memory=torch.cuda.is_available(),
             )
+            if test_loader is None and logger and opt["rank"] == 0:
+                logger.error("Test loader creation failed.")
 
         else:
-            if opt["rank"] == 0:
-                raise NotImplementedError(f"Phase [{phase}] not recognized.")
+            if logger and opt["rank"] == 0:
+                logger.error(f"Phase [{phase}] not recognized.")
 
     return train_loader, test_loader
 

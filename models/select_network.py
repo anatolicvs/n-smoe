@@ -194,7 +194,7 @@ def define_G(opt):
             pool=opt_net["pool"],
             activation=opt_net["activation"],
             resizer_num_layers=opt_net["resizer_num_layers"],
-            resizer_avg_pool=opt_net["resizer_avg_pool"]
+            resizer_avg_pool=opt_net["resizer_avg_pool"],
         )
 
         decoder_cfg = MoEConfig(
@@ -307,24 +307,6 @@ def define_G(opt):
         )
 
         netG = Autoencoder(cfg=autoenocer_cfg)
-
-    elif net_type == "f_u_moe":
-        from models.network_f_u_moe import Autoencoder as net
-
-        z = 2 * opt_net["kernel"] + 4 * opt_net["num_mixtures"] + opt_net["kernel"]
-        netG = net(
-            in_channels=opt_net["n_channels"],
-            latent_dim=z,
-            num_mixtures=opt_net["num_mixtures"],
-            kernel=opt_net["kernel"],
-            sharpening_factor=opt_net["sharpening_factor"],
-            scale_factor=opt_net["scale"],
-            overlap=opt_net["overlap"],
-            phw=opt_net["phw"],
-            num_layers=opt_net["num_layers"],
-            avg_pool=opt_net["avg_pool"],
-            pre_trained=opt_net["pre_trained"],
-        )
 
     elif net_type == "transformer_moe":
         from models.network_transformer_moe1 import (
@@ -457,6 +439,22 @@ def define_G(opt):
         from models.network_lft_atnnscale import LFT
 
         netG = LFT(opt_net)
+
+    # ----------------------------------------
+    # Segment Anything MedSam
+    # ----------------------------------------
+
+    elif net_type == "sam2":
+        from models.network_medsam import MedSAM2
+        from sam2.build_sam import build_sam2
+
+        sam2 = build_sam2(
+            config_file=opt_net["model_cfg"],
+            ckpt_path=opt_net["sam2_checkpoint"],
+            apply_postprocessing=True,
+        )
+
+        netG = MedSAM2(sam2=sam2)
 
     # ----------------------------------------
     # modified SRResNet v0.0
@@ -652,12 +650,13 @@ def define_G(opt):
     # initialize weights
     # ----------------------------------------
     if opt["is_train"]:
-        init_weights(
-            netG,
-            init_type=opt_net["init_type"],
-            init_bn_type=opt_net["init_bn_type"],
-            gain=opt_net["init_gain"],
-        )
+        if any(key in opt_net for key in ["init_gain", "init_bn_type", "init_type"]):
+            init_weights(
+                netG,
+                init_type=opt_net.get("init_type"),
+                init_bn_type=opt_net.get("init_bn_type"),
+                gain=opt_net.get("init_gain"),
+            )
 
     return netG
 

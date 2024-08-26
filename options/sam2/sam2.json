@@ -1,0 +1,68 @@
+{
+    "task": "fine_tune_sam2" 
+    , "model": "seg" 
+    , "gpu_ids": [0]
+
+    , "merge_bn": false              
+    , "merge_bn_startpoint": 400000  
+        
+    , "path": {
+        "root": "/mnt/d/segmentation"
+        , "pretrained_netG": null 
+        , "pretrained_netD": null 
+        , "pretrained_netE": null
+        , "pretrained_optimizerG" : null
+      }
+
+      , "datasets": {
+         "train": {
+            "name": "seg"            
+          , "dataset_type": "seg_npy"      
+          , "bbox_shift" : 5      
+          , "dataroot_H": "/mnt/d/dataset/FLARE22/npy"
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : null
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1
+          ,  "dataloader_shuffle" : true
+        }
+      }
+
+      , "netG": {
+        "net_type": "sam2"
+        , "model_cfg" : "sam2_hiera_l.yaml"
+        , "sam2_checkpoint" : "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
+        , "init_type": "default"
+    }
+
+    , "train": {
+        "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+      
+      , "G_optimizer_type": "adamw"
+      , "G_optimizer_lr": 6e-5  // learning rate
+      , "G_optimizer_wd": 0.01
+      , "G_optimizer_clipgrad": null 
+      
+      , "G_scheduler_type": "MultiStepLR"
+      
+      , "G_scheduler_T_max": 200000
+      , "G_scheduler_eta_min": 1e-6
+      , "G_scheduler_max_lr": 1e-3
+      , "G_scheduler_step_size_up": 30000
+      , "G_scheduler_step_size_down": 30000
+      , "G_scheduler_mode": "triangular"
+      , "G_scheduler_cycle_momentum": false
+      , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+      , "G_scheduler_gamma": 0.5
+      , "G_optimizer_reuse": true
+  
+    
+      , "G_param_strict": true
+      , "D_param_strict": true
+      , "E_param_strict": true
+  
+      , "checkpoint_test": 20           
+      , "checkpoint_save": 20        
+      , "checkpoint_print": 20         
+    }
+  }

@@ -42,24 +42,33 @@ def parse(opt_path, is_train=True):
     # ----------------------------------------
     # datasets
     # ----------------------------------------
+    default_ang_res = 5
+    default_kernel_path = None
+    default_n_channels = 1
+    default_phw = 16
+    default_overlap = 14
+    default_scale = 1
+
     for phase, dataset in opt["datasets"].items():
-        phase = phase.split("_")[0]
-        dataset["phase"] = phase
-        dataset["scale"] = opt["scale"]
-        dataset["kernel_path"] = opt["kernel_path"] if "kernel_path" in opt else None
-        dataset["n_channels"] = opt["n_channels"]
-        dataset["ang_res"] = opt["ang_res"] if "ang_res" in opt else 5
-        if "dataroot_H" in dataset and dataset["dataroot_H"] is not None:
-            dataset["dataroot_H"] = dataset[
-                "dataroot_H"
-            ]  # os.path.expanduser(dataset['dataroot_H'])
-        if "dataroot_L" in dataset and dataset["dataroot_L"] is not None:
-            dataset["dataroot_L"] = dataset[
-                "dataroot_H"
-            ]  # os.path.expanduser(dataset['dataroot_L'])
-        if "phw" and "overlap" in opt:
-            dataset["phw"] = opt["phw"]
-            dataset["overlap"] = opt["overlap"]
+        phase_key = phase.split("_")[0]
+        dataset.update(
+            {
+                "phase": phase_key,
+                "scale": opt.get("scale", default_scale),
+                "kernel_path": opt.get("kernel_path", default_kernel_path),
+                "n_channels": opt.get("n_channels", default_n_channels),
+                "ang_res": opt.get("ang_res", default_ang_res),
+                "phw": opt.get("phw", default_phw),
+                "overlap": opt.get("overlap", default_overlap),
+            }
+        )
+
+        dataroot_H = dataset.get("dataroot_H")
+        if dataroot_H:
+            dataset["dataroot_H"] = dataroot_H
+
+        if dataset.get("dataroot_L"):
+            dataset["dataroot_L"] = dataroot_H
 
     # ----------------------------------------
     # path

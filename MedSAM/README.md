@@ -53,12 +53,12 @@ This dataset contains 50 abdomen CT scans and each scan contains an annotation m
 1. Run the pre-processing script to convert the dataset to `npz` format:
 ```bash
 python pre_CT_MR.py \
-    -img_path data/FLARE22Train/images \
+    -img_path /mnt/d/dataset/FLARE22Train/images \
     -img_name_suffix _0000.nii.gz \
-    -gt_path data/FLARE22Train/labels \
+    -gt_path /mnt/d/dataset/FLARE22Train/labels \
     -gt_name_suffix .nii.gz \
-    -output_path data \
-    -num_workers 4 \
+    -output_path /mnt/d/dataset/FLARE22 \
+    -num_workers 16 \
     -modality CT \
     -anatomy Abd \
     -window_level 40 \
@@ -73,9 +73,9 @@ python pre_CT_MR.py \
 2. Convert the training `npz` to `npy` format for training:
 ```bash
 python npz_to_npy.py \
-    -npz_dir data/npz_train/CT_Abd \
-    -npy_dir data/npy \
-    -num_workers 4
+    -npz_dir /mnt/d/dataset/FLARE22/npz_train/CT_Abd \
+    -npy_dir /mnt/d/dataset/FLARE22/npy \
+    -num_workers 16
 ```
 > For more efficient fine-tuning, the ground truth `npy` masks are resampled to `[256, 256]`.
 
