@@ -1,3 +1,255 @@
+import torch
+import torch.nn as nn
+from torch.optim import AdamW
+from torch.optim import lr_scheduler
+from models.model_base import ModelBase
+from models.select_network import define_G
+from collections import OrderedDict
+import monai
 
+class ModelSeg(ModelBase):
+    def __init__(self, opt):
+        super(ModelSeg, self).__init__(opt)
 
-class ModelSeg():
+        self.opt_train = self.opt["train"]
+        self.netG = define_G(opt)
+        self.netG = self.model_to_device(self.netG)
+        if self.opt_train["E_decay"] > 0:
+            self.netE = define_G(opt).to(self.device).eval()
+
+    def init_train(self):
+        self.load()
+        self.netG.train()
+        self.define_loss()
+        self.define_optimizer()
+        self.define_scheduler()
+        self.log_dict = OrderedDict()
+
+    def load(self):
+        load_path_G = self.opt["path"]["pretrained_netG"]
+        if load_path_G is not None:
+            print("Loading model for G [{:s}] ...".format(load_path_G))
+            self.load_network(
+                load_path_G,
+                self.netG,
+                strict=self.opt_train["G_param_strict"],
+                param_key="params",
+            )
+        load_path_E = self.opt["path"]["pretrained_netE"]
+        if self.opt_train["E_decay"] > 0:
+            if load_path_E is not None:
+                print("Loading model for E [{:s}] ...".format(load_path_E))
+                self.load_network(
+                    load_path_E,
+                    self.netE,
+                    strict=self.opt_train["E_param_strict"],
+                    param_key="params_ema",
+                )
+            else:
+                print("Copying model for E ...")
+                self.update_E(0)
+            self.netE.eval()
+
+    def define_loss(self):
+        self.G_seg_loss = monai.losses.DiceLoss(sigmoid=True, squared_pred=True, reduction="mean").to(self.device)
+        self.G_ce_loss = nn.BCEWithLogitsLoss(reduction="mean").to(self.device)
+
+    def define_optimizer(self):
+        G_optim_params = []
+        for k, v in self.netG.named_parameters():
+            if v.requires_grad:
+                G_optim_params.append(v)
+            else:
+                print("Params [{:s}] will not optimize.".format(k))
+
+        if self.opt_train["G_optimizer_type"] == "adamw":
+            self.G_optimizer = AdamW(
+                G_optim_params,
+                lr=self.opt_train["G_optimizer_lr"],
+                betas=self.opt_train["G_optimizer_betas"],
+                weight_decay=self.opt_train["G_optimizer_wd"],
+            )
+        else:
+            raise NotImplementedError
+
+    def load_optimizers(self):
+        load_path_optimizerG = self.opt["path"]["pretrained_optimizerG"]
+        if load_path_optimizerG is not None and self.opt_train["G_optimizer_reuse"]:
+            print("Loading optimizerG [{:s}] ...".format(load_path_optimizerG))
+            self.load_optimizer(load_path_optimizerG, self.G_optimizer)
+
+    def define_scheduler(self):
+        g_scheduler_type = self.opt_train["G_scheduler_type"]
+        if g_scheduler_type == "MultiStepLR":
+            self.schedulers.append(
+                lr_scheduler.MultiStepLR(
+                    self.G_optimizer,
+                    self.opt_train["G_scheduler_milestones"],
+                    self.opt_train["G_scheduler_gamma"],
+                )
+            )
+
+        elif g_scheduler_type == "CyclicLR":
+            self.schedulers.append(
+                lr_scheduler.CyclicLR(
+                    self.G_optimizer,
+                    self.opt_train["G_optimizer_lr"],
+                    self.opt_train["G_scheduler_max_lr"],
+                    step_size_up=self.opt_train["G_scheduler_step_size_up"],
+                    step_size_down=self.opt_train["G_scheduler_step_size_down"],
+                    mode=self.opt_train["G_scheduler_mode"],
+                    gamma=1.0,
+                    cycle_momentum=self.opt_train["G_scheduler_cycle_momentum"],
+                    base_momentum=0.8,
+                    max_momentum=0.9,
+                    last_epoch=-1,
+                    verbose=False,
+                )
+            )
+
+        elif g_scheduler_type == "CosineAnnealingLR":
+            self.schedulers.append(
+                lr_scheduler.CosineAnnealingLR(
+                    self.G_optimizer,
+                    T_max=self.opt_train["G_scheduler_T_max"],
+                    eta_min=self.opt_train["G_scheduler_eta_min"],
+                )
+            )
+        elif g_scheduler_type == "ReduceLROnPlateau":
+            self.schedulers.append(
+                lr_scheduler.ReduceLROnPlateau(
+                    self.G_optimizer,
+                    mode="min",
+                    patience=self.opt_train["G_scheduler_lr_patience"],
+                    factor=0.1,
+                    verbose=True,
+                    min_lr=self.opt_train["G_scheduler_lr_min"],
+                )
+            )
+        else:
+            raise NotImplementedError
+
+    def save(self, iter_label):
+        self.save_network(self.save_dir, self.netG, "G", iter_label)
+        if self.opt_train["E_decay"] > 0:
+            self.save_network(self.save_dir, self.netE, "E", iter_label)
+        if self.opt_train["G_optimizer_reuse"]:
+            self.save_optimizer(
+                self.save_dir, self.G_optimizer, "optimizerG", iter_label
+            )
+
+    def feed_data(self, data):
+        self.img = data["img"].to(self.device)
+        self.box = data['box'].to(self.device)
+        self.label = data["label"].to(self.device)
+
+    def netG_forward(self):
+        self.E = self.netG(self.img,self.box)
+
+    def optimize_parameters(self, current_step):
+        self.G_optimizer.zero_grad()
+        self.netG_forward()
+
+        G_loss = self.G_seg_loss(self.E, self.label) + self.G_ce_loss(self.E, self.label)
+        G_loss.backward()
+
+        # ------------------------------------
+        # clip_grad
+        # ------------------------------------
+        # `clip_grad_norm` helps prevent the exploding gradient problem.
+        G_optimizer_clipgrad = (
+            self.opt_train["G_optimizer_clipgrad"]
+            if self.opt_train["G_optimizer_clipgrad"]
+            else 0
+        )
+        if G_optimizer_clipgrad > 0:
+            torch.nn.utils.clip_grad_norm_(
+                self.parameters(),
+                max_norm=self.opt_train["G_optimizer_clipgrad"],
+                norm_type=2,
+            )
+
+        self.G_optimizer.step()
+        self.log_dict["G_loss"] = G_loss.item()
+        if self.opt_train["E_decay"] > 0:
+            self.update_E(self.opt_train["E_decay"])
+
+    def test(self):
+        self.netG.eval()
+        with torch.no_grad():
+            self.netG_forward()
+        self.netG.train()
+
+    def current_log(self):
+        return self.log_dict
+
+    def print_network(self):
+        msg = self.describe_network(self.netG)
+        print(msg)
+
+    def print_params(self):
+        msg = self.describe_params(self.netG)
+        print(msg)
+
+    def info_network(self):
+        msg = self.describe_network(self.netG)
+        return msg
+
+    def info_params(self):
+        msg = self.describe_params(self.netG)
+        return msg
+
+class MedSAM2(nn.Module):
+    def __init__(self, sam2, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+
+        self.sam2 = sam2
+        for param in self.sam2.sam_prompt_encoder.parameters():
+            param.requires_grad = False
+
+    def forward(self, image, box):
+        """
+        image: (B, 3, 1024, 1024)
+        box: (B, 2, 2)
+        """
+        _features = self._image_encoder(image)
+        img_embed, high_res_features = _features["image_embed"], _features["high_res_feats"]
+        with torch.no_grad():
+            box_torch = torch.as_tensor(box, dtype=torch.float32, device=image.device)
+            if len(box_torch.shape) == 2:
+                box_coords = box_torch.reshape(-1, 2, 2) # (B, 4) to (B, 2, 2)
+                box_labels = torch.tensor([[2, 3]], dtype=torch.int, device=image.device)
+                box_labels = box_labels.repeat(box_torch.size(0), 1)
+            concat_points = (box_coords, box_labels)
+
+            sparse_embeddings, dense_embeddings = self.sam2_model.sam_prompt_encoder(
+                points=concat_points,
+                boxes=None,
+                masks=None,
+            )
+        low_res_masks_logits, iou_predictions, sam_tokens_out, object_score_logits = self.sam2_model.sam_mask_decoder(
+            image_embeddings=img_embed, # (B, 256, 64, 64)
+            image_pe=self.sam2_model.sam_prompt_encoder.get_dense_pe(),
+            sparse_prompt_embeddings=sparse_embeddings,
+            dense_prompt_embeddings=dense_embeddings,
+            multimask_output=False,
+            repeat_image=False,
+            high_res_features=high_res_features,
+        )
+
+        return low_res_masks_logits
+
+    def _image_encoder(self, input_image):
+        backbone_out = self.sam2.forward_image(input_image)
+        _, vision_feats, _, _ = self.sam2._prepare_backbone_features(backbone_out)
+        # Add no_mem_embed, which is added to the lowest rest feat. map during training on videos
+        if self.sam2.directly_add_no_mem_embed:
+            vision_feats[-1] = vision_feats[-1] + self.sam2.no_mem_embed
+        bb_feat_sizes = [(256, 256), (128, 128), (64, 64)]
+        feats = [
+            feat.permute(1, 2, 0).view(input_image.size(0), -1, *feat_size)
+            for feat, feat_size in zip(vision_feats[::-1], bb_feat_sizes[::-1])
+        ][::-1]
+        _features = {"image_embed": feats[-1], "high_res_feats": feats[:-1]}
+
+        return _features
