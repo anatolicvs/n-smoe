@@ -235,7 +235,7 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
 
     if opt["dist"]:
         train_loader, test_loader = build_loaders(opt, logger)
-        dist.barrier()
+        # dist.barrier()
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
@@ -283,8 +283,8 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 try:
                     logger.info("Saving the model.")
                     model.save(current_step)
-                    if opt["dist"] and dist.is_initialized():
-                        dist.barrier()
+                    # if opt["dist"] and dist.is_initialized():
+                    #     dist.barrier()
                 except Exception as e:
                     logger.error(f"Error saving model at step {current_step}: {e}")
 
@@ -352,8 +352,8 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
 
-        if opt["dist"] and dist.is_initialized():
-            dist.barrier()
+        # if opt["dist"] and dist.is_initialized():
+        #     dist.barrier()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
