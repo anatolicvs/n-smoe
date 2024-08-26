@@ -5,24 +5,23 @@ import math
 import os
 import random
 import sys
-from typing import Any, Dict, Optional, Tuple
 
 import numpy as np
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
-from models.model_gan import ModelGAN
-from models.model_plain import ModelPlain
-from models.model_plain2 import ModelPlain2
-from models.model_plain4 import ModelPlain4
-from models.model_vrt import ModelVRT
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
+
+torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+if torch.cuda.get_device_properties(0).major >= 8:
+    # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
 
 def set_seed(seed):
@@ -35,6 +34,12 @@ def set_seed(seed):
 
 
 set_seed(2024)
+
+os.environ["OMP_NUM_THREADS"] = "4"  # export OMP_NUM_THREADS=4
+os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
+os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
+os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
+os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
 
 
 def setup_logging(opt):
@@ -201,7 +206,7 @@ def build_loaders(opt, logger=None):
     return train_loader, test_loader
 
 
-def main(json_path="options/train_unet_moex1_gan_local.json"):
+def main(json_path="options/sam2/sam2.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
@@ -224,47 +229,25 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
         net_type="G",
         pretrained_path=opt["path"]["pretrained_netG"],
     )
-    init_iter_D, init_path_D = option.find_last_checkpoint(
-        opt["path"]["models"],
-        net_type="D",
-        pretrained_path=opt["path"]["pretrained_netD"],
-    )
-    init_iter_E, init_path_E = option.find_last_checkpoint(
-        opt["path"]["models"],
-        net_type="E",
-        pretrained_path=opt["path"]["pretrained_netE"],
-    )
+
     opt["path"]["pretrained_netG"] = init_path_G
-    opt["path"]["pretrained_netD"] = init_path_D
-    opt["path"]["pretrained_netE"] = init_path_E
+
     init_iter_optimizerG, init_path_optimizerG = option.find_last_checkpoint(
         opt["path"]["models"], net_type="optimizerG"
     )
-    init_iter_optimizerD, init_path_optimizerD = option.find_last_checkpoint(
-        opt["path"]["models"], net_type="optimizerD"
-    )
-    opt["path"]["pretrained_optimizerG"] = init_path_optimizerG
-    opt["path"]["pretrained_optimizerD"] = init_path_optimizerD
-    current_step = max(
-        init_iter_G,
-        init_iter_D,
-        init_iter_E,
-        init_iter_optimizerG,
-        init_iter_optimizerD,
-    )
 
-    border = opt["scale"]
+    opt["path"]["pretrained_optimizerG"] = init_path_optimizerG
+
+    current_step = max(init_iter_G, init_iter_optimizerG)
 
     if opt["rank"] == 0:
         option.save(opt)
 
-    opt = option.dict_to_nonedict(opt)
-
     if opt["dist"]:
-        train_loader, test_loader = build_loaders(opt, logger)
-        # dist.barrier()
+        train_loader, _ = build_loaders(opt, logger)
+        dist.barrier()
     else:
-        train_loader, test_loader = build_loaders(opt, logger)
+        train_loader, _ = build_loaders(opt, logger)
 
     model = define_Model(opt)
     model.init_train()
@@ -310,80 +293,8 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 try:
                     logger.info("Saving the model.")
                     model.save(current_step)
-                    # if opt["dist"] and dist.is_initialized():
-                    #     dist.barrier()
                 except Exception as e:
                     logger.error(f"Error saving model at step {current_step}: {e}")
-
-            if current_step % test_interval == 0:
-                local_psnr_sum = 0.0
-                local_count = 0
-
-                try:
-                    for test_data in test_loader:
-                        if test_data is None and opt["rank"] == 0:
-                            logger.warning("Test data is None, skipping...")
-                            continue
-
-                        image_name_ext = os.path.basename(test_data["L_path"][0])
-
-                        model.feed_data(test_data)
-                        model.test()
-
-                        visuals = model.current_visuals()
-                        E_img = util.tensor2uint(visuals["E"])
-                        H_img = util.tensor2uint(visuals["H"])
-                        current_psnr = util.calculate_psnr(E_img, H_img, border)
-
-                        local_psnr_sum += current_psnr
-                        local_count += 1
-
-                        if opt["rank"] == 0:
-                            logger.info(
-                                f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
-                            )
-
-                    if opt["dist"] and dist.is_initialized():
-                        local_psnr_sum_tensor = torch.tensor(
-                            local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
-                        )
-                        local_count_tensor = torch.tensor(
-                            local_count, device=torch.device(f"cuda:{opt['rank']}")
-                        )
-
-                        dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
-                        dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
-
-                        if local_count_tensor.item() > 0:
-                            global_avg_psnr = (
-                                local_psnr_sum_tensor.item() / local_count_tensor.item()
-                            )
-                        else:
-                            global_avg_psnr = 0.0
-
-                        if opt["rank"] == 0:
-                            logger.info(
-                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
-                            )
-                    else:
-                        if local_count > 0:
-                            avg_psnr = local_psnr_sum / local_count
-                        else:
-                            avg_psnr = 0.0
-
-                        if opt["rank"] == 0:
-                            logger.info(
-                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                            )
-                except Exception as e:
-                    if opt["rank"] == 0:
-                        logger.error(f"Error during testing: {e}")
-
-        # if opt["dist"] and dist.is_initialized():
-        #     dist.barrier()
-
-        if opt["rank"] == 0:
-            logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
 
 
 def cleanup():

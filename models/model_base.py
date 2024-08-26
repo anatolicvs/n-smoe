@@ -1,189 +1,202 @@
 import os
+from abc import ABC, abstractmethod
+from typing import Any, Dict, List, Optional, Union
+
 import torch
-from utils_n.utils_bnorm import merge_bn, tidy_sequential
+from torch.nn.modules.module import Module
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 
+from utils_n.utils_bnorm import merge_bn, tidy_sequential
 
-class ModelBase:
-    def __init__(self, opt):
+
+class ModelBase(ABC):
+    def __init__(self, opt: dict) -> None:
         self.opt = opt
         self.save_dir = opt["path"]["models"]
-        if opt["dist"]:
-            rank = opt["rank"]
-            torch.cuda.set_device(rank)
-            self.device = torch.device(f"cuda:{rank}")
-        else:
-            self.device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(
+            f"cuda:{opt['rank']}"
+            if opt["dist"]
+            else "cuda" if torch.cuda.is_available() else "cpu"
+        )
         self.is_train = opt["is_train"]
         self.schedulers = []
 
-    def init_train(self):
+    @abstractmethod
+    def init_train(self, *args, **kwargs) -> None:
         pass
 
-    def load(self):
+    @abstractmethod
+    def load(self, *args, **kwargs) -> None:
         pass
 
-    def save(self, label):
+    @abstractmethod
+    def save(self, *args, **kwargs) -> None:
         pass
 
-    def define_loss(self):
+    @abstractmethod
+    def define_loss(self, *args, **kwargs) -> Any:
         pass
 
-    def define_optimizer(self):
+    @abstractmethod
+    def define_optimizer(self, *args, **kwargs) -> Any:
         pass
 
-    def define_scheduler(self):
+    @abstractmethod
+    def define_scheduler(self, *args, **kwargs) -> Any:
         pass
 
-    def feed_data(self, data):
+    @abstractmethod
+    def feed_data(self, *args, **kwargs) -> Any:
         pass
 
-    def optimize_parameters(self):
+    @abstractmethod
+    def optimize_parameters(self, *args, **kwargs) -> Any:
         pass
 
-    def current_visuals(self):
-        pass
+    def current_visuals(self) -> dict:
+        return {}
 
-    def current_losses(self):
-        pass
+    def current_losses(self) -> dict:
+        return {}
 
-    def update_learning_rate(self, n):
+    def update_learning_rate(self, n: int) -> Any:
         for scheduler in self.schedulers:
             scheduler.step()
 
-    def current_learning_rate(self):
-        return self.schedulers[0].get_last_lr()[0] if self.schedulers else None
+    def current_learning_rate(self) -> float:
+        if self.schedulers and self.schedulers[0].get_last_lr():
+            return self.schedulers[0].get_last_lr()[0]
+        return 0.0
 
-    def requires_grad(self, model, flag=True):
+    def requires_grad(self, model: torch.nn.Module, flag: bool = True) -> None:
         for p in model.parameters():
             p.requires_grad = flag
 
-    def print_network(self):
+    @abstractmethod
+    def print_network(self, *args, **kwargs) -> Any:
         pass
 
-    def info_network(self):
+    @abstractmethod
+    def info_network(self, *args, **kwargs) -> Any:
         pass
 
-    def print_params(self):
+    @abstractmethod
+    def print_params(self, *args, **kwargs) -> Any:
         pass
 
-    def info_params(self):
+    @abstractmethod
+    def info_params(self, *args, **kwargs) -> Any:
         pass
 
-    def get_bare_model(self, network):
+    def get_bare_model(self, network: torch.nn.Module) -> torch.nn.Module:
         if isinstance(network, (DataParallel, DistributedDataParallel)):
             network = network.module
         return network
 
-    def model_to_device(self, network):
+    def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
         if self.opt["dist"]:
             network = DistributedDataParallel(
-                network, device_ids=[self.opt["rank"]
-                                     ], output_device=self.opt["rank"]
+                network, device_ids=[self.opt["rank"]], output_device=self.opt["rank"]
             )
             if self.opt.get("use_static_graph", False):
-                print(
-                    'Using static graph. Make sure that "unused parameters" will not change during the training loop.'
-                )
-                network._set_static_graph()
+                self._set_static_graph(network)
         else:
             network = DataParallel(network)
         return network
 
-    def describe_network(self, network):
+    def describe_network(self, network: torch.nn.Module) -> str:
         network = self.get_bare_model(network)
-        msg = f"Networks on Device: {next(network.parameters()).device} \n"
-        msg += "Networks name: {}".format(network.__class__.__name__) + "\n"
-        msg += (
-            "Params number: {}".format(
-                sum(map(lambda x: x.numel(), network.parameters()))
-            )
-            + "\n"
+        msg = (
+            f"Networks on Device: {next(network.parameters()).device} \n"
+            f"Networks name: {network.__class__.__name__}\n"
+            f"Params number: {sum(p.numel() for p in network.parameters())}\n"
+            f"Net structure:\n{network}\n"
         )
-        msg += "Net structure:\n{}".format(str(network)) + "\n"
         return msg
 
-    def describe_params(self, network):
+    def describe_params(self, network: torch.nn.Module) -> str:
         network = self.get_bare_model(network)
-        msg = "\n"
-        msg += (
+        msg = (
             " | {:^6s} | {:^6s} | {:^6s} | {:^6s} || {:<20s}".format(
                 "mean", "min", "max", "std", "shape", "param_name"
             )
             + "\n"
         )
         for name, param in network.state_dict().items():
-            if not "num_batches_tracked" in name:
+            if "num_batches_tracked" not in name:
                 v = param.data.clone().float()
-                std_value = v.std().item() if v.numel() > 1 else float('nan')
-                msg += (
-                    " | {:>6.3f} | {:>6.3f} | {:>6.3f} | {:>6.3f} | {} || {:s}".format(
-                        v.mean().item(), v.min().item(), v.max().item(), std_value, v.shape, name
-                    )
-                    + "\n"
+                std_value = v.std().item() if v.numel() > 1 else float("nan")
+                msg += " | {:>6.3f} | {:>6.3f} | {:>6.3f} | {:>6.3f} | {} || {:s}\n".format(
+                    v.mean().item(),
+                    v.min().item(),
+                    v.max().item(),
+                    std_value,
+                    v.shape,
+                    name,
                 )
         return msg
 
-    def save_network(self, save_dir, network, network_label, iter_label):
-        save_filename = "{}_{}.pth".format(iter_label, network_label)
+    def save_network(
+        self,
+        save_dir: str,
+        network: torch.nn.Module,
+        network_label: str,
+        iter_label: str,
+    ) -> None:
+        save_filename = f"{iter_label}_{network_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
         network = self.get_bare_model(network)
-        state_dict = network.state_dict()
-        for key, param in state_dict.items():
-            state_dict[key] = param.cpu()
+        state_dict = {key: param.cpu() for key, param in network.state_dict().items()}
         torch.save(state_dict, save_path)
 
-    def load_network(self, load_path, network, strict=True, param_key="params"):
+    def load_network(
+        self,
+        load_path: str,
+        network: torch.nn.Module,
+        strict: bool = True,
+        param_key: str = "params",
+    ) -> None:
         network = self.get_bare_model(network)
-        if strict:
-            state_dict = torch.load(load_path, weights_only=True)
-            if param_key in state_dict.keys():
-                state_dict = state_dict[param_key]
-            network.load_state_dict(state_dict, strict=strict)
-        else:
-            state_dict_old = torch.load(load_path, weights_only=True)
-            if param_key in state_dict_old.keys():
-                state_dict_old = state_dict_old[param_key]
-            state_dict = network.state_dict()
-            for (key_old, param_old), (key, param) in zip(
-                state_dict_old.items(), state_dict.items()
-            ):
-                state_dict[key] = param_old
-            network.load_state_dict(state_dict, strict=True)
-            del state_dict_old, state_dict
+        state_dict = torch.load(load_path, map_location=self.device)
+        if param_key in state_dict:
+            state_dict = state_dict[param_key]
+        network.load_state_dict(state_dict, strict=strict)
 
-    def save_optimizer(self, save_dir, optimizer, optimizer_label, iter_label):
-        save_filename = "{}_{}.pth".format(iter_label, optimizer_label)
+    def save_optimizer(
+        self,
+        save_dir: str,
+        optimizer: torch.optim.Optimizer,
+        optimizer_label: str,
+        iter_label: str,
+    ) -> None:
+        save_filename = f"{iter_label}_{optimizer_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
         torch.save(optimizer.state_dict(), save_path)
 
-    def load_optimizer(self, load_path, optimizer):
+    def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
         optimizer.load_state_dict(
             torch.load(
-                load_path,
-                map_location=lambda storage, loc: storage.cuda(
-                    torch.cuda.current_device()
-                ),
-                weights_only=True
+                load_path, map_location=lambda storage, loc: storage.cuda(self.device)
             )
         )
 
-    def update_E(self, decay=0.999):
-        netG = self.get_bare_model(self.netG)
+    def update_E(self, decay: float = 0.999) -> None:
+        netG: Module = self.get_bare_model(self.netG)
         netG_params = dict(netG.named_parameters())
         netE_params = dict(self.netE.named_parameters())
         for k in netG_params.keys():
-            netE_params[k].data.mul_(decay).add_(
-                netG_params[k].data, alpha=1 - decay)
+            netE_params[k].data.mul_(decay).add_(netG_params[k].data, alpha=1 - decay)
 
-    def merge_bnorm_train(self):
+    def merge_bnorm_train(self) -> None:
         merge_bn(self.netG)
         tidy_sequential(self.netG)
         self.define_optimizer()
         self.define_scheduler()
 
-    def merge_bnorm_test(self):
+    def merge_bnorm_test(self) -> None:
         merge_bn(self.netG)
         tidy_sequential(self.netG)
+
+    def _set_static_graph(self, network: torch.nn.Module) -> None:
+        network._set_static_graph()

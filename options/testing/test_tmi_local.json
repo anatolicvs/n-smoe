@@ -25,17 +25,17 @@
       }
       , "datasets": {
          "test": {
-            "name": "brain2"            
+            "name": "echocardiography" //"FLARE22"            
           , "dataset_type": "medical_sr"            
           , "lq_patchsize": 96
           , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
           , "exclude_dirs": []
           , "length" : 50
           , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
-          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/echocardiography"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
-          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_brain2_.pkl"
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_echocardiography_.pkl"
           , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 

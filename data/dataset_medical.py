@@ -452,7 +452,7 @@ class FastMRIRawDataSample(NamedTuple):
 
 class MedicalDatasetSR(Dataset):
     def __init__(self, opt):
-        self.n_channels: int = opt.get("n_channels", 3)
+        self.n_channels: int = opt.get("n_channels", 1)
         self.roots: list[str] = opt.get("dataroot_H", [])
         self.exclude_dirs: list[str] = opt.get("exclude_dirs", [])
         self.challenge = opt.get("challenge", "multicoil")
@@ -635,12 +635,12 @@ class MedicalDatasetSR(Dataset):
         if img is None:
             return None
 
-        img = self.preprocess(img)
+        (img_crop_H, img_H) = self.preprocess(img)
 
         if img is None:
             return None
 
-        return self.apply_degradation(img, sample.fname)
+        return self.apply_degradation(img_crop_H, img_H, sample.fname)
 
     def load_image_data(self, fname: str, slice_ind: int):
         try:
@@ -660,7 +660,10 @@ class MedicalDatasetSR(Dataset):
                 best_slice_index = self._get_best_slice(volume)
                 img = volume[:, :, best_slice_index]
             elif fname.endswith(".npy"):
-                img = np.load(fname)[slice_ind]
+                if slice_ind == 0:
+                    img = np.load(fname)
+                else:
+                    img = np.load(fname)[slice_ind]
             elif fname.endswith(".gz") and "4CH_ES.nii" in fname:
                 img = nibabel.load(fname).get_fdata()
             else:
@@ -733,19 +736,14 @@ class MedicalDatasetSR(Dataset):
         if img is None or img.ndim < 2 or np.max(img) == np.min(img):
             return None
 
+        if self.n_channels == 1 and img.ndim == 3 and img.shape[2] == 3:
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = img[:, :, np.newaxis]
+
         img_H = util.modcrop(img, self.sf)
 
         if img_H.shape[0] < self.h_size or img_H.shape[1] < self.h_size:
             return None
-
-        crop_methods = {
-            "high_texture": self.crop_high_texture,
-            "center": self.center_crop,
-        }
-
-        img_H = crop_methods.get(self.crop_method, self.center_crop)(img_H, self.h_size)
-
-        img_H = img_H.astype(np.float32)
 
         normalized_diff = np.ptp(img_H)
         if normalized_diff == 0:
@@ -753,12 +751,23 @@ class MedicalDatasetSR(Dataset):
 
         img_H = (img_H - np.min(img_H)) / (normalized_diff + np.finfo(np.float32).eps)
 
-        if img_H.ndim == 2:
-            img_H = img_H[:, :, np.newaxis]
+        crop_methods = {
+            "high_texture": self.crop_high_texture,
+            "center": self.center_crop,
+        }
 
-        return img_H
+        img_crop_H = crop_methods.get(self.crop_method, self.center_crop)(
+            img_H, self.h_size
+        )
 
-    def apply_degradation(self, img, fname):
+        img_crop_H = img_crop_H.astype(np.float32)
+
+        if img_crop_H.ndim == 2:
+            img_crop_H = img_crop_H[:, :, np.newaxis]
+
+        return img_crop_H, img_H
+
+    def apply_degradation(self, img_ch, img_h, fname):
         chosen_model = random.choice(self.degradation_methods)
         kernel = self.select_kernel()
         img_L, img_H = {
@@ -774,14 +783,16 @@ class MedicalDatasetSR(Dataset):
             "bicubic_degradation": lambda x: blindsr.bicubic_degradation(
                 x, self.sf, self.lq_patchsize
             ),
-        }[chosen_model](img)
+        }[chosen_model](img_ch)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
         img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
+
         return {
             "L": img_L,
             "L_p": img_L_p,
             "H": img_H,
+            "O": img_h,
             "L_path": str(fname),
             "H_path": str(fname),
         }

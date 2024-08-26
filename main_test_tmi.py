@@ -314,7 +314,9 @@ def visualize_with_segmentation(
         wspace=0.01,  # Reducing space between columns
     )
 
-    annotated_mask = mask_generator.generate(np.repeat(images[0][:, :, :], 3, axis=-1))
+    annotated_mask = mask_generator.generate(
+        np.repeat(images[0][:, :, np.newaxis], 3, axis=-1)
+    )
     ax_annotated = fig.add_subplot(gs[0:2, 0])
     ax_annotated.imshow(images[0], cmap=cmap)
     show_anns(annotated_mask)
@@ -960,7 +962,8 @@ def main(json_path="options/testing/test_tmi_local.json"):
         L_crop_img = util.tensor2uint(test_data["L"])
         H_crop_img = util.tensor2uint(test_data["H"])
 
-        img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
+        img_H = util.tensor2uint(test_data["O"])
+        # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
         img_H = util.modcrop(img_H, border)
 
         images: dict[str, Any] = {

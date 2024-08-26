@@ -78,6 +78,12 @@ def define_Dataset(dataset_opt):
         from data.dataset_video_test import VFI_Vid4 as D
 
     # -----------------------------------------
+    # segmentation
+    # -----------------------------------------
+    elif dataset_type in ["seg_npy"]:
+        from data.dataset_seg import NpyDataset as D
+
+    # -----------------------------------------
     # common
     # -----------------------------------------
     elif dataset_type in ["plain"]:
