@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_gan_v3_x4_mri_rgb_act_gelu" 
+    "task": "moex1_sr_gan_v4_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -34,7 +34,7 @@
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
             , "dataroot_L": null              // path of L training dataset
-            , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
@@ -51,13 +51,13 @@
             , "dataroot_L": null              // path of L testing dataset
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-            , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4 
             }
         }
 
-      , "netG": {
+        , "netG": {
           "net_type": "unet_moex1"
           , "kernel": 16
           , "sharpening_factor": 1
@@ -65,7 +65,7 @@
           , "model_channels": 64
           , "num_res_blocks": 8
           , "attention_resolutions": [16, 8, 4]
-          , "dropout": 0.1
+          , "dropout": 0.2
           , "num_groups": 8
           , "num_heads" : 32
           , "num_head_channels": 32
@@ -78,15 +78,15 @@
           , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
           , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
           ,"resizer_num_layers": 4
-          ,"resizer_avg_pool": true
+          ,"resizer_avg_pool": false
        
           , "init_type": "default"         
-    }
+      }
 
     , "netD": {
       "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
       , "in_nc": 1
-      , "base_nc": 128
+      , "base_nc": 64
       , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
       , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
   
@@ -121,36 +121,34 @@
       , "D_optimizer_lr": 1e-4  // learning rate
       , "D_optimizer_wd": 0
       
-        , "G_scheduler_type": "CosineAnnealingLR"
-        , "G_scheduler_T_max": 200000
-        , "G_scheduler_eta_min": 1e-6
-        , "G_scheduler_max_lr": 1e-3
-        , "G_scheduler_step_size_up": 30000
-        , "G_scheduler_step_size_down": 30000
-        , "G_scheduler_mode": "triangular"
-        , "G_scheduler_cycle_momentum": false
-        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
-        , "G_scheduler_gamma": 0.5
-        , "G_optimizer_reuse": true
-    
-        , "D_scheduler_type": "CosineAnnealingLR"
-        , "D_scheduler_T_max": 200000
-        , "D_scheduler_eta_min": 1e-6
-        , "D_scheduler_max_lr": 1e-3
-        , "D_scheduler_step_size_up": 30000
-        , "D_scheduler_step_size_down": 30000
-        , "D_scheduler_mode": "triangular"
-        , "D_scheduler_cycle_momentum": false
-        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
-        , "D_scheduler_gamma": 0.5
-        , "D_optimizer_reuse": false
-    
-        , "G_param_strict": true
-        , "D_param_strict": true
-        , "E_param_strict": true
-    
-        , "checkpoint_test": 5000           
-        , "checkpoint_save": 5000        
-        , "checkpoint_print": 500          
-        }
+      , "G_scheduler_type": "CosineAnnealingLR"
+      , "G_scheduler_T_max": 200000
+      , "G_scheduler_eta_min": 1e-6
+      , "G_scheduler_max_lr": 1e-3
+      , "G_scheduler_step_size_up": 30000
+      , "G_scheduler_step_size_down": 30000
+      , "G_scheduler_mode": "triangular"
+      , "G_scheduler_cycle_momentum": false
+      , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+      , "G_scheduler_gamma": 0.5
+      , "G_optimizer_reuse": true
+  
+      , "D_scheduler_type": "MultiStepLR"
+      , "D_scheduler_max_lr": 1e-3
+      , "D_scheduler_step_size_up": 30000
+      , "D_scheduler_step_size_down": 30000
+      , "D_scheduler_mode": "triangular"
+      , "D_scheduler_cycle_momentum": false
+      , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+      , "D_scheduler_gamma": 0.5
+      , "D_optimizer_reuse": false
+  
+      , "G_param_strict": true
+      , "D_param_strict": true
+      , "E_param_strict": true
+  
+      , "checkpoint_test": 5000           
+      , "checkpoint_save": 5000        
+      , "checkpoint_print": 500          
+      }
     }
