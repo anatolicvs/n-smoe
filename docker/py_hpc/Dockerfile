@@ -40,14 +40,17 @@ RUN source /opt/miniconda/bin/activate venv && \
     pip install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm && \
     pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124 && \
     pip install --no-cache-dir pandas wandb -U scikit-learn timm lightning['extra'] tensorboard monailabel \
-    pytorch-metric-learning pytorch-ignite pytorch-gradcam pytorch-msssim pytorchvideo torchmetrics torch_optimizer torchsampler \
+    pytorch-metric-learning pytorch-ignite pytorchvideo torchmetrics torch_optimizer torchsampler \
     torchgeometry torchio piq torchdiffeq hydra-core --upgrade fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom \
     "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch \
-    datashader holoviews hvplot jupyterlab mahotas && \
+    datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d && \
     pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
     "cudf-cu12>=24.8.0a0,<=24.8" "dask-cudf-cu12>=24.8.0a0,<=24.8" "cuml-cu12>=24.8.0a0,<=24.8" "cugraph-cu12>=24.8.0a0,<=24.8" \
     "cuspatial-cu12>=24.8.0a0,<=24.8" "cuproj-cu12>=24.8.0a0,<=24.8" "cuxfilter-cu12>=24.8.0a0,<=24.8" "cucim-cu12>=24.8.0a0,<=24.8" \
     "pylibraft-cu12>=24.8.0a0,<=24.8" "raft-dask-cu12>=24.8.0a0,<=24.8" "cuvs-cu12>=24.8.0a0,<=24.8" "pylibraft-cu12>=24.8.0a0,<=24.8" \
     "dask-cuda>=24.8.0a0,<=24.8"
+
+RUN git clone https://github.com/facebookresearch/segment-anything-2.git
+RUN cd segment-anything-2 && pip install -e .
 
 ENTRYPOINT ["python"]
