@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": null //"/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/30000_G.pth"
+      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -34,7 +34,7 @@
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
             , "dataroot_L": null              // path of L training dataset
-            , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
@@ -51,104 +51,105 @@
             , "dataroot_L": null              // path of L testing dataset
             , "use_dataset_cache": true
             , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-            , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+            , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 4 
             }
         }
 
-        , "netG": {
-          "net_type": "unet_moex1"
-          , "kernel": 16
-          , "sharpening_factor": 1
+      , "netG": {
+        "net_type": "unet_moex1"
+        , "kernel": 16
+        , "sharpening_factor": 1
+    
+        , "model_channels": 64
+        , "num_res_blocks": 8
+        , "attention_resolutions": [16, 8, 4]
+        , "dropout": 0.2
+        , "num_groups": 8
+        , "num_heads" : 32
+        , "num_head_channels": 32
+        , "use_new_attention_order": true
+        , "use_checkpoint": true
+        , "resblock_updown": false
+        , "channel_mult": [1, 2, 4, 8]
+        , "resample_2d" : false
+    
+        , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
+        , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
+        ,"resizer_num_layers": 2
+        ,"resizer_avg_pool": false
       
-          , "model_channels": 64
-          , "num_res_blocks": 8
-          , "attention_resolutions": [16, 8, 4]
-          , "dropout": 0.2
-          , "num_groups": 8
-          , "num_heads" : 32
-          , "num_head_channels": 32
-          , "use_new_attention_order": true
-          , "use_checkpoint": true
-          , "resblock_updown": false
-          , "channel_mult": [1, 2, 4, 8]
-          , "resample_2d" : false
+        , "init_type": "default"         
+        }
       
-          , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
-          , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
-          ,"resizer_num_layers": 4
-          ,"resizer_avg_pool": false
-       
-          , "init_type": "default"         
+      , "netD": {
+          "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
+          , "in_nc": 1
+          , "base_nc": 64
+          , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
+          , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
+      
+          , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          , "init_bn_type": "uniform"      // "uniform" | "constant"
+          , "init_gain": 0.2
       }
-
-    , "netD": {
-      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
-      , "in_nc": 1
-      , "base_nc": 64
-      , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
-      , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
   
-      , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-      , "init_bn_type": "uniform"      // "uniform" | "constant"
-      , "init_gain": 0.2
-    }
-    , "train": {
-        "is_moe": true
-      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
-      , "G_lossfn_weight": 1
-
-      , "F_lossfn_type": "l1"  // "l1" | "l2"
-      , "F_lossfn_weight": 1
-      , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
-      , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
-      , "F_use_input_norm": true
-      , "F_use_range_norm": false
-
-      , "gan_type": "gan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
-      , "D_lossfn_weight": 0.1
-
-      , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
-
-      , "D_init_iters": 0
-
-      , "G_optimizer_type": "adam"
-      , "G_optimizer_lr": 1e-4  // learning rate
-      , "G_optimizer_wd": 0
-
-      , "D_optimizer_type": "adam"
-      , "D_optimizer_lr": 1e-4  // learning rate
-      , "D_optimizer_wd": 0
+      , "train": {
+            "is_moe": true
+          , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+          , "G_lossfn_weight": 1
       
-      , "G_scheduler_type": "CosineAnnealingLR"
-      , "G_scheduler_T_max": 200000
-      , "G_scheduler_eta_min": 1e-6
-      , "G_scheduler_max_lr": 1e-3
-      , "G_scheduler_step_size_up": 30000
-      , "G_scheduler_step_size_down": 30000
-      , "G_scheduler_mode": "triangular"
-      , "G_scheduler_cycle_momentum": false
-      , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
-      , "G_scheduler_gamma": 0.5
-      , "G_optimizer_reuse": true
-  
-      , "D_scheduler_type": "MultiStepLR"
-      , "D_scheduler_max_lr": 1e-3
-      , "D_scheduler_step_size_up": 30000
-      , "D_scheduler_step_size_down": 30000
-      , "D_scheduler_mode": "triangular"
-      , "D_scheduler_cycle_momentum": false
-      , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
-      , "D_scheduler_gamma": 0.5
-      , "D_optimizer_reuse": false
-  
-      , "G_param_strict": true
-      , "D_param_strict": true
-      , "E_param_strict": true
-  
-      , "checkpoint_test": 5000           
-      , "checkpoint_save": 5000        
-      , "checkpoint_print": 500          
-      }
+          , "F_lossfn_type": "l2"  // "l1" | "l2"
+          , "F_lossfn_weight": 1
+          , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
+          , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+          , "F_use_input_norm": true
+          , "F_use_range_norm": false
+      
+          , "gan_type": "gan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+          , "D_lossfn_weight": 0.1
+      
+          , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+      
+          , "D_init_iters": 0
+      
+          , "G_optimizer_type": "adam"
+          , "G_optimizer_lr": 1e-05  // learning rate
+          , "G_optimizer_wd": 0
+      
+          , "D_optimizer_type": "adam"
+          , "D_optimizer_lr": 1e-05  // learning rate
+          , "D_optimizer_wd": 0
+      
+          , "G_scheduler_type": "CosineAnnealingLR"
+          , "G_scheduler_T_max": 200000
+          , "G_scheduler_eta_min": 1e-6
+          , "G_scheduler_max_lr": 1e-3
+          , "G_scheduler_step_size_up": 30000
+          , "G_scheduler_step_size_down": 30000
+          , "G_scheduler_mode": "triangular"
+          , "G_scheduler_cycle_momentum": false
+          , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+          , "G_scheduler_gamma": 0.5
+          , "G_optimizer_reuse": true
+      
+          , "D_scheduler_type": "MultiStepLR"
+          , "D_scheduler_max_lr": 1e-3
+          , "D_scheduler_step_size_up": 30000
+          , "D_scheduler_step_size_down": 30000
+          , "D_scheduler_mode": "triangular"
+          , "D_scheduler_cycle_momentum": false
+          , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+          , "D_scheduler_gamma": 0.5
+          , "D_optimizer_reuse": false
+      
+          , "G_param_strict": true
+          , "D_param_strict": true
+          , "E_param_strict": true
+      
+          , "checkpoint_test": 50           
+          , "checkpoint_save": 20        
+          , "checkpoint_print": 10          
+        }
     }
