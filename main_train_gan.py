@@ -351,6 +351,9 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                                 f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
                             )
 
+                        del visuals, E_img, H_img
+                        torch.cuda.empty_cache()
+
                     if opt["dist"] and dist.is_initialized():
                         local_psnr_sum_tensor = torch.tensor(
                             local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
@@ -386,7 +389,8 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
-        synchronize()
+                finally:
+                    synchronize()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
