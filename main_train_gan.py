@@ -10,7 +10,6 @@ from typing import Any, Dict, Optional, Tuple
 import numpy as np
 import torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -79,10 +78,16 @@ def initialize_distributed(opt):
         init_dist("pytorch")
         opt["world_size"] = dist.get_world_size()
         opt["rank"] = dist.get_rank()
-        torch.cuda.set_device(opt["rank"])
+        local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
+        torch.cuda.set_device(local_rank)
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
+
+
+def synchronize():
+    if dist.is_initialized():
+        dist.barrier()
 
 
 def build_loaders(opt, logger=None):
@@ -219,6 +224,8 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
         )
         logger = setup_logging(opt)
 
+    synchronize()
+
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
         net_type="G",
@@ -262,7 +269,7 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
 
     if opt["dist"]:
         train_loader, test_loader = build_loaders(opt, logger)
-        dist.barrier()
+        synchronize()
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
@@ -306,14 +313,15 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
-            if current_step % checkpoint_interval == 0 and opt["rank"] == 0:
+            if current_step % checkpoint_interval == 0:
                 try:
-                    logger.info("Saving the model.")
-                    model.save(current_step)
-                    if opt["dist"] and dist.is_initialized():
-                        dist.barrier()
+                    if opt["rank"] == 0:
+                        logger.info("Saving the model.")
+                        model.save(current_step)
+                    synchronize()
                 except Exception as e:
-                    logger.error(f"Error saving model at step {current_step}: {e}")
+                    if opt["rank"] == 0:
+                        logger.error(f"Error saving model at step {current_step}: {e}")
 
             if current_step % test_interval == 0:
                 local_psnr_sum = 0.0
@@ -378,9 +386,7 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
-
-        if opt["dist"] and dist.is_initialized():
-            dist.barrier()
+        synchronize()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")

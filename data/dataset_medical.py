@@ -118,19 +118,19 @@ class MedicalDatasetSR(Dataset):
     def load_sample(self, fname) -> None | List[FastMRIRawDataSample]:
         fname_path = Path(fname)
 
-        if not fname_path.exists() or not os.access(fname, os.R_OK):
+        if not fname_path.exists() or not os.access(fname_path, os.R_OK):
             logging.warning(f"Access issue with file: {fname}")
             return None
 
         try:
-            if fname_path.suffix.lower() in [".jpg", ".jpeg"]:
+            if str(fname_path).endswith((".jpg", ".jpeg")):
                 with Image.open(fname_path) as img:
                     img.verify()
 
-            if fname_path.suffix in [".h5", ".gz", ".npy"]:
-                return self.handle_special_formats(fname)
+            if str(fname_path).endswith((".h5", ".gz", ".npy")):
+                return self.handle_special_formats(fname_path)
 
-            return [FastMRIRawDataSample(fname, 0, {})]
+            return [FastMRIRawDataSample(fname_path, 0, {})]
 
         except (OSError, ValueError) as e:
             logging.error(f"Error processing file {fname}: {e}")
@@ -140,7 +140,6 @@ class MedicalDatasetSR(Dataset):
             return None
 
     def handle_special_formats(self, fname_path) -> List[FastMRIRawDataSample] | None:
-        fname_path = Path(fname_path)
         if fname_path.suffix == ".h5":
             metadata, num_slices = self._retrieve_metadata(str(fname_path))
             return [
@@ -208,6 +207,9 @@ class MedicalDatasetSR(Dataset):
 
     def load_image_data(self, fname: str, slice_ind: int):
         try:
+            if isinstance(fname, Path):
+                fname = str(fname)
+
             if not os.path.exists(fname) or not os.access(fname, os.R_OK):
                 logging.warning(f"File does not exist or is not accessible: {fname}")
                 return None
@@ -299,6 +301,7 @@ class MedicalDatasetSR(Dataset):
             img = img[:, :, np.newaxis]
 
         img_H = util.modcrop(img, self.sf)
+        img_H = img_H.astype(np.float32)
 
         if img_H.shape[0] < self.h_size or img_H.shape[1] < self.h_size:
             return None
@@ -341,7 +344,7 @@ class MedicalDatasetSR(Dataset):
 
         return self.apply_degradation(img_crop_H, img_H, sample.fname)
 
-    def apply_degradation(self, img_ch, img_h, fname):
+    def apply_degradation(self, img_crop_H, img_oH, fname):
         chosen_model = random.choice(self.degradation_methods)
         kernel = self.select_kernel()
         img_L, img_H = {
@@ -357,16 +360,18 @@ class MedicalDatasetSR(Dataset):
             "bicubic_degradation": lambda x: blindsr.bicubic_degradation(
                 x, self.sf, self.lq_patchsize
             ),
-        }[chosen_model](img_ch)
+        }[chosen_model](img_crop_H)
 
         img_H, img_L = util.single2tensor3(img_H), util.single2tensor3(img_L)
+        img_H = img_H.contiguous()
+        img_L = img_L.contiguous()
         img_L_p = self.extract_blocks(img_L, self.phw, self.overlap)
 
         return {
             "L": img_L,
             "L_p": img_L_p,
             "H": img_H,
-            "O": img_h,
+            # "O": img_oH,
             "L_path": str(fname),
             "H_path": str(fname),
         }
@@ -376,7 +381,9 @@ class MedicalDatasetSR(Dataset):
             kernel_index = random.randint(0, len(self.k["kernels"][0]) - 1)
             return self.k["kernels"][0][kernel_index]
         else:
-            logging.warning("No kernels found or empty kernel list, using default kernel")
+            logging.warning(
+                "No kernels found or empty kernel list, using default kernel"
+            )
             return np.ones((5, 5), dtype=np.float32) / 25
 
     @staticmethod
