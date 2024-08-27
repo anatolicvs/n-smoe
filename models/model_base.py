@@ -158,7 +158,7 @@ class ModelBase(ABC):
         param_key: str = "params",
     ) -> None:
         network = self.get_bare_model(network)
-        state_dict = torch.load(load_path, map_location=self.device)
+        state_dict = torch.load(load_path, map_location=self.device, weights_only=True)
         if param_key in state_dict:
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
@@ -177,7 +177,9 @@ class ModelBase(ABC):
     def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
         optimizer.load_state_dict(
             torch.load(
-                load_path, map_location=lambda storage, loc: storage.cuda(self.device)
+                load_path,
+                map_location=self.device,
+                weights_only=True,
             )
         )
 

@@ -1,12 +1,12 @@
 {
-    "task": "moex1_sr_gan_v1_x2_mri_rgb_act_gelu" 
+    "task": "moex1_sr_gan_v1_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 2       
+    , "scale": 4       
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // server: "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:
     , "phw": 16  
-    , "overlap": 14
+    , "overlap": 15
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -77,7 +77,7 @@
     
         , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
         , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
-        ,"resizer_num_layers": 2
+        ,"resizer_num_layers": 4
         ,"resizer_avg_pool": false
      
         , "init_type": "default"         
@@ -122,7 +122,9 @@
         , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
     
-        , "G_scheduler_type": "MultiStepLR"
+        , "G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_T_max": 200000
+        , "G_scheduler_eta_min": 1e-6
         , "G_scheduler_max_lr": 1e-3
         , "G_scheduler_step_size_up": 30000
         , "G_scheduler_step_size_down": 30000
