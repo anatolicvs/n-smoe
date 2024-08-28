@@ -1,6 +1,7 @@
 #!/usr/bin/zsh
 
 USE_APPTAINER=true
+BUILT_VERSION="1.0"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 
@@ -113,7 +114,7 @@ if [ "$USE_APPTAINER" = true ]; then
       echo "Error: Required environment variables (HPCWORK, WORK, WORKDIR) are not set." >&2
       exit 1
   fi
-  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
+  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
     torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_seg.py --opt=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
 else
   module load Python/3.10.4
