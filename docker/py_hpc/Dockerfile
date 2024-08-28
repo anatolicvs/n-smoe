@@ -3,10 +3,11 @@ FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 ENV CUDA_HOME=/usr/local/cuda \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    NUMBA_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so.1
 
 ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH} \
-LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
+    LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
 WORKDIR /usr/src/
 
@@ -46,17 +47,17 @@ RUN git clone https://github.com/facebookresearch/segment-anything-2.git && \
     cd segment-anything-2 && pip install -e .
 
 RUN pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-        --extra-index-url=https://pypi.nvidia.com \
-        "cudf-cu12==24.8.2" \
-        "dask-cudf-cu12==24.8.2" \
-        "cuml-cu12==24.8.0" \
-        "cugraph-cu12==24.8.0" \
-        "cuspatial-cu12==24.8.0" \
-        "cuproj-cu12==24.8.0" \
-        "cuxfilter-cu12==24.8.0" \
-        "cucim-cu12==24.8.0" \
-        "pylibraft-cu12==24.8.1" \
-        "raft-dask-cu12==24.8.1" \
-        "cuvs-cu12==24.8.0"
+    --extra-index-url=https://pypi.nvidia.com \
+    "cudf-cu12==24.8.2" \
+    "dask-cudf-cu12==24.8.2" \
+    "cuml-cu12==24.8.0" \
+    "cugraph-cu12==24.8.0" \
+    "cuspatial-cu12==24.8.0" \
+    "cuproj-cu12==24.8.0" \
+    "cuxfilter-cu12==24.8.0" \
+    "cucim-cu12==24.8.0" \
+    "pylibraft-cu12==24.8.1" \
+    "raft-dask-cu12==24.8.1" \
+    "cuvs-cu12==24.8.0"
 
 ENTRYPOINT ["python"]
