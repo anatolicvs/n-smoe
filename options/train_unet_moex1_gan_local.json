@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_gan_v1_x4_mri_rgb_act_gelu" 
+    "task": "moex1_sr_gan_v2_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -15,7 +15,7 @@
         
     , "path": {
       "root": "/mnt/d/superresolution"
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
+      , "pretrained_netG": null
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       , "pretrained_optimizerG": null 
@@ -34,7 +34,7 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_training_medical_echocardiography_v1_.pkl"
-          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 1
           , "dataloader_batch_size": 2 
         } 
@@ -51,7 +51,7 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_echocardiography_v1_.pkl"
-          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 1
           , "dataloader_batch_size": 1 
         }

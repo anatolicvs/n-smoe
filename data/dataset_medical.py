@@ -352,7 +352,7 @@ class MedicalDatasetSR(Dataset):
                 x, kernel, self.sf, self.lq_patchsize
             ),
             "bsrgan_plus": lambda x: blindsr.degradation_bsrgan_plus(
-                x, self.sf, self.lq_patchsize
+                img=x, sf=self.sf, use_sharp=True, lq_patchsize=self.lq_patchsize
             ),
             "classic_sr": lambda x: blindsr.classical_degradation(
                 x, kernel, self.sf, self.lq_patchsize

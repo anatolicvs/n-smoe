@@ -315,6 +315,30 @@ def classical_degradation(x, k, sf=3, lq_patchsize=64):
     lq, hq = random_crop(x, hq, sf, lq_patchsize)
     return lq, hq
 
+def add_sharpening(img, weight=0.5, radius=50, threshold=10):
+    if radius % 2 == 0:
+        radius += 1
+    
+    # Handle grayscale images by repeating the single channel to match RGB format
+    if img.shape[2] == 1:
+        img = np.repeat(img, 3, axis=2)
+
+    blur = cv2.GaussianBlur(img, (radius, radius), 0)
+    residual = img - blur
+    mask = np.abs(residual) * 255 > threshold
+    mask = mask.astype("float32")
+    soft_mask = cv2.GaussianBlur(mask, (radius, radius), 0)
+
+    K = img + weight * residual
+    K = np.clip(K, 0, 1)
+    output = soft_mask * K + (1 - soft_mask) * img
+    
+    # Convert the output back to grayscale if the input was grayscale
+    if img.shape[2] == 1:
+        output = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
+        output = output[:, :, np.newaxis]
+
+    return output
 
 def add_sharpening(img, weight=0.5, radius=50, threshold=10):
     """USM sharpening. borrowed from real-ESRGAN
@@ -329,8 +353,13 @@ def add_sharpening(img, weight=0.5, radius=50, threshold=10):
         radius (float): Kernel size of Gaussian blur. Default: 50.
         threshold (int):
     """
+    orig_shape = img.shape
     if radius % 2 == 0:
         radius += 1
+
+    if img.shape[2] == 1:
+        img = np.repeat(img, 3, axis=2)
+
     blur = cv2.GaussianBlur(img, (radius, radius), 0)
     residual = img - blur
     mask = np.abs(residual) * 255 > threshold
@@ -339,7 +368,13 @@ def add_sharpening(img, weight=0.5, radius=50, threshold=10):
 
     K = img + weight * residual
     K = np.clip(K, 0, 1)
-    return soft_mask * K + (1 - soft_mask) * img
+    output = soft_mask * K + (1 - soft_mask) * img
+    
+    if orig_shape[2] == 1:
+        output = cv2.cvtColor(output, cv2.COLOR_BGR2GRAY)
+        output = output[:, :, np.newaxis]
+
+    return output
 
 
 def add_blur(img, sf=4):
