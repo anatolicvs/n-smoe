@@ -29,7 +29,7 @@
           , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
           , "exclude_dirs": []
           , "length" : 50
-          , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
+          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
           , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/echocardiography"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
@@ -46,7 +46,7 @@
           , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
           , "exclude_dirs": []
           , "length" : 50
-          , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
+          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
           , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/echocardiography"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
