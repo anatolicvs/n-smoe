@@ -6,6 +6,7 @@ ENV CUDA_HOME=/usr/local/cuda \
     DEBIAN_FRONTEND=noninteractive \
     NUMBA_CUDA_DRIVER=/usr/lib/x86_64-linux-gnu/libcuda.so.1
 
+
 ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH} \
     LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
 
