@@ -267,6 +267,7 @@ def visualize_with_segmentation(
     save_path: str = None,
     visualize: bool = False,
     backend: str = "TkAgg",
+    error_map: bool = False,
 ):
     import matplotlib
 

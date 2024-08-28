@@ -395,9 +395,24 @@ class RoPEAttention(Attention):
         num_k_exclude_rope: int = 0,
     ) -> torch.Tensor:
 
+        # q = self.q_proj(q)
+        # k = self.k_proj(k)
+        # v = self.v_proj(v)
+
+        batch_size, channels, seq_len = q.shape
+        q = q.reshape(
+            batch_size * seq_len, -1
+        )  # Reshape to [batch_size * seq_len, channels]
+        k = k.reshape(batch_size * seq_len, -1)
+        v = v.reshape(batch_size * seq_len, -1)
+
         q = self.q_proj(q)
         k = self.k_proj(k)
         v = self.v_proj(v)
+
+        q = q.reshape(batch_size, seq_len, self.internal_dim)
+        k = k.reshape(batch_size, seq_len, self.internal_dim)
+        v = v.reshape(batch_size, seq_len, self.internal_dim)
 
         q = self._separate_heads(q, self.num_heads)
         k = self._separate_heads(k, self.num_heads)
@@ -546,25 +561,26 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
             1, cfg.channels, cfg.channels * 3, 1
         )
 
-        self.num_heads = (
-            cfg.num_heads
-            if cfg.num_head_channels == -1
-            else cfg.channels // cfg.num_head_channels
-        )
-        if cfg.num_head_channels != -1:
-            assert cfg.channels % cfg.num_head_channels == 0, (
-                f"q,k,v channels {cfg.channels} must be divisible "
-                f"by num_head_channels {cfg.num_head_channels}"
-            )
+        # self.num_heads = (
+        #     cfg.num_heads
+        #     if cfg.num_head_channels == -1
+        #     else cfg.channels // cfg.num_head_channels
+        # )
+        # if cfg.num_head_channels != -1:
+        #     assert cfg.channels % cfg.num_head_channels == 0, (
+        #         f"q,k,v channels {cfg.channels} must be divisible "
+        #         f"by num_head_channels {cfg.num_head_channels}"
+        #     )
 
         self.attention_type: str = (
             cfg.attention_type if hasattr(cfg, "attention_type") else "attention"
         )
 
         self.attention_map = {
-            "attention": QKVAttention(self.num_heads),
+            "attention": QKVAttention(cfg.num_heads),
             "cross_attention": RoPEAttention(
-                embedding_dim=int((self.num_heads * scale_factor**2) / 2),
+                embedding_dim=cfg.channels,
+                # int((self.num_heads * scale_factor**2) / 2),
                 num_heads=cfg.num_heads,
                 rope_theta=cfg.rope_theta,
                 rope_k_repeat=True,
@@ -599,6 +615,7 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
             # print(f"Attention shape: {self.attention}")
 
             h = self.attention(*qkv.chunk(3, dim=1))
+            h = h.transpose(1, 2)
 
         h = self.proj_out(h)
         return (x + h).reshape(b, c, *spatial)

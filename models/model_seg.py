@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -17,6 +18,11 @@ class ModelSeg(ModelBase):
         self.netG = self.model_to_device(self.netG)
         if self.opt_train["E_decay"] > 0:
             self.netE = define_G(opt).to(self.device).eval()
+
+        self.iou = torch.Tensor([0.0]).to(self.netG.device)
+        self.iou.requires_grad = False
+
+        self.b_loss: float = 1e10
 
     def init_train(self):
         self.load()
@@ -50,6 +56,23 @@ class ModelSeg(ModelBase):
                 print("Copying model for E ...")
                 self.update_E(0)
             self.netE.eval()
+
+
+    def _loss(self, prd_mask:torch.Tensor, gt_mask:torch.Tensor, prd_scores:torch.Tensor):
+        prd_mask = torch.sigmoid(prd_mask[:,0])
+
+        seg_loss = (
+            -gt_mask * torch.log(prd_mask + 0.00001)
+            - (1 - gt_mask) * torch.log((1 - prd_mask) + 0.00001)
+        ).mean()
+
+        inter = (gt_mask * (prd_mask > 0.5)).sum(1).sum(1)
+        iou = inter / (gt_mask.sum(1).sum(1) + (prd_mask > 0.5).sum(1).sum(1) - inter)
+        score_loss = torch.abs(prd_scores[:, 0] - iou).mean()
+        loss = seg_loss + score_loss * 0.05
+
+        self.iou = iou
+        return loss
 
     def define_loss(self):
         self.G_seg_loss = DiceLoss(
@@ -130,8 +153,27 @@ class ModelSeg(ModelBase):
         else:
             raise NotImplementedError
 
+    def save_network(
+            self,
+            save_dir: str,
+            network: torch.nn.Module,
+            network_label: str,
+            iter_label: str,
+        ) -> None:
+            save_filename = f"{iter_label}_{network_label}.pth"
+            save_path = os.path.join(save_dir, save_filename)
+            network = self.get_bare_model(network)
+            state_dict = {key: param.cpu() for key, param in network.state_dict().items()}
+
+            checkpoint = {
+                            "model": state_dict,
+                        }
+            torch.save(checkpoint, save_path)
+
     def save(self, iter_label):
-        self.save_network(self.save_dir, self.netG, "G", iter_label)
+        if self.log_dict["G_loss"] < self.b_loss:
+            self.b_loss = self.log_dict["G_loss"]
+            self.save_network(self.save_dir, self.netG, "G", iter_label)
         if self.opt_train["E_decay"] > 0:
             self.save_network(self.save_dir, self.netE, "E", iter_label)
         if self.opt_train["G_optimizer_reuse"]:
@@ -143,6 +185,8 @@ class ModelSeg(ModelBase):
         self.img = data["img"].to(self.device)
         self.box = data["box"].to(self.device)
         self.label = data["label"].to(self.device)
+        # self.mask = data["mask"].to(self.device)
+        # self.input_point = data["input_point"].to(self.device)
 
     def netG_forward(self):
         boxes_np = self.box.detach().cpu().numpy()
