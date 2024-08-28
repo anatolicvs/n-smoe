@@ -317,20 +317,20 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 try:
                     if opt["rank"] == 0:
                         logger.info("Saving the model.")
+                        synchronize()
                         model.save(current_step)
-                    synchronize()
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error saving model at step {current_step}: {e}")
 
             if current_step % test_interval == 0:
-                local_psnr_sum = 0.0
-                local_count = 0
-
+                local_psnr_sum: float = 0.0
+                local_count: int = 0
                 try:
                     for test_data in test_loader:
-                        if test_data is None and opt["rank"] == 0:
-                            logger.warning("Test data is None, skipping...")
+                        if test_data is None:
+                            if opt["rank"] == 0:
+                                logger.warning("Test data is None, skipping...")
                             continue
 
                         image_name_ext = os.path.basename(test_data["L_path"][0])
@@ -355,27 +355,22 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                         torch.cuda.empty_cache()
 
                     if opt["dist"] and dist.is_initialized():
-                        local_psnr_sum_tensor = torch.tensor(
-                            local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}")
-                        )
-                        local_count_tensor = torch.tensor(
-                            local_count, device=torch.device(f"cuda:{opt['rank']}")
-                        )
-
+                        synchronize()
+                        local_psnr_sum_tensor = torch.tensor(local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}"))
+                        local_count_tensor = torch.tensor(local_count, device=torch.device(f"cuda:{opt['rank']}"))
                         dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
                         dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
+                        synchronize()
 
                         if local_count_tensor.item() > 0:
-                            global_avg_psnr = (
-                                local_psnr_sum_tensor.item() / local_count_tensor.item()
-                            )
+                            global_avg_psnr = local_psnr_sum_tensor.item() / local_count_tensor.item()
                         else:
                             global_avg_psnr = 0.0
+                            if opt["rank"] == 0:
+                                logger.warning("One or more ranks had no valid data, leading to a PSNR of 0.0")
 
                         if opt["rank"] == 0:
-                            logger.info(
-                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>"
-                            )
+                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>")
                     else:
                         if local_count > 0:
                             avg_psnr = local_psnr_sum / local_count
@@ -383,9 +378,7 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                             avg_psnr = 0.0
 
                         if opt["rank"] == 0:
-                            logger.info(
-                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                            )
+                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
@@ -394,7 +387,6 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
-
 
 def cleanup():
     if dist.is_initialized():
