@@ -1,3 +1,4 @@
+import os
 import torch
 import torch.nn as nn
 from torch.optim import AdamW
@@ -20,6 +21,8 @@ class ModelSeg(ModelBase):
 
         self.iou = torch.Tensor([0.0]).to(self.netG.device)
         self.iou.requires_grad = False
+
+        self.b_loss: float = 1e10
 
     def init_train(self):
         self.load()
@@ -150,8 +153,27 @@ class ModelSeg(ModelBase):
         else:
             raise NotImplementedError
 
+    def save_network(
+            self,
+            save_dir: str,
+            network: torch.nn.Module,
+            network_label: str,
+            iter_label: str,
+        ) -> None:
+            save_filename = f"{iter_label}_{network_label}.pth"
+            save_path = os.path.join(save_dir, save_filename)
+            network = self.get_bare_model(network)
+            state_dict = {key: param.cpu() for key, param in network.state_dict().items()}
+
+            checkpoint = {
+                            "model": state_dict,
+                        }
+            torch.save(checkpoint, save_path)
+
     def save(self, iter_label):
-        self.save_network(self.save_dir, self.netG, "G", iter_label)
+        if self.log_dict["G_loss"] < self.b_loss:
+            self.b_loss = self.log_dict["G_loss"]
+            self.save_network(self.save_dir, self.netG, "G", iter_label)
         if self.opt_train["E_decay"] > 0:
             self.save_network(self.save_dir, self.netE, "E", iter_label)
         if self.opt_train["G_optimizer_reuse"]:
