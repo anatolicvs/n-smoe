@@ -333,6 +333,8 @@ def main(json_path="options/"):
                                 logger.warning("Test data is None, skipping...")
                             continue
 
+                        synchronize()
+                        
                         image_name_ext = os.path.basename(test_data["L_path"][0])
 
                         model.feed_data(test_data)
