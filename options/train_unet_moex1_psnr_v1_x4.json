@@ -15,7 +15,7 @@
       
   , "path": {
       "root": "/hpcwork/p0021791/superresolution"  
-    , "pretrained_netG": "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
+    , "pretrained_netG": "/hpcwork/p0021791/superresolution/moex1_sr_plain_v8_x4_mri_rgb_act_gelu/models/10000_G.pth" // "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
     , "pretrained_netD": null 
     , "pretrained_netE": null 
     }
@@ -34,10 +34,10 @@
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
           , "dataroot_L": null              // path of L training dataset
-          , "H_size": 256                    // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 220                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 6     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataloader_batch_size": 4     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
           "name": "test_dataset"            
@@ -51,7 +51,7 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-          , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 32
           , "dataloader_batch_size": 4 
           }
@@ -85,7 +85,7 @@
 
   , "train": {
       "is_moe": true
-      , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+      , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
       , "G_lossfn_weight": 1.0            // default
   
       , "G_optimizer_type": "adam"        // fixed, adam is enough
@@ -102,8 +102,8 @@
       , "G_regularizer_orthstep": null    // unused
       , "G_regularizer_clipstep": null    // unused
   
-      , "checkpoint_test": 10000           // for testing
-      , "checkpoint_save": 10000           // for saving model
+      , "checkpoint_test": 1500           // for testing
+      , "checkpoint_save": 5000           // for saving model
       , "checkpoint_print": 250           // for print
     }
 }
