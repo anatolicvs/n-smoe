@@ -3,7 +3,8 @@ FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 ENV CUDA_HOME=/usr/local/cuda \
     NVIDIA_VISIBLE_DEVICES=all \
     NVIDIA_DRIVER_CAPABILITIES=compute,utility \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    NUMBA_CUDA_DRIVER=/usr/local/cuda-12.5/compat/libcuda.so.1
 
 ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH} \
 LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}
