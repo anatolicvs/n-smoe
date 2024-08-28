@@ -11,6 +11,7 @@
 # Has to be used without an project!
 
 USE_APPTAINER=true
+BUILT_VERSION="1.0"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}
 
@@ -115,7 +116,7 @@ export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_TIMEOUT=1200
 
 if [ "$USE_APPTAINER" = true ]; then
-  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda.sif \
+  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
     torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/main_train_gan.py --opt=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
 else
   module load Python/3.10.4
