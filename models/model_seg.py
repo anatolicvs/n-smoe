@@ -18,6 +18,9 @@ class ModelSeg(ModelBase):
         if self.opt_train["E_decay"] > 0:
             self.netE = define_G(opt).to(self.device).eval()
 
+        self.iou = torch.Tensor([0.0]).to(self.netG.device)
+        self.iou.requires_grad = False
+
     def init_train(self):
         self.load()
         self.netG.train()
@@ -50,6 +53,23 @@ class ModelSeg(ModelBase):
                 print("Copying model for E ...")
                 self.update_E(0)
             self.netE.eval()
+
+
+    def _loss(self, prd_mask:torch.Tensor, gt_mask:torch.Tensor, prd_scores:torch.Tensor):
+        prd_mask = torch.sigmoid(prd_mask[:,0])
+
+        seg_loss = (
+            -gt_mask * torch.log(prd_mask + 0.00001)
+            - (1 - gt_mask) * torch.log((1 - prd_mask) + 0.00001)
+        ).mean()
+
+        inter = (gt_mask * (prd_mask > 0.5)).sum(1).sum(1)
+        iou = inter / (gt_mask.sum(1).sum(1) + (prd_mask > 0.5).sum(1).sum(1) - inter)
+        score_loss = torch.abs(prd_scores[:, 0] - iou).mean()
+        loss = seg_loss + score_loss * 0.05
+
+        self.iou = iou
+        return loss
 
     def define_loss(self):
         self.G_seg_loss = DiceLoss(
@@ -143,6 +163,8 @@ class ModelSeg(ModelBase):
         self.img = data["img"].to(self.device)
         self.box = data["box"].to(self.device)
         self.label = data["label"].to(self.device)
+        # self.mask = data["mask"].to(self.device)
+        # self.input_point = data["input_point"].to(self.device)
 
     def netG_forward(self):
         boxes_np = self.box.detach().cpu().numpy()
