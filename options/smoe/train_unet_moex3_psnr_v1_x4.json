@@ -1,7 +1,7 @@
 {
   "task": "moex3_sr_plain_v4_x4_medical_mix_act_gelu" 
   , "model": "plain" // "gan"
-  , "gpu_ids": [0,1,2,3]
+  , "gpu_ids": [0,1]
   , "dist": true
   
   , "scale": 4       // broadcast to "netG" if SISR
@@ -66,7 +66,7 @@
         "model_channels": 64,
         "num_res_blocks": 8,
         "attention_resolutions": [16,8,4],
-        "dropout": 0.2,
+        "dropout": 0.0,
         "channel_mult": [2,4,8],
         "conv_resample": false,
         "dims":2,
@@ -90,20 +90,20 @@
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-5            // learning rate
+        , "G_optimizer_lr": 1e-4            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR"
         , "G_scheduler_T_max": 10000
         , "G_scheduler_eta_min": 1e-7
-        , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
+        , "G_scheduler_milestones": [20000, 40000, 60000, 80000, 100000, 200000]
         , "G_scheduler_gamma": 0.5
     
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 2000           // for testing
+        , "checkpoint_test": 5000           // for testing
         , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 250           // for print
+        , "checkpoint_print": 500           // for print
       }
 }
