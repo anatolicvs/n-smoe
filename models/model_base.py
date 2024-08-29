@@ -13,11 +13,13 @@ class ModelBase(ABC):
     def __init__(self, opt: dict) -> None:
         self.opt = opt
         self.save_dir = opt["path"]["models"]
-        self.device = torch.device(
-            f"cuda:{opt['rank']}"
-            if opt["dist"]
-            else "cuda" if torch.cuda.is_available() else "cpu"
-        )
+
+        if opt["dist"]:
+            local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
+            self.device = torch.device(f"cuda:{local_rank}")
+        else:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.is_train = opt["is_train"]
         self.schedulers = []
 
@@ -96,8 +98,9 @@ class ModelBase(ABC):
     def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
         if self.opt["dist"]:
+            local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
             network = DistributedDataParallel(
-                network, device_ids=[self.opt["rank"]], output_device=self.opt["rank"]
+                network, device_ids=[local_rank], output_device=local_rank
             )
             if self.opt.get("use_static_graph", False):
                 self._set_static_graph(network)

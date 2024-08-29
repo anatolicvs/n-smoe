@@ -84,7 +84,6 @@ def initialize_distributed(opt):
         opt["rank"], opt["world_size"] = 0, 1
     return opt
 
-
 def synchronize():
     if dist.is_initialized():
         dist.barrier()
@@ -360,7 +359,7 @@ def main(json_path="options/"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
-                  
+
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
 
