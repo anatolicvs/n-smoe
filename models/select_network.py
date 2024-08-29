@@ -278,7 +278,7 @@ def define_G(opt):
             use_checkpoint=opt_net["use_checkpoint"],  # True,
             use_fp16=opt_net["use_fp16"],  # False,
             num_heads=opt_net["num_heads"],  # 4,
-            num_head_channels=opt_net["num_head_channels"],  # 8,
+            # num_head_channels=opt_net["num_head_channels"],  # 8,
             resblock_updown=opt_net["resblock_updown"],  # False,
             num_groups=opt_net["num_groups"],  # 32,
             resample_2d=opt_net["resample_2d"],  # True,

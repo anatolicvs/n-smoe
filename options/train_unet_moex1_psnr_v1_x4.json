@@ -37,7 +37,7 @@
           , "H_size": 220                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
           "name": "test_dataset"            
@@ -77,7 +77,7 @@
     
         , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
         , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
-        ,"resizer_num_layers": 2
+        ,"resizer_num_layers": 3
         ,"resizer_avg_pool": false
       
         , "init_type": "default"         

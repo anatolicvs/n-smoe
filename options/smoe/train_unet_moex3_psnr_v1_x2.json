@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_plain_v2_x2_medical_mix_act_gelu" 
+    "task": "moex3_sr_plain_v3_x2_medical_mix_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -65,22 +65,21 @@
           "model_channels": 64,
           "num_res_blocks": 8,
           "attention_resolutions": [16,8,4],
-          "dropout": 0.1,
-          "num_groups": 16,
-          "num_heads": 4,
-          "num_head_channels": 16,
-          "use_new_attention_order": true,
-          "use_checkpoint": true,
-          "use_fp16": false,
-          "resblock_updown": false,
+          "dropout": 0.2,
           "channel_mult": [2,4,8],
           "conv_resample": false,
+          "dims":2,
+          "use_checkpoint": true,
+          "use_fp16": false,
+          "num_heads": 32,
+          "resblock_updown": false,
+          "num_groups": 32,
           "resample_2d": false,
-          "attention_type": "cross_attention",
-          "activation": "GELU",
-          "rope_theta": 10000.0,
           "resizer_num_layers": 3,
           "resizer_avg_pool": false,
+          "activation": "GELU",
+          "rope_theta": 10000.0,
+          "attention_type": "cross_attention",
           "init_type": "default"
         }
 
@@ -93,7 +92,7 @@
         , "G_optimizer_lr": 1e-5            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
-        , "G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_type": "MultiStepLR"
         , "G_scheduler_T_max": 10000
         , "G_scheduler_eta_min": 1e-7
         , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
