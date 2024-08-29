@@ -321,11 +321,11 @@ def main(json_path="options/"):
             if current_step % test_interval == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
+                gpu_psnr_list = []
+
                 try:
                     for test_data in test_loader:
                         if test_data is None:
-                            if opt["rank"] == 0:
-                                logger.warning("Test data is None, skipping...")
                             continue
 
                         image_name_ext = os.path.basename(test_data["L_path"][0])
@@ -341,23 +341,26 @@ def main(json_path="options/"):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        if opt["rank"] == 0:
-                            logger.info(
-                                f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
-                            )
+                        gpu_psnr_list.append((opt['rank'], image_name_ext, current_psnr))
+
+                        logger.info(
+                            f"GPU {opt['rank']} -> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+                        )
 
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    if local_count > 0:
-                        avg_psnr = local_psnr_sum / local_count
-                    else:
-                        avg_psnr = 0.0
+                    gathered_psnr_list = [None for _ in range(opt['world_size'])]
+                    dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
 
-                    if opt["rank"] == 0:
+                    if opt['rank'] == 0:
+                        all_psnrs = [psnr for gpu_list in gathered_psnr_list for _, _, psnr in gpu_list]
+                        avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
+
                         logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
+
                 except Exception as e:
-                    if opt["rank"] == 0:
+                    if opt['rank'] == 0:
                         logger.error(f"Error during testing: {e}")
 
         if opt["rank"] == 0:
