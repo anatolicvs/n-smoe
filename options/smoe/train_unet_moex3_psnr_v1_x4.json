@@ -1,5 +1,5 @@
 {
-  "task": "moex3_sr_plain_v3_x4_medical_mix_act_gelu" 
+  "task": "moex3_sr_plain_v4_x4_medical_mix_act_gelu" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -76,7 +76,7 @@
         "resblock_updown": false,
         "num_groups": 32,
         "resample_2d": false,
-        "resizer_num_layers": 3,
+        "resizer_num_layers": 2,
         "resizer_avg_pool": false,
         "activation": "GELU",
         "rope_theta": 10000.0,
@@ -90,7 +90,7 @@
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-4            // learning rate
+        , "G_optimizer_lr": 1e-5            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR"

@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_plain_v3_x2_medical_mix_act_gelu" 
+    "task": "moex3_sr_plain_v4_x2_medical_mix_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -75,7 +75,7 @@
           "resblock_updown": false,
           "num_groups": 32,
           "resample_2d": false,
-          "resizer_num_layers": 3,
+          "resizer_num_layers": 2,
           "resizer_avg_pool": false,
           "activation": "GELU",
           "rope_theta": 10000.0,
