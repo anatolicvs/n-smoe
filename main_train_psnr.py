@@ -334,7 +334,7 @@ def main(json_path="options/"):
                             continue
 
                         synchronize()
-                        
+
                         image_name_ext = os.path.basename(test_data["L_path"][0])
 
                         model.feed_data(test_data)
@@ -356,31 +356,13 @@ def main(json_path="options/"):
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    if opt["dist"] and dist.is_initialized():
-                        synchronize()
-                        local_psnr_sum_tensor = torch.tensor(local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}"))
-                        local_count_tensor = torch.tensor(local_count, device=torch.device(f"cuda:{opt['rank']}"))
-                        dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
-                        dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
-                        synchronize()
-
-                        if local_count_tensor.item() > 0:
-                            global_avg_psnr = local_psnr_sum_tensor.item() / local_count_tensor.item()
-                        else:
-                            global_avg_psnr = 0.0
-                            if opt["rank"] == 0:
-                                logger.warning("One or more ranks had no valid data, leading to a PSNR of 0.0")
-
-                        if opt["rank"] == 0:
-                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>")
+                    if local_count > 0:
+                        avg_psnr = local_psnr_sum / local_count
                     else:
-                        if local_count > 0:
-                            avg_psnr = local_psnr_sum / local_count
-                        else:
-                            avg_psnr = 0.0
+                        avg_psnr = 0.0
 
-                        if opt["rank"] == 0:
-                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
+                    if opt["rank"] == 0:
+                        logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
