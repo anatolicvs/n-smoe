@@ -224,8 +224,6 @@ def main(json_path="options/"):
         )
         logger = setup_logging(opt)
 
-    synchronize()
-
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
         net_type="G",
@@ -269,7 +267,6 @@ def main(json_path="options/"):
 
     if opt["dist"]:
         train_loader, test_loader = build_loaders(opt, logger)
-        synchronize()
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
@@ -317,7 +314,6 @@ def main(json_path="options/"):
                 try:
                     if opt["rank"] == 0:
                         logger.info("Saving the model.")
-                        synchronize()
                         model.save(current_step)
                 except Exception as e:
                     if opt["rank"] == 0:
@@ -332,8 +328,6 @@ def main(json_path="options/"):
                             if opt["rank"] == 0:
                                 logger.warning("Test data is None, skipping...")
                             continue
-
-                        synchronize()
 
                         image_name_ext = os.path.basename(test_data["L_path"][0])
 
@@ -366,9 +360,7 @@ def main(json_path="options/"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
-                finally:
-                    synchronize()
-
+                  
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
 

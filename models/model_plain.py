@@ -150,19 +150,20 @@ class ModelPlain(ModelBase):
             self.schedulers.append(
                 lr_scheduler.CosineAnnealingLR(
                     self.G_optimizer,
-                    T_max=self.opt_train["G_scheduler_T_max"],
-                    eta_min=self.opt_train["G_scheduler_eta_min"],
+                    T_max=self.opt_train.get("G_scheduler_T_max", 1000),
+                    eta_min=self.opt_train.get("G_scheduler_eta_min", 0),
                 )
             )
+
         elif g_scheduler_type == "ReduceLROnPlateau":
             self.schedulers.append(
                 lr_scheduler.ReduceLROnPlateau(
                     self.G_optimizer,
                     mode="min",
-                    patience=self.opt_train["G_scheduler_lr_patience"],
+                    patience=self.opt_train.get("G_scheduler_patience", 1000),
                     factor=0.1,
                     verbose=True,
-                    min_lr=self.opt_train["G_scheduler_lr_min"],
+                    min_lr= self.opt_train.get("G_scheduler_lr_min", 0),
                 )
             )
         else:
