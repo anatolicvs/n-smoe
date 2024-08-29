@@ -65,7 +65,7 @@
         , "model_channels": 96
         , "num_res_blocks": 8
         , "attention_resolutions": [16, 8, 4]
-        , "dropout": 0.0
+        , "dropout": 0.1
         , "num_groups": 8
         , "num_heads" : 32
         , "num_head_channels": 32
