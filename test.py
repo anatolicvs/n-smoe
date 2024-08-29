@@ -305,7 +305,7 @@ if __name__ == "__main__":
         resblock_updown=False,
         num_groups=64,
         resample_2d=False,
-        scale_factor=1,
+        scale_factor=2,
         resizer_num_layers=4,
         resizer_avg_pool=False,
         activation="GELU",
