@@ -78,10 +78,16 @@ if [ ! -w "$OUTPUT_DIR" ] || [ ! -w "$ERROR_DIR" ]; then
 fi
 
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
+mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp directory"; exit 1; }
 
 PARTITION="c23g"
 
-JOB_SCRIPT=$(mktemp)
+JOB_SCRIPT=$(mktemp /home/p0021791/tmp/job_script.XXXXXX)
+if [ ! -f "$JOB_SCRIPT" ]; then
+    echo "Failed to create a temporary job script file." >&2
+    exit 1
+fi
+
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
@@ -101,7 +107,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 
 echo "Starting job at: \$(date)"
 nvidia-smi
-echo "GPUs available: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
+echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
 export TORCH_NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
@@ -125,6 +131,8 @@ fi
 
 echo "Job completed at: \$(date)"
 EOT
+
+chmod +x "$JOB_SCRIPT"
 
 job_id=$(sbatch "$JOB_SCRIPT" | awk '{print $4}')
 
