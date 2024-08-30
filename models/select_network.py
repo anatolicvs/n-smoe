@@ -440,6 +440,19 @@ def define_G(opt):
 
         netG = LFT(opt_net)
 
+    elif net_type == "edsr":
+        from models.network_edsr import EDSR as net
+
+        netG = net(
+            num_in_ch=opt_net["in_nc"],
+            num_out_ch=opt_net["out_nc"],
+            num_feat=opt_net["nf"],
+            num_block=opt_net["nb"],
+            upscale=opt_net["scale"],
+            res_scale=opt_net["res_scale"],
+            img_range=opt_net["img_range"],
+        )
+
     # ----------------------------------------
     # Segment Anything MedSam
     # ----------------------------------------
