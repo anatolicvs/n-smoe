@@ -54,7 +54,7 @@
           , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
           , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 1 
+          , "dataloader_batch_size": 2 
           }
       }
 
