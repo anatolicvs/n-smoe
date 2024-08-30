@@ -35,9 +35,7 @@ def set_seed(seed):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-
 set_seed(2024)
-
 
 def setup_logging(opt):
     if opt["rank"] == 0:
@@ -86,7 +84,6 @@ def initialize_distributed(opt):
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
-
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -321,7 +318,6 @@ def main(json_path="options/"):
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
                 gpu_psnr_list = []
-
                 try:
                     for test_data in test_loader:
                         if test_data is None:
@@ -349,11 +345,18 @@ def main(json_path="options/"):
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
+                    max_len = max(len(gpu_psnr_list) for _ in range(opt['world_size']))
+
+                    for _ in range(max_len - len(gpu_psnr_list)):
+                        gpu_psnr_list.append((opt['rank'], "padding", 0.0))
+
+                    synchronize()
+
                     gathered_psnr_list = [None for _ in range(opt['world_size'])]
                     dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
 
                     if opt['rank'] == 0:
-                        all_psnrs = [psnr for gpu_list in gathered_psnr_list for _, _, psnr in gpu_list]
+                        all_psnrs = [psnr for gpu_list in gathered_psnr_list for _, image_name, psnr in gpu_list if image_name != "padding"]
                         avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
 
                         logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
