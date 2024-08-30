@@ -178,6 +178,7 @@ def build_loaders(opt, logger=None):
 
         elif phase == "test":
             log_stats(phase, dataset, batch_size, logger)
+
             # sampler = (
             #     DistributedSampler(
             #         dataset,
@@ -189,6 +190,7 @@ def build_loaders(opt, logger=None):
             #     if opt["dist"]
             #     else None
             # )
+
             test_loader = create_loader(
                 dataset,
                 batch_size,
