@@ -108,6 +108,7 @@ export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_TIMEOUT=1200
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
 
 if [ "$USE_APPTAINER" = true ]; then
   if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then

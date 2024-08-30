@@ -23,6 +23,9 @@ from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 import random
 
+def synchronize():
+    if dist.is_initialized():
+        dist.barrier()
 
 def set_seed(seed):
     random.seed(seed)
@@ -72,7 +75,6 @@ def setup_logging(opt):
 
     return logger
 
-
 def initialize_distributed(opt):
     if opt["dist"]:
         init_dist("pytorch")
@@ -80,13 +82,10 @@ def initialize_distributed(opt):
         opt["rank"] = dist.get_rank()
         local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
         torch.cuda.set_device(local_rank)
+        synchronize()
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
-
-def synchronize():
-    if dist.is_initialized():
-        dist.barrier()
 
 
 def build_loaders(opt, logger=None):
