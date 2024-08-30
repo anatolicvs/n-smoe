@@ -3,6 +3,7 @@ import argparse
 import logging
 import math
 import os
+from pickle import NONE
 import sys
 from typing import Any, Dict, Optional, Tuple
 
@@ -177,23 +178,23 @@ def build_loaders(opt, logger=None):
 
         elif phase == "test":
             log_stats(phase, dataset, batch_size, logger)
-            sampler = (
-                DistributedSampler(
-                    dataset,
-                    num_replicas=opt["world_size"],
-                    rank=opt["rank"],
-                    shuffle=False,
-                    drop_last=False,
-                )
-                if opt["dist"]
-                else None
-            )
+            # sampler = (
+            #     DistributedSampler(
+            #         dataset,
+            #         num_replicas=opt["world_size"],
+            #         rank=opt["rank"],
+            #         shuffle=False,
+            #         drop_last=False,
+            #     )
+            #     if opt["dist"]
+            #     else None
+            # )
             test_loader = create_loader(
                 dataset,
                 batch_size,
                 shuffle=False,
                 workers=dataset_opt["dataloader_num_workers"],
-                sampler=sampler,
+                sampler=None,
                 drop_last=False,
                 pin_memory=torch.cuda.is_available(),
             )
@@ -323,7 +324,7 @@ def main(json_path="options/"):
             if current_step % test_interval == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
-                gpu_psnr_list = []
+                # gpu_psnr_list = []
                 try:
                     for test_data in test_loader:
                         if test_data is None:
@@ -342,9 +343,9 @@ def main(json_path="options/"):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        gpu_psnr_list.append(
-                            (opt["rank"], image_name_ext, current_psnr)
-                        )
+                        # gpu_psnr_list.append(
+                        #     (opt["rank"], image_name_ext, current_psnr)
+                        # )
 
                         logger.info(
                             f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
@@ -353,28 +354,30 @@ def main(json_path="options/"):
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    max_len = max(len(gpu_psnr_list) for _ in range(opt["world_size"]))
+                    avg_psr = local_psnr_sum / local_count
+                    logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>")
 
-                    for _ in range(max_len - len(gpu_psnr_list)):
-                        gpu_psnr_list.append((opt["rank"], "padding", 0.0))
+                    # max_len = max(len(gpu_psnr_list) for _ in range(opt["world_size"]))
+                    # for _ in range(max_len - len(gpu_psnr_list)):
+                    #     gpu_psnr_list.append((opt["rank"], "padding", 0.0))
 
-                    synchronize()
+                    # synchronize()
 
-                    gathered_psnr_list = [None for _ in range(opt["world_size"])]
-                    dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
+                    # gathered_psnr_list = [None for _ in range(opt["world_size"])]
+                    # dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
 
-                    if opt["rank"] == 0:
-                        all_psnrs = [
-                            psnr
-                            for gpu_list in gathered_psnr_list
-                            for _, image_name, psnr in gpu_list
-                            if image_name != "padding"
-                        ]
-                        avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
+                    # if opt["rank"] == 0:
+                    #     all_psnrs = [
+                    #         psnr
+                    #         for gpu_list in gathered_psnr_list
+                    #         for _, image_name, psnr in gpu_list
+                    #         if image_name != "padding"
+                    #     ]
+                    #     avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
 
-                        logger.info(
-                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                        )
+                    #     logger.info(
+                    #         f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
+                    #     )
 
                 except Exception as e:
                     if opt["rank"] == 0:
