@@ -101,7 +101,7 @@ class ModelBase(ABC):
             local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
             network = DistributedDataParallel(
                 network, device_ids=[local_rank], output_device=local_rank,
-                find_unused_parameters=False,
+                find_unused_parameters=True,
             )
             if self.opt.get("use_static_graph", False):
                 self._set_static_graph(network)

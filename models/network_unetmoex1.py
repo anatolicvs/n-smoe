@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Any, Generic, Optional, Tuple, TypeVar
+from typing import Any, Generic, Optional, Tuple, TypeVar, List
 
 import numpy as np
 import torch
@@ -16,7 +16,6 @@ DEFAULT_NUM_GROUPS = 32
 DEFAULT_KERNEL_SIZE = 3
 DEFAULT_DIMS = 2
 
-
 class Backbone(nn.Module, Generic[T]):
     def __init__(self, cfg: T):
         super().__init__()
@@ -28,7 +27,6 @@ class Backbone(nn.Module, Generic[T]):
     @property
     def d_out(self) -> int:
         raise NotImplementedError
-
 
 class Upsample(nn.Module):
     def __init__(
@@ -63,7 +61,6 @@ class Upsample(nn.Module):
         if self.use_conv:
             x = self.conv(x)
         return x
-
 
 class Downsample(nn.Module):
     def __init__(
@@ -100,7 +97,6 @@ class Downsample(nn.Module):
             x.shape[1] == self.channels
         ), f"Expected {self.channels} channels, got {x.shape[1]}"
         return self.op(x)
-
 
 class AttentionPool2d(nn.Module):
     def __init__(
@@ -145,17 +141,14 @@ class AttentionPool2d(nn.Module):
         )
         return x.squeeze(0)
 
-
 def normalization(channels: int, groups: int) -> GroupNorm32:
     return GroupNorm32(groups, channels)
-
 
 def count_flops_attn(model, _x, y):
     b, c, *spatial = y[0].shape
     num_spatial = int(np.prod(spatial))
     matmul_ops = 2 * b * (num_spatial**2) * c
-    model.total_ops += torch.DoubleTensor([matmul_ops])
-
+    model.total_ops += torch.tensor([matmul_ops], dtype=torch.float64)
 
 class QKVAttentionLegacy(nn.Module):
     def __init__(self, n_heads: int):
@@ -178,7 +171,6 @@ class QKVAttentionLegacy(nn.Module):
     @staticmethod
     def count_flops(model, _x, y):
         return count_flops_attn(model, _x, y)
-
 
 class QKVAttention(nn.Module):
     def __init__(self, n_heads: int):
@@ -208,7 +200,6 @@ class QKVAttention(nn.Module):
     def count_flops(model, _x, y):
         return count_flops_attn(model, _x, y)
 
-
 @dataclass
 class ResBlockConfig:
     channels: int = 3
@@ -224,7 +215,6 @@ class ResBlockConfig:
 
     def __post_init__(self):
         self.out_channels = self.out_channels or self.channels
-
 
 class ResBlock(Backbone[ResBlockConfig]):
     def __init__(self, cfg: ResBlockConfig, activation: nn.Module = nn.GELU()):
@@ -304,7 +294,6 @@ class ResBlock(Backbone[ResBlockConfig]):
     def d_out(self) -> int:
         return self.cfg.out_channels or 0
 
-
 @dataclass
 class AttentionBlockConfig:
     channels: int = 3
@@ -314,10 +303,10 @@ class AttentionBlockConfig:
     use_new_attention_order: bool = False
     num_groups: int = DEFAULT_NUM_GROUPS
 
-
 class AttentionBlock(Backbone[AttentionBlockConfig]):
     def __init__(self, cfg: AttentionBlockConfig):
         super().__init__(cfg)
+        self.use_checkpoint = cfg.use_checkpoint
         if cfg.num_head_channels == -1:
             self.num_heads = cfg.num_heads
         else:
@@ -336,7 +325,7 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         self.proj_out = zero_module(conv_nd(1, cfg.channels, cfg.channels, 1))
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return checkpoint(self._forward, (x,), self.parameters(), True)
+        return checkpoint(self._forward, (x,), self.parameters(), self.use_checkpoint)
 
     def _forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, *spatial = x.shape
@@ -345,7 +334,6 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         h = self.attention(qkv)
         h = self.proj_out(h)
         return (x + h).reshape(b, c, *spatial)
-
 
 class MullerResizer(nn.Module):
     def __init__(
@@ -435,14 +423,13 @@ class MullerResizer(nn.Module):
 
         return net
 
-
 @dataclass
 class EncoderConfig:
     model_channels: int
     num_res_blocks: int
-    attention_resolutions: Optional[list] = None
+    attention_resolutions: Optional[List[int]] = None
     dropout: float = 0
-    channel_mult: tuple = (1, 2, 4, 8)
+    channel_mult: Tuple[int, ...] = (1, 2, 4, 8)
     conv_resample: bool = True
     dims: int = DEFAULT_DIMS
     use_checkpoint: bool = False
@@ -460,7 +447,6 @@ class EncoderConfig:
     resizer_num_layers: int = 2
     resizer_avg_pool: bool = False
     activation: str = "GELU"
-
 
 class Encoder(Backbone[EncoderConfig]):
     def __init__(self, cfg: EncoderConfig, phw: int, d_in: int, d_out: int):
@@ -495,7 +481,7 @@ class Encoder(Backbone[EncoderConfig]):
 
         for level, mult in enumerate(cfg.channel_mult):
             for _ in range(cfg.num_res_blocks):
-                layers: list[Any] = [
+                layers: List[Any] = [
                     ResBlock(
                         ResBlockConfig(
                             channels=ch,
@@ -642,7 +628,10 @@ class Encoder(Backbone[EncoderConfig]):
         target_h = int(H * scale_factor)
         target_w = int(W * scale_factor)
         target_size = (target_h, target_w)
-        x_resized = self.resizer(x, target_size)
+        try:
+            x_resized = self.resizer(x, target_size)
+        except Exception as e:
+            raise RuntimeError(f"Error during interpolation: {e}")
         return x_resized
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -658,22 +647,13 @@ class Encoder(Backbone[EncoderConfig]):
             h = self.gap(h)
             N = h.shape[0]
             h = h.reshape(N, -1)
-
             gaussians = self.out(h)
-            gaussians = rearrange(
-                gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
-            )
-
-            return gaussians
         else:
             h = h.type(x.dtype)
-
             gaussians = self.out(h)
-            gaussians = rearrange(
-                gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
-            )
 
-            return gaussians
+        gaussians = rearrange(gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent)
+        return gaussians
 
     @property
     def d_out(self) -> int:
@@ -683,19 +663,16 @@ class Encoder(Backbone[EncoderConfig]):
     def scale_factor(self) -> int:
         return self.cfg.scale_factor
 
-
 @dataclass
 class MoEConfig:
     kernel: int = 4
     sharpening_factor: float = 1.0
-
 
 @dataclass
 class Gaussians:
     mu: torch.Tensor
     sigma: torch.Tensor
     w: torch.Tensor
-
 
 class MoE(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
@@ -790,7 +767,6 @@ class MoE(Backbone[MoEConfig]):
 
         return y_hat
 
-
 @dataclass
 class AutoencoderConfig:
     EncoderConfig: EncoderConfig
@@ -799,7 +775,6 @@ class AutoencoderConfig:
     d_out: int
     phw: int = 32
     overlap: int = 24
-
 
 class Autoencoder(Backbone[AutoencoderConfig]):
     def __init__(self, cfg: AutoencoderConfig):
@@ -883,19 +858,29 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         b = torch.split(x, cs)
 
-        enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+        try:
+            enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+        except Exception as e:
+            raise RuntimeError(f"Error during encoding: {e}")
 
         B, C, H, W = s
         sp = self.phw * self.encoder.scale_factor
 
-        dec = torch.cat(
-            [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
-        )
+        try:
+            dec = torch.cat(
+                [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error during decoding: {e}")
 
-        y = self.reconstruct(
-            dec,
-            (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
-            sp,
-            self.overlap * self.encoder.scale_factor,
-        )
+        try:
+            y = self.reconstruct(
+                dec,
+                (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
+                sp,
+                self.overlap * self.encoder.scale_factor,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Error during reconstruction: {e}")
+
         return y

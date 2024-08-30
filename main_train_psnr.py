@@ -179,18 +179,6 @@ def build_loaders(opt, logger=None):
         elif phase == "test":
             log_stats(phase, dataset, batch_size, logger)
 
-            # sampler = (
-            #     DistributedSampler(
-            #         dataset,
-            #         num_replicas=opt["world_size"],
-            #         rank=opt["rank"],
-            #         shuffle=False,
-            #         drop_last=False,
-            #     )
-            #     if opt["dist"]
-            #     else None
-            # )
-
             test_loader = create_loader(
                 dataset,
                 batch_size,
@@ -326,7 +314,6 @@ def main(json_path="options/"):
             if current_step % test_interval == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
-                # gpu_psnr_list = []
                 try:
                     for test_data in test_loader:
                         if test_data is None:
@@ -359,31 +346,11 @@ def main(json_path="options/"):
                     avg_psr = local_psnr_sum / local_count
                     logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>")
 
-                    # max_len = max(len(gpu_psnr_list) for _ in range(opt["world_size"]))
-                    # for _ in range(max_len - len(gpu_psnr_list)):
-                    #     gpu_psnr_list.append((opt["rank"], "padding", 0.0))
-
-                    # synchronize()
-
-                    # gathered_psnr_list = [None for _ in range(opt["world_size"])]
-                    # dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
-
-                    # if opt["rank"] == 0:
-                    #     all_psnrs = [
-                    #         psnr
-                    #         for gpu_list in gathered_psnr_list
-                    #         for _, image_name, psnr in gpu_list
-                    #         if image_name != "padding"
-                    #     ]
-                    #     avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
-
-                    #     logger.info(
-                    #         f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                    #     )
-
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
+                finally:
+                    synchronize()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
