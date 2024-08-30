@@ -349,8 +349,8 @@ def main(json_path="options/"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
-                finally:
-                    synchronize()
+                # finally:
+                #     synchronize()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
