@@ -3,7 +3,6 @@ import argparse
 import logging
 import math
 import os
-import random
 import sys
 from typing import Any, Dict, Optional, Tuple
 
@@ -22,7 +21,11 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
+import random
 
+def synchronize():
+    if dist.is_initialized():
+        dist.barrier()
 
 def set_seed(seed):
     random.seed(seed)
@@ -32,9 +35,7 @@ def set_seed(seed):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-
 set_seed(2024)
-
 
 def setup_logging(opt):
     if opt["rank"] == 0:
@@ -72,7 +73,6 @@ def setup_logging(opt):
 
     return logger
 
-
 def initialize_distributed(opt):
     if opt["dist"]:
         init_dist("pytorch")
@@ -80,15 +80,10 @@ def initialize_distributed(opt):
         opt["rank"] = dist.get_rank()
         local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
         torch.cuda.set_device(local_rank)
+        synchronize()
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
-
-
-def synchronize():
-    if dist.is_initialized():
-        dist.barrier()
-
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -206,7 +201,7 @@ def build_loaders(opt, logger=None):
     return train_loader, test_loader
 
 
-def main(json_path="options/train_unet_moex1_gan_local.json"):
+def main(json_path="options/"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
@@ -223,8 +218,6 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
             [path for key, path in opt["path"].items() if "pretrained" not in key]
         )
         logger = setup_logging(opt)
-
-    synchronize()
 
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
@@ -269,7 +262,6 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
 
     if opt["dist"]:
         train_loader, test_loader = build_loaders(opt, logger)
-        synchronize()
     else:
         train_loader, test_loader = build_loaders(opt, logger)
 
@@ -317,7 +309,6 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                 try:
                     if opt["rank"] == 0:
                         logger.info("Saving the model.")
-                        synchronize()
                         model.save(current_step)
                 except Exception as e:
                     if opt["rank"] == 0:
@@ -326,14 +317,12 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
             if current_step % test_interval == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
+                gpu_psnr_list = []
                 try:
                     for test_data in test_loader:
                         if test_data is None:
-                            if opt["rank"] == 0:
-                                logger.warning("Test data is None, skipping...")
                             continue
-                        synchronize()
-                        
+
                         image_name_ext = os.path.basename(test_data["L_path"][0])
 
                         model.feed_data(test_data)
@@ -347,44 +336,34 @@ def main(json_path="options/train_unet_moex1_gan_local.json"):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        if opt["rank"] == 0:
-                            logger.info(
-                                f"{local_count:->4d}--> {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
-                            )
+                        gpu_psnr_list.append((opt['rank'], image_name_ext, current_psnr))
+
+                        logger.info(
+                            f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+                        )
 
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    if opt["dist"] and dist.is_initialized():
-                        synchronize()
-                        local_psnr_sum_tensor = torch.tensor(local_psnr_sum, device=torch.device(f"cuda:{opt['rank']}"))
-                        local_count_tensor = torch.tensor(local_count, device=torch.device(f"cuda:{opt['rank']}"))
-                        dist.all_reduce(local_psnr_sum_tensor, op=dist.ReduceOp.SUM)
-                        dist.all_reduce(local_count_tensor, op=dist.ReduceOp.SUM)
-                        synchronize()
+                    max_len = max(len(gpu_psnr_list) for _ in range(opt['world_size']))
 
-                        if local_count_tensor.item() > 0:
-                            global_avg_psnr = local_psnr_sum_tensor.item() / local_count_tensor.item()
-                        else:
-                            global_avg_psnr = 0.0
-                            if opt["rank"] == 0:
-                                logger.warning("One or more ranks had no valid data, leading to a PSNR of 0.0")
+                    for _ in range(max_len - len(gpu_psnr_list)):
+                        gpu_psnr_list.append((opt['rank'], "padding", 0.0))
 
-                        if opt["rank"] == 0:
-                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {global_avg_psnr:.2f} dB>")
-                    else:
-                        if local_count > 0:
-                            avg_psnr = local_psnr_sum / local_count
-                        else:
-                            avg_psnr = 0.0
-
-                        if opt["rank"] == 0:
-                            logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
-                except Exception as e:
-                    if opt["rank"] == 0:
-                        logger.error(f"Error during testing: {e}")
-                finally:
                     synchronize()
+
+                    gathered_psnr_list = [None for _ in range(opt['world_size'])]
+                    dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
+
+                    if opt['rank'] == 0:
+                        all_psnrs = [psnr for gpu_list in gathered_psnr_list for _, image_name, psnr in gpu_list if image_name != "padding"]
+                        avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
+
+                        logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
+
+                except Exception as e:
+                    if opt['rank'] == 0:
+                        logger.error(f"Error during testing: {e}")
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
