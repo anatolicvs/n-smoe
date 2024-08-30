@@ -10,3 +10,6 @@
 [submodule "cvpr/Text-IF"]
         path = cvpr/Text-IF
         url = https://github.com/XunpengYi/Text-IF.git
+[submodule "gmflow"]
+        path = models/gmflow
+        url = https://github.com/haofeixu/gmflow.git

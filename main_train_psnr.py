@@ -23,9 +23,11 @@ from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 import random
 
+
 def synchronize():
     if dist.is_initialized():
         dist.barrier()
+
 
 def set_seed(seed):
     random.seed(seed)
@@ -35,7 +37,9 @@ def set_seed(seed):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
+
 set_seed(2024)
+
 
 def setup_logging(opt):
     if opt["rank"] == 0:
@@ -73,6 +77,7 @@ def setup_logging(opt):
 
     return logger
 
+
 def initialize_distributed(opt):
     if opt["dist"]:
         init_dist("pytorch")
@@ -84,6 +89,7 @@ def initialize_distributed(opt):
     else:
         opt["rank"], opt["world_size"] = 0, 1
     return opt
+
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -336,7 +342,9 @@ def main(json_path="options/"):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        gpu_psnr_list.append((opt['rank'], image_name_ext, current_psnr))
+                        gpu_psnr_list.append(
+                            (opt["rank"], image_name_ext, current_psnr)
+                        )
 
                         logger.info(
                             f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
@@ -345,28 +353,36 @@ def main(json_path="options/"):
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    max_len = max(len(gpu_psnr_list) for _ in range(opt['world_size']))
+                    max_len = max(len(gpu_psnr_list) for _ in range(opt["world_size"]))
 
                     for _ in range(max_len - len(gpu_psnr_list)):
-                        gpu_psnr_list.append((opt['rank'], "padding", 0.0))
+                        gpu_psnr_list.append((opt["rank"], "padding", 0.0))
 
                     synchronize()
 
-                    gathered_psnr_list = [None for _ in range(opt['world_size'])]
+                    gathered_psnr_list = [None for _ in range(opt["world_size"])]
                     dist.all_gather_object(gathered_psnr_list, gpu_psnr_list)
 
-                    if opt['rank'] == 0:
-                        all_psnrs = [psnr for gpu_list in gathered_psnr_list for _, image_name, psnr in gpu_list if image_name != "padding"]
+                    if opt["rank"] == 0:
+                        all_psnrs = [
+                            psnr
+                            for gpu_list in gathered_psnr_list
+                            for _, image_name, psnr in gpu_list
+                            if image_name != "padding"
+                        ]
                         avg_psnr = sum(all_psnrs) / len(all_psnrs) if all_psnrs else 0.0
 
-                        logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>")
+                        logger.info(
+                            f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
+                        )
 
                 except Exception as e:
-                    if opt['rank'] == 0:
+                    if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
+
 
 def cleanup():
     if dist.is_initialized():
