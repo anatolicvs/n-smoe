@@ -1,3 +1,4 @@
+# type: ignore
 import math
 from re import T
 import numpy as np
@@ -12,13 +13,23 @@ from collections import defaultdict
 # from gpu_mem_track import MemTracker
 from einops import rearrange, repeat
 
-from basicsr.archs.vqgan_arch import Encoder, VectorQuantizer, GumbelQuantizer, Generator, ResBlock
-from basicsr.archs.arch_util import flow_warp, resize_flow
-from basicsr.archs.pwcnet_arch import FlowGenerator
-from basicsr.utils import get_root_logger
-from basicsr.utils.registry import ARCH_REGISTRY
+from models.network_vqgan import (
+    Encoder,
+    VectorQuantizer,
+    GumbelQuantizer,
+    Generator,
+    ResBlock,
+)
+from utils_n.network_util import flow_warp, resize_flow
+from models.network_pwcnet import FlowGenerator
+from logging import getLogger
 
-from diffusers.models.attention import  Attention as CrossAttention, FeedForward, AdaLayerNorm
+
+from diffusers.models.attention import (
+    Attention as CrossAttention,
+    FeedForward,
+    AdaLayerNorm,
+)
 
 # gpu_tracker = MemTracker()
 
@@ -32,7 +43,7 @@ def calc_mean_std(feat, eps=1e-5):
             divide-by-zero. Default: 1e-5.
     """
     size = feat.size()
-    assert len(size) == 4, 'The input feature should be 4D tensor.'
+    assert len(size) == 4, "The input feature should be 4D tensor."
     b, c = size[:2]
     feat_var = feat.view(b, c, -1).var(dim=2) + eps
     feat_std = feat_var.sqrt().view(b, c, 1, 1)
@@ -53,8 +64,9 @@ def adaptive_instance_normalization(content_feat, style_feat):
     size = content_feat.size()
     style_mean, style_std = calc_mean_std(style_feat)
     content_mean, content_std = calc_mean_std(content_feat)
-    normalized_feat = (content_feat - content_mean.expand(size)
-                       ) / content_std.expand(size)
+    normalized_feat = (content_feat - content_mean.expand(size)) / content_std.expand(
+        size
+    )
     return normalized_feat * style_std.expand(size) + style_mean.expand(size)
 
 
@@ -64,7 +76,9 @@ class PositionEmbeddingSine(nn.Module):
     used by the Attention is all you need paper, generalized to work on images.
     """
 
-    def __init__(self, num_pos_feats=64, temperature=10000, normalize=False, scale=None):
+    def __init__(
+        self, num_pos_feats=64, temperature=10000, normalize=False, scale=None
+    ):
         super().__init__()
         self.num_pos_feats = num_pos_feats
         self.temperature = temperature
@@ -77,8 +91,9 @@ class PositionEmbeddingSine(nn.Module):
 
     def forward(self, x, mask=None):
         if mask is None:
-            mask = torch.zeros((x.size(0), x.size(2), x.size(3)),
-                               device=x.device, dtype=torch.bool)
+            mask = torch.zeros(
+                (x.size(0), x.size(2), x.size(3)), device=x.device, dtype=torch.bool
+            )
         not_mask = ~mask
         y_embed = not_mask.cumsum(1, dtype=torch.float32)
         x_embed = not_mask.cumsum(2, dtype=torch.float32)
@@ -87,8 +102,7 @@ class PositionEmbeddingSine(nn.Module):
             y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
             x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
-        dim_t = torch.arange(self.num_pos_feats,
-                             dtype=torch.float32, device=x.device)
+        dim_t = torch.arange(self.num_pos_feats, dtype=torch.float32, device=x.device)
         dim_t = self.temperature ** (2 * (dim_t // 2) / self.num_pos_feats)
 
         pos_x = x_embed[:, :, :, None] / dim_t
@@ -111,14 +125,15 @@ def _get_activation_fn(activation):
         return F.gelu
     if activation == "glu":
         return F.glu
-    raise RuntimeError(F"activation should be relu/gelu, not {activation}.")
+    raise RuntimeError(f"activation should be relu/gelu, not {activation}.")
 
 
 class TransformerSALayer(nn.Module):
-    def __init__(self, embed_dim, nhead=8, dim_mlp=2048, dropout=0.0, activation="gelu"):
+    def __init__(
+        self, embed_dim, nhead=8, dim_mlp=2048, dropout=0.0, activation="gelu"
+    ):
         super().__init__()
-        self.self_attn = nn.MultiheadAttention(
-            embed_dim, nhead, dropout=dropout)
+        self.self_attn = nn.MultiheadAttention(embed_dim, nhead, dropout=dropout)
         # Implementation of Feedforward model - MLP
         self.linear1 = nn.Linear(embed_dim, dim_mlp)
         self.dropout = nn.Dropout(dropout)
@@ -134,16 +149,20 @@ class TransformerSALayer(nn.Module):
     def with_pos_embed(self, tensor, pos: Optional[Tensor]):
         return tensor if pos is None else tensor + pos
 
-    def forward(self, tgt,
-                tgt_mask: Optional[Tensor] = None,
-                tgt_key_padding_mask: Optional[Tensor] = None,
-                query_pos: Optional[Tensor] = None):
+    def forward(
+        self,
+        tgt,
+        tgt_mask: Optional[Tensor] = None,
+        tgt_key_padding_mask: Optional[Tensor] = None,
+        query_pos: Optional[Tensor] = None,
+    ):
 
         # self attention
         tgt2 = self.norm1(tgt)
         q = k = self.with_pos_embed(tgt2, query_pos)
-        tgt2 = self.self_attn(q, k, value=tgt2, attn_mask=tgt_mask,
-                              key_padding_mask=tgt_key_padding_mask)[0]
+        tgt2 = self.self_attn(
+            q, k, value=tgt2, attn_mask=tgt_mask, key_padding_mask=tgt_key_padding_mask
+        )[0]
         tgt = tgt + self.dropout1(tgt2)
 
         # ffn
@@ -156,17 +175,19 @@ class TransformerSALayer(nn.Module):
 class Fuse_sft_block(nn.Module):
     def __init__(self, in_ch, out_ch):
         super().__init__()
-        self.encode_enc = ResBlock(2*in_ch, out_ch)
+        self.encode_enc = ResBlock(2 * in_ch, out_ch)
 
         self.scale = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2, True),
-            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1))
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+        )
 
         self.shift = nn.Sequential(
             nn.Conv2d(in_ch, out_ch, kernel_size=3, padding=1),
             nn.LeakyReLU(0.2, True),
-            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1))
+            nn.Conv2d(out_ch, out_ch, kernel_size=3, padding=1),
+        )
 
         self.apply(self._init_weights)
 
@@ -206,8 +227,7 @@ class CrossFrameFusionLayer(nn.Module):
         self.norm2 = nn.LayerNorm(dim)
 
         # Feed-forward
-        self.ff = FeedForward(dim, dropout=dropout,
-                              activation_fn=activation_fn)
+        self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn)
 
         # Cross Frame Attention
         self.attn = CrossAttention(
@@ -283,8 +303,11 @@ class BasicTransformerBlock(nn.Module):
             cross_attention_dim=cross_attention_dim if only_cross_attention else None,
             upcast_attention=upcast_attention,
         )
-        self.norm1 = AdaLayerNorm(
-            dim, num_embeds_ada_norm) if self.use_ada_layer_norm else nn.LayerNorm(dim)
+        self.norm1 = (
+            AdaLayerNorm(dim, num_embeds_ada_norm)
+            if self.use_ada_layer_norm
+            else nn.LayerNorm(dim)
+        )
 
         # # Cross-Attn
         # if cross_attention_dim is not None:
@@ -306,8 +329,7 @@ class BasicTransformerBlock(nn.Module):
         #     self.norm2 = None
 
         # Feed-forward
-        self.ff = FeedForward(dim, dropout=dropout,
-                              activation_fn=activation_fn)
+        self.ff = FeedForward(dim, dropout=dropout, activation_fn=activation_fn)
         self.norm3 = nn.LayerNorm(dim)
 
         # Temp-Attn
@@ -320,10 +342,15 @@ class BasicTransformerBlock(nn.Module):
             upcast_attention=upcast_attention,
         )
         nn.init.zeros_(self.attn_temp.to_out[0].weight.data)
-        self.norm_temp = AdaLayerNorm(
-            dim, num_embeds_ada_norm) if self.use_ada_layer_norm else nn.LayerNorm(dim)
+        self.norm_temp = (
+            AdaLayerNorm(dim, num_embeds_ada_norm)
+            if self.use_ada_layer_norm
+            else nn.LayerNorm(dim)
+        )
 
-    def set_use_memory_efficient_attention_xformers(self, use_memory_efficient_attention_xformers: bool):
+    def set_use_memory_efficient_attention_xformers(
+        self, use_memory_efficient_attention_xformers: bool
+    ):
         if not is_xformers_available():
             print("Here is how to install it")
             raise ModuleNotFoundError(
@@ -346,26 +373,48 @@ class BasicTransformerBlock(nn.Module):
                 )
             except Exception as e:
                 raise e
-            self.attn1._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
+            self.attn1._use_memory_efficient_attention_xformers = (
+                use_memory_efficient_attention_xformers
+            )
             if self.attn2 is not None:
-                self.attn2._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
+                self.attn2._use_memory_efficient_attention_xformers = (
+                    use_memory_efficient_attention_xformers
+                )
             # self.attn_temp._use_memory_efficient_attention_xformers = use_memory_efficient_attention_xformers
 
-    def forward(self, hidden_states, encoder_hidden_states=None, timestep=None, attention_mask=None, video_length=None):
+    def forward(
+        self,
+        hidden_states,
+        encoder_hidden_states=None,
+        timestep=None,
+        attention_mask=None,
+        video_length=None,
+    ):
         # SparseCausal-Attention
         norm_hidden_states = (
-            self.norm1(hidden_states, timestep) if self.use_ada_layer_norm else self.norm1(
-                hidden_states)
+            self.norm1(hidden_states, timestep)
+            if self.use_ada_layer_norm
+            else self.norm1(hidden_states)
         )
 
         if self.only_cross_attention:
             hidden_states = (
-                self.attn1(norm_hidden_states, encoder_hidden_states,
-                           attention_mask=attention_mask) + hidden_states
+                self.attn1(
+                    norm_hidden_states,
+                    encoder_hidden_states,
+                    attention_mask=attention_mask,
+                )
+                + hidden_states
             )
         else:
-            hidden_states = self.attn1(
-                norm_hidden_states, attention_mask=attention_mask, video_length=video_length) + hidden_states
+            hidden_states = (
+                self.attn1(
+                    norm_hidden_states,
+                    attention_mask=attention_mask,
+                    video_length=video_length,
+                )
+                + hidden_states
+            )
 
         # if self.attn2 is not None:
         #     # Cross-Attention
@@ -385,10 +434,12 @@ class BasicTransformerBlock(nn.Module):
         # Temporal-Attention
         d = hidden_states.shape[1]
         hidden_states = rearrange(
-            hidden_states, "(b f) d c -> (b d) f c", f=video_length)
+            hidden_states, "(b f) d c -> (b d) f c", f=video_length
+        )
         norm_hidden_states = (
-            self.norm_temp(hidden_states, timestep) if self.use_ada_layer_norm else self.norm_temp(
-                hidden_states)
+            self.norm_temp(hidden_states, timestep)
+            if self.use_ada_layer_norm
+            else self.norm_temp(hidden_states)
         )
         hidden_states = self.attn_temp(norm_hidden_states) + hidden_states
         hidden_states = rearrange(hidden_states, "(b d) f c -> (b f) d c", d=d)
@@ -397,12 +448,19 @@ class BasicTransformerBlock(nn.Module):
 
 
 class SparseCausalAttention(CrossAttention):
-    def forward(self, hidden_states, encoder_hidden_states=None, attention_mask=None, video_length=None):
+    def forward(
+        self,
+        hidden_states,
+        encoder_hidden_states=None,
+        attention_mask=None,
+        video_length=None,
+    ):
         batch_size, sequence_length, _ = hidden_states.shape
 
         if self.group_norm is not None:
-            hidden_states = self.group_norm(
-                hidden_states.transpose(1, 2)).transpose(1, 2)
+            hidden_states = self.group_norm(hidden_states.transpose(1, 2)).transpose(
+                1, 2
+            )
 
         query = self.to_q(hidden_states)
         dim = query.shape[-1]
@@ -411,7 +469,11 @@ class SparseCausalAttention(CrossAttention):
         if self.added_kv_proj_dim is not None:
             raise NotImplementedError
 
-        encoder_hidden_states = encoder_hidden_states if encoder_hidden_states is not None else hidden_states
+        encoder_hidden_states = (
+            encoder_hidden_states
+            if encoder_hidden_states is not None
+            else hidden_states
+        )
         key = self.to_k(encoder_hidden_states)
         value = self.to_v(encoder_hidden_states)
 
@@ -420,13 +482,13 @@ class SparseCausalAttention(CrossAttention):
 
         # d = h*w
         key = rearrange(key, "(b f) d c -> b f d c", f=video_length)
-        key = torch.cat([key[:, [0] * video_length],
-                        key[:, former_frame_index]], dim=2)
+        key = torch.cat([key[:, [0] * video_length], key[:, former_frame_index]], dim=2)
         key = rearrange(key, "b f d c -> (b f) d c")
 
         value = rearrange(value, "(b f) d c -> b f d c", f=video_length)
-        value = torch.cat([value[:, [0] * video_length],
-                          value[:, former_frame_index]], dim=2)
+        value = torch.cat(
+            [value[:, [0] * video_length], value[:, former_frame_index]], dim=2
+        )
         value = rearrange(value, "b f d c -> (b f) d c")
 
         key = self.reshape_heads_to_batch_dim(key)
@@ -435,24 +497,23 @@ class SparseCausalAttention(CrossAttention):
         if attention_mask is not None:
             if attention_mask.shape[-1] != query.shape[1]:
                 target_length = query.shape[1]
-                attention_mask = F.pad(
-                    attention_mask, (0, target_length), value=0.0)
-                attention_mask = attention_mask.repeat_interleave(
-                    self.heads, dim=0)
+                attention_mask = F.pad(attention_mask, (0, target_length), value=0.0)
+                attention_mask = attention_mask.repeat_interleave(self.heads, dim=0)
 
         # attention, what we cannot get enough of
         if self._use_memory_efficient_attention_xformers:
             hidden_states = self._memory_efficient_attention_xformers(
-                query, key, value, attention_mask)
+                query, key, value, attention_mask
+            )
             # Some versions of xformers return output in fp32, cast it back to the dtype of the input
             hidden_states = hidden_states.to(query.dtype)
         else:
             if self._slice_size is None or query.shape[0] // self._slice_size == 1:
-                hidden_states = self._attention(
-                    query, key, value, attention_mask)
+                hidden_states = self._attention(query, key, value, attention_mask)
             else:
                 hidden_states = self._sliced_attention(
-                    query, key, value, sequence_length, dim, attention_mask)
+                    query, key, value, sequence_length, dim, attention_mask
+                )
 
         # linear proj
         hidden_states = self.to_out[0](hidden_states)
@@ -463,8 +524,9 @@ class SparseCausalAttention(CrossAttention):
 
 
 class KalmanFilter(nn.Module):
-    def __init__(self, emb_dim, num_attention_heads,
-                 attention_head_dim, num_uncertainty_layers):
+    def __init__(
+        self, emb_dim, num_attention_heads, attention_head_dim, num_uncertainty_layers
+    ):
         super().__init__()
         self.uncertainty_estimator = nn.ModuleList(
             [
@@ -482,7 +544,7 @@ class KalmanFilter(nn.Module):
             ResBlock(emb_dim, emb_dim),
             ResBlock(emb_dim, emb_dim),
             nn.Conv2d(emb_dim, 1, kernel_size=1, padding=0),
-            nn.Sigmoid()
+            nn.Sigmoid(),
         )
 
     def predict(self, z_hat, flow):
@@ -497,8 +559,9 @@ class KalmanFilter(nn.Module):
         return z_hat
 
     def calc_gain(self, z_codes):
-        assert z_codes.dim(
-        ) == 5, f"Expected z_codes to have ndim=5, but got ndim={z_codes.dim()}."
+        assert (
+            z_codes.dim() == 5
+        ), f"Expected z_codes to have ndim=5, but got ndim={z_codes.dim()}."
         video_length = z_codes.shape[1]
         height, width = z_codes.shape[3:5]
 
@@ -509,27 +572,50 @@ class KalmanFilter(nn.Module):
             h_codes = block(h_codes, video_length=video_length)
 
         h_codes = rearrange(
-            h_codes, "(b f) (h w) c -> (b f) c h w", h=height, f=video_length)
+            h_codes, "(b f) (h w) c -> (b f) c h w", h=height, f=video_length
+        )
         w_codes = self.kalman_gain_calculator(h_codes)
 
-        w_codes = rearrange(
-            w_codes, "(b f) c h w -> b f c h w", f=video_length)
+        w_codes = rearrange(w_codes, "(b f) c h w -> b f c h w", f=video_length)
 
         # pdb.set_trace()
         return w_codes
 
 
-@ARCH_REGISTRY.register()
 class KEEP(nn.Module):
-    def __init__(self, img_size=512, nf=64, ch_mult=[1, 2, 2, 4, 4, 8], quantizer_type="nearest",
-                 res_blocks=2, attn_resolutions=[16], codebook_size=1024, emb_dim=256,
-                 beta=0.25, gumbel_straight_through=False, gumbel_kl_weight=1e-8, vqgan_path=None,
-                 dim_embd=512, n_head=8, n_layers=9, latent_size=256,
-                 connect_list=['32', '64', '128', '256'], fix_modules=['quantize', 'generator'],
-                 flow_type='pwc', flownet_path=None, kalman_attn_head_dim=64, num_uncertainty_layers=4,
-                 cond=1, cross_fuse_list=[], cross_fuse_nhead=4, cross_fuse_dim=256,
-                 cross_fuse_nlayers=4, cross_residual=True,
-                 temp_reg_list=[], mask_ratio=0.):
+    def __init__(
+        self,
+        img_size=512,
+        nf=64,
+        ch_mult=[1, 2, 2, 4, 4, 8],
+        quantizer_type="nearest",
+        res_blocks=2,
+        attn_resolutions=[16],
+        codebook_size=1024,
+        emb_dim=256,
+        beta=0.25,
+        gumbel_straight_through=False,
+        gumbel_kl_weight=1e-8,
+        vqgan_path=None,
+        dim_embd=512,
+        n_head=8,
+        n_layers=9,
+        latent_size=256,
+        connect_list=["32", "64", "128", "256"],
+        fix_modules=["quantize", "generator"],
+        flow_type="pwc",
+        flownet_path=None,
+        kalman_attn_head_dim=64,
+        num_uncertainty_layers=4,
+        cond=1,
+        cross_fuse_list=[],
+        cross_fuse_nhead=4,
+        cross_fuse_dim=256,
+        cross_fuse_nlayers=4,
+        cross_residual=True,
+        temp_reg_list=[],
+        mask_ratio=0.0,
+    ):
         super().__init__()
 
         self.cond = cond
@@ -539,15 +625,17 @@ class KEEP(nn.Module):
         self.use_residual = cross_residual
         self.mask_ratio = mask_ratio
         self.latent_size = latent_size
-        logger = get_root_logger()
+        logger = getLogger()
 
         # alignment
         # assert flownet_path != None, "Missing path to load pre-trained flow net."
-        if flow_type == 'pwc':
-            from basicsr.archs.pwcnet_arch import FlowGenerator
+        if flow_type == "pwc":
+            from models.network_pwcnet import FlowGenerator
+
             self.flownet = FlowGenerator(path=flownet_path)
-        elif flow_type == 'gmflow':
-            from basicsr.archs.gmflow_arch import FlowGenerator
+        elif flow_type == "gmflow":
+            from models.network_gmflow import FlowGenerator
+
             self.flownet = FlowGenerator(path=flownet_path)
 
         # Kalman Filter
@@ -565,7 +653,7 @@ class KEEP(nn.Module):
             ch_mult=ch_mult,
             num_res_blocks=res_blocks,
             resolution=img_size,
-            attn_resolutions=attn_resolutions
+            attn_resolutions=attn_resolutions,
         )
 
         # VQGAN
@@ -576,13 +664,17 @@ class KEEP(nn.Module):
             ch_mult=ch_mult,
             num_res_blocks=res_blocks,
             resolution=img_size,
-            attn_resolutions=attn_resolutions
+            attn_resolutions=attn_resolutions,
         )
         if quantizer_type == "nearest":
             self.quantize = VectorQuantizer(codebook_size, emb_dim, beta)
         elif quantizer_type == "gumbel":
             self.quantize = GumbelQuantizer(
-                codebook_size, emb_dim, emb_dim, gumbel_straight_through, gumbel_kl_weight
+                codebook_size,
+                emb_dim,
+                emb_dim,
+                gumbel_straight_through,
+                gumbel_kl_weight,
             )
         self.generator = Generator(
             nf=nf,
@@ -590,57 +682,80 @@ class KEEP(nn.Module):
             ch_mult=ch_mult,
             res_blocks=res_blocks,
             img_size=img_size,
-            attn_resolutions=attn_resolutions
+            attn_resolutions=attn_resolutions,
         )
 
         if vqgan_path is not None:
-            ckpt = torch.load(vqgan_path, map_location='cpu')
-            if 'params_ema' in ckpt:
-                self.load_state_dict(torch.load(
-                    vqgan_path, map_location='cpu')['params_ema'], strict=False)
-                logger.info(f'vqgan is loaded from: {vqgan_path} [params_ema]')
-            elif 'params' in ckpt:
-                self.load_state_dict(torch.load(
-                    vqgan_path, map_location='cpu')['params'], strict=False)
-                logger.info(f'vqgan is loaded from: {vqgan_path} [params]')
+            ckpt = torch.load(vqgan_path, map_location="cpu")
+            if "params_ema" in ckpt:
+                self.load_state_dict(
+                    torch.load(vqgan_path, map_location="cpu")["params_ema"],
+                    strict=False,
+                )
+                logger.info(f"vqgan is loaded from: {vqgan_path} [params_ema]")
+            elif "params" in ckpt:
+                self.load_state_dict(
+                    torch.load(vqgan_path, map_location="cpu")["params"], strict=False
+                )
+                logger.info(f"vqgan is loaded from: {vqgan_path} [params]")
             else:
-                raise ValueError(f'Wrong params!')
+                raise ValueError(f"Wrong params!")
 
         self.position_emb = nn.Parameter(torch.zeros(latent_size, dim_embd))
         self.feat_emb = nn.Linear(emb_dim, dim_embd)
 
         # transformer
-        self.ft_layers = nn.Sequential(*[TransformerSALayer(embed_dim=dim_embd, nhead=n_head,
-                                                            dim_mlp=dim_embd*2, dropout=0.0) for _ in range(n_layers)])
+        self.ft_layers = nn.Sequential(
+            *[
+                TransformerSALayer(
+                    embed_dim=dim_embd, nhead=n_head, dim_mlp=dim_embd * 2, dropout=0.0
+                )
+                for _ in range(n_layers)
+            ]
+        )
 
         # logits_predict head
         self.idx_pred_layer = nn.Sequential(
-            nn.LayerNorm(dim_embd),
-            nn.Linear(dim_embd, codebook_size, bias=False))
+            nn.LayerNorm(dim_embd), nn.Linear(dim_embd, codebook_size, bias=False)
+        )
 
         self.channels = {
-            '16': 512,
-            '32': 256,
-            '64': 256,
-            '128': 128,
-            '256': 128,
-            '512': 64,
+            "16": 512,
+            "32": 256,
+            "64": 256,
+            "128": 128,
+            "256": 128,
+            "512": 64,
         }
 
         # after second residual block for > 16, before attn layer for ==16
-        self.fuse_encoder_block = {'512': 2, '256': 5,
-                                   '128': 8, '64': 11, '32': 14, '16': 18}
+        self.fuse_encoder_block = {
+            "512": 2,
+            "256": 5,
+            "128": 8,
+            "64": 11,
+            "32": 14,
+            "16": 18,
+        }
         # after first residual block for > 16, before attn layer for ==16
         self.fuse_generator_block = {
-            '16': 6, '32': 9, '64': 12, '128': 15, '256': 18, '512': 21}
+            "16": 6,
+            "32": 9,
+            "64": 12,
+            "128": 15,
+            "256": 18,
+            "512": 21,
+        }
 
         # cross frame attention fusion
         self.cross_fuse = nn.ModuleDict()
         for f_size in self.cross_fuse_list:
             in_ch = self.channels[f_size]
-            self.cross_fuse[f_size] = CrossFrameFusionLayer(dim=in_ch,
-                                                            num_attention_heads=cross_fuse_nhead,
-                                                            attention_head_dim=cross_fuse_dim)
+            self.cross_fuse[f_size] = CrossFrameFusionLayer(
+                dim=in_ch,
+                num_attention_heads=cross_fuse_nhead,
+                attention_head_dim=cross_fuse_dim,
+            )
 
         # fuse_convs_dict
         self.fuse_convs_dict = nn.ModuleDict()
@@ -674,7 +789,7 @@ class KEEP(nn.Module):
 
         return flows.detach()
 
-    def mask_by_ratio(self, x, mask_ratio=0.):
+    def mask_by_ratio(self, x, mask_ratio=0.0):
         if mask_ratio == 0:
             return x
 
@@ -684,8 +799,7 @@ class KEEP(nn.Module):
         x = rearrange(x, "b f c h w -> b f (h w) c")
 
         len_keep = int(d * (1 - mask_ratio))
-        sample = torch.rand((b, t, d, 1), device=x.device).topk(
-            len_keep, dim=2).indices
+        sample = torch.rand((b, t, d, 1), device=x.device).topk(len_keep, dim=2).indices
         mask = torch.zeros((b, t, d, 1), dtype=torch.bool, device=x.device)
         mask.scatter_(dim=2, index=sample, value=True)
 
@@ -708,7 +822,7 @@ class KEEP(nn.Module):
 
         if need_upscale:
             x = rearrange(x, "b f c h w -> (b f) c h w")
-            x = F.interpolate(x, scale_factor=4, mode='bilinear')
+            x = F.interpolate(x, scale_factor=4, mode="bilinear")
             x = rearrange(x, "(b f) c h w -> b f c h w", f=video_length)
 
         b, t, c, h, w = x.size()
@@ -718,8 +832,7 @@ class KEEP(nn.Module):
         # BTCHW -> (BT)CHW
         x = x.reshape(-1, c, h, w)
         enc_feat_dict = {}
-        out_list = [self.fuse_encoder_block[f_size]
-                    for f_size in self.connect_list]
+        out_list = [self.fuse_encoder_block[f_size] for f_size in self.connect_list]
         for i, block in enumerate(self.encoder.blocks):
             x = block(x)
             if i in out_list:
@@ -739,14 +852,15 @@ class KEEP(nn.Module):
         cross_prev_feat = {}
         gen_feat_dict = defaultdict(list)
 
-        fuse_list = [self.fuse_generator_block[f_size]
-                     for f_size in self.connect_list]
+        fuse_list = [self.fuse_generator_block[f_size] for f_size in self.connect_list]
 
-        cross_fuse_list = [self.fuse_generator_block[f_size]
-                           for f_size in self.cross_fuse_list]
+        cross_fuse_list = [
+            self.fuse_generator_block[f_size] for f_size in self.cross_fuse_list
+        ]
 
-        temp_reg_list = [self.fuse_generator_block[f_size]
-                         for f_size in self.temp_reg_list]
+        temp_reg_list = [
+            self.fuse_generator_block[f_size] for f_size in self.temp_reg_list
+        ]
 
         for i in range(video_length):
             # print(f'Frame {i} ...')
@@ -756,9 +870,11 @@ class KEEP(nn.Module):
             else:
                 # gpu_tracker.track(f'Before {i}-frame Kalman Filter')
                 z_prime = self.hq_encoder(
-                    self.kalman_filter.predict(prev_out.detach(), flows[:, i-1, ...]))
+                    self.kalman_filter.predict(prev_out.detach(), flows[:, i - 1, ...])
+                )
                 z_hat = self.kalman_filter.update(
-                    z_codes[:, i, ...], z_prime, gains[:, i, ...])
+                    z_codes[:, i, ...], z_prime, gains[:, i, ...]
+                )
                 # z_hat = z_codes[:, i, ...]
                 # gpu_tracker.track(f'After {i}-frame Kalman Filter')
                 # del z_prime
@@ -774,8 +890,7 @@ class KEEP(nn.Module):
                 query_emb = layer(query_emb, query_pos=pos_emb)
 
             # output logits
-            logit = self.idx_pred_layer(query_emb).permute(
-                1, 0, 2)  # (hw)bn -> b(hw)n
+            logit = self.idx_pred_layer(query_emb).permute(1, 0, 2)  # (hw)bn -> b(hw)n
             logits.append(logit)
 
             # ################# Quantization ###################
@@ -783,7 +898,8 @@ class KEEP(nn.Module):
             soft_one_hot = F.softmax(logit, dim=2)
             _, top_idx = torch.topk(soft_one_hot, 1, dim=2)
             quant_feat = self.quantize.get_codebook_feat(
-                top_idx, shape=[b, code_h, code_h, 256])
+                top_idx, shape=[b, code_h, code_h, 256]
+            )
 
             if detach_16:
                 # for training stage III
@@ -801,7 +917,8 @@ class KEEP(nn.Module):
                 if j in fuse_list:  # fuse after i-th block
                     f_size = str(x.shape[-1])
                     x = self.fuse_convs_dict[f_size](
-                        enc_feat_dict[f_size][i: i+1, ...], x, self.cond)
+                        enc_feat_dict[f_size][i : i + 1, ...], x, self.cond
+                    )
 
                 if j in cross_fuse_list:
                     f_size = str(x.shape[-1])
@@ -813,7 +930,8 @@ class KEEP(nn.Module):
                         # pdb.set_trace()
                         prev_fea = cross_prev_feat[f_size]
                         x = self.cross_fuse[f_size](
-                            x, prev_fea, residual=self.use_residual)
+                            x, prev_fea, residual=self.use_residual
+                        )
                         cross_prev_feat[f_size] = x
 
                 if j in temp_reg_list:
@@ -853,8 +971,9 @@ def count_parameters(model):
     return total_params, sub_module_params
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     import time
+
     batch_size = 1
     video_length = 4
     height = 128
@@ -869,17 +988,26 @@ if __name__ == '__main__':
         n_layers=4,
         codebook_size=1024,
         connect_list=[],
-        fix_modules=['generator', 'quantize', 'flownet', 'fuse_convs_dict', 'hq_encoder',
-                     'encoder', 'feat_emb', 'ft_layers', 'idx_pred_layer'],
-        flow_type='gmflow',
+        fix_modules=[
+            "generator",
+            "quantize",
+            "flownet",
+            "fuse_convs_dict",
+            "hq_encoder",
+            "encoder",
+            "feat_emb",
+            "ft_layers",
+            "idx_pred_layer",
+        ],
+        flow_type="gmflow",
         flownet_path="../../weights/GMFlow/gmflow_sintel-0c07dcb3.pth",
         kalman_attn_head_dim=32,
         num_uncertainty_layers=3,
         cond=0,
-        cross_fuse_list=['32'],
+        cross_fuse_list=["32"],
         cross_fuse_nhead=4,
         cross_fuse_dim=256,
-        temp_reg_list=['64'],
+        temp_reg_list=["64"],
     ).cuda()
 
     total_params = sum(map(lambda x: x.numel(), model.parameters()))
