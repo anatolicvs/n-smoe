@@ -7,3 +7,6 @@
 [submodule "torch-splatting"]
         path = torch-splatting
         url = https://github.com/hbb1/torch-splatting.git
+[submodule "torch-splatting"]
+        path = cvpr/Text-IF
+        url = https://github.com/XunpengYi/Text-IF.git
