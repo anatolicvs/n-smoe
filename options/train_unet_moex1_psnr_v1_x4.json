@@ -112,8 +112,8 @@
       ,"D_param_strict": true
       ,"E_param_strict": true
 
-      , "checkpoint_test": 250           // for testing
-      , "checkpoint_save": 250           // for saving model
-      , "checkpoint_print": 250           // for print
+      , "checkpoint_test": 150           // for testing
+      , "checkpoint_save": 150           // for saving model
+      , "checkpoint_print": 50           // for print
     }
 }
