@@ -115,6 +115,8 @@ export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_TIMEOUT=1200
 export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export NCCL_P2P_LEVEL=PXB
+export NCCL_P2P_DISABLE=1
 
 if [ "$USE_APPTAINER" = true ]; then
   if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then

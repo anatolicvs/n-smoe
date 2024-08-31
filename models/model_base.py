@@ -2,6 +2,7 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Union
 
+import torch.distributed as dist
 import torch
 from torch.nn.modules.module import Module
 from torch.nn.parallel import DataParallel, DistributedDataParallel
@@ -100,8 +101,8 @@ class ModelBase(ABC):
         if self.opt["dist"]:
             local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
             network = DistributedDataParallel(
-                network, device_ids=[local_rank], output_device=local_rank,
-                find_unused_parameters=True,
+                network, device_ids=[dist.get_rank() % torch.cuda.device_count()], output_device=local_rank,
+                find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
                 self._set_static_graph(network)
