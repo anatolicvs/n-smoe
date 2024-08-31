@@ -332,10 +332,6 @@ def main(json_path="options/"):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        # gpu_psnr_list.append(
-                        #     (opt["rank"], image_name_ext, current_psnr)
-                        # )
-
                         logger.info(
                             f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
                         )
