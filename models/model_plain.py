@@ -9,6 +9,8 @@ from models.model_base import ModelBase
 from models.loss import CharbonnierLoss
 from models.loss_ssim import SSIMLoss
 
+import torch.distributed as dist
+
 from utils_n.utils_model import test_mode
 from utils_n.utils_regularizers import regularizer_orth, regularizer_clip
 
@@ -242,6 +244,7 @@ class ModelPlain(ModelBase):
         self.netG.eval()
         with torch.no_grad():
             self.netG_forward()
+        self.synchronize()
         self.netG.train()
 
     # ----------------------------------------
@@ -308,3 +311,7 @@ class ModelPlain(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
+
+    def synchronize(self):
+        if dist.is_initialized():
+            dist.barrier()

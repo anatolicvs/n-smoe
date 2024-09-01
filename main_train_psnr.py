@@ -78,19 +78,20 @@ def setup_logging(opt):
 
     return logger
 
-
 def initialize_distributed(opt):
-    if opt["dist"]:
-        init_dist("pytorch")
-        opt["world_size"] = dist.get_world_size()
-        opt["rank"] = dist.get_rank()
-        local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
-        torch.cuda.set_device(local_rank)
-        synchronize()
-    else:
-        opt["rank"], opt["world_size"] = 0, 1
+    try:
+        if opt["dist"]:
+            init_dist("pytorch")
+            opt["world_size"] = dist.get_world_size()
+            opt["rank"] = dist.get_rank()
+            local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
+            torch.cuda.set_device(local_rank)
+            synchronize()
+        else:
+            opt["rank"], opt["world_size"] = 0, 1
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize distributed training: {e}")
     return opt
-
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -274,6 +275,7 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
     test_interval = opt["train"].get("checkpoint_test", 1000)
     log_interval = opt["train"].get("checkpoint_print", 500)
 
+    current_step = 0
     for epoch in range(num_epochs):
         if opt["dist"] and isinstance(train_loader.sampler, DistributedSampler):
             train_loader.sampler.set_epoch(epoch)
@@ -343,7 +345,6 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     logger.info(
                         f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>"
                     )
-                    synchronize()
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
