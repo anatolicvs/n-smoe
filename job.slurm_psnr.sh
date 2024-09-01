@@ -3,7 +3,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.0"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-2}  # Default to 4 if not set
+GPUS=${GPUS:-4}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -64,7 +64,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="4:00:00"
+TIME="100:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
