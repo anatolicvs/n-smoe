@@ -12,11 +12,6 @@ import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
-from models.model_gan import ModelGAN
-from models.model_plain import ModelPlain
-from models.model_plain2 import ModelPlain2
-from models.model_plain4 import ModelPlain4
-from models.model_vrt import ModelVRT
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
@@ -36,9 +31,6 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
-
-set_seed(2024)
 
 
 def setup_logging(opt):
@@ -211,6 +203,8 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
     opt["dist"] = args.dist
 
     opt = initialize_distributed(opt)
+    set_seed(opt.get("seed", 2024))
+
     logger = None
     if opt["rank"] == 0:
         util.mkdirs(
@@ -294,9 +288,12 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                 model.optimize_parameters(current_step)
                 model.update_learning_rate(current_step)
             except Exception as e:
-                if opt["rank"] == 0:
-                    logger.error(f"Error during training iteration {i}: {e}")
-                continue
+                   if opt["rank"] == 0:
+                       logger.error(f"Error during training iteration {i} in epoch {epoch}: {e}")
+                   raise e
+            finally:
+                   del train_data
+                   torch.cuda.empty_cache()
 
             if current_step % log_interval == 0 and opt["rank"] == 0:
                 logs = model.current_log()
@@ -348,7 +345,8 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     )
                 except Exception as e:
                     if opt["rank"] == 0:
-                        logger.error(f"Error during testing: {e}")
+                        logger.error(f"Error during testing at step {current_step} in epoch {epoch}: {e}")
+                    raise e
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
