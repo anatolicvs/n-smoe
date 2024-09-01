@@ -11,15 +11,6 @@ from models.loss_ssim import SSIMLoss
 
 from utils_n.utils_model import test_mode
 from utils_n.utils_regularizers import regularizer_orth, regularizer_clip
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-import numpy as np
-from scipy.ndimage import zoom
-from scipy.stats import entropy
-from scipy.signal import correlate
-from matplotlib.table import Table
-from scipy.fftpack import fftshift, fft2
-
 
 class ModelPlain(ModelBase):
     def __init__(self, opt):

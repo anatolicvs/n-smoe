@@ -99,9 +99,15 @@ class ModelBase(ABC):
     def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
         if self.opt["dist"]:
-            local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
+
+            # local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
+            # network = DistributedDataParallel(
+            #     network, device_ids=[local_rank], output_device=local_rank,
+            #     find_unused_parameters=True,
+            # )
+
             network = DistributedDataParallel(
-                network, device_ids=[dist.get_rank() % torch.cuda.device_count()], output_device=local_rank,
+                network, device_ids=[dist.get_rank() % torch.cuda.device_count()], output_device=(dist.get_rank() % torch.cuda.device_count()),
                 find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
