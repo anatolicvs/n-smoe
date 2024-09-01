@@ -3,7 +3,6 @@ import argparse
 import logging
 import math
 import os
-from pickle import NONE
 import sys
 from typing import Any, Dict, Optional, Tuple
 
@@ -24,11 +23,9 @@ from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 import random
 
-
 def synchronize():
     if dist.is_initialized():
         dist.barrier()
-
 
 def set_seed(seed):
     random.seed(seed)
@@ -38,9 +35,7 @@ def set_seed(seed):
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
 
-
 set_seed(2024)
-
 
 def setup_logging(opt):
     if opt["rank"] == 0:
@@ -313,7 +308,7 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     if opt["rank"] == 0:
                         logger.error(f"Error saving model at step {current_step}: {e}")
 
-            if current_step % test_interval == 0:
+            if current_step % test_interval == 0 && opt["rank"] == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
                 try:
