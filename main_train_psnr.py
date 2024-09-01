@@ -198,7 +198,7 @@ def build_loaders(opt, logger=None):
     return train_loader, test_loader
 
 
-def main(json_path="options/"):
+def main(json_path="options/train_unet_moex1_psnr_local.json"):
     parser = argparse.ArgumentParser()
     parser.add_argument("--opt", type=str, default=json_path)
     parser.add_argument("--launcher", type=str, default="pytorch")
@@ -340,7 +340,9 @@ def main(json_path="options/"):
                         torch.cuda.empty_cache()
 
                     avg_psr = local_psnr_sum / local_count
-                    logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>")
+                    logger.info(
+                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>"
+                    )
                     synchronize()
                 except Exception as e:
                     if opt["rank"] == 0:

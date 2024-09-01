@@ -80,25 +80,66 @@ def surf(Z, cmap="rainbow", figsize=None):
 #         return None
 #     return torch.utils.data.dataloader.default_collate(batch)
 
+
 def custom_pad_collate_fn(batch):
     batch = list(filter(lambda x: x is not None, batch))
     if len(batch) == 0:
         return None
 
-    max_dims = [max(item.size(dim) for item in batch) for dim in range(batch[0].dim())]
+    first_elem = batch[0]
 
-    padded_batch = []
-    for item in batch:
-        if all(item.size(dim) == max_dims[dim] for dim in range(item.dim())):
-            padded_batch.append(item)
+    padded_batch = {}
+
+    for key in first_elem.keys():
+        if isinstance(first_elem[key], torch.Tensor):
+            max_dims = [
+                max(item[key].size(dim) for item in batch)
+                for dim in range(first_elem[key].dim())
+            ]
+            padded_batch[key] = torch.stack(
+                [
+                    (
+                        item[key]
+                        if all(
+                            item[key].size(dim) == max_dims[dim]
+                            for dim in range(item[key].dim())
+                        )
+                        else F.pad(
+                            item[key],
+                            sum(
+                                [
+                                    [0, max_dims[dim] - item[key].size(dim)]
+                                    for dim in range(item[key].dim())
+                                ],
+                                [],
+                            ),
+                        )
+                    )
+                    for item in batch
+                ]
+            )
+        elif isinstance(first_elem[key], np.ndarray):
+            max_shape = tuple(
+                max(item[key].shape[dim] for item in batch)
+                for dim in range(len(first_elem[key].shape))
+            )
+            padded_batch[key] = np.stack(
+                [
+                    np.pad(
+                        item[key],
+                        [
+                            (0, max_shape[dim] - item[key].shape[dim])
+                            for dim in range(len(item[key].shape))
+                        ],
+                        mode="constant",
+                    )
+                    for item in batch
+                ]
+            )
         else:
-            padding = []
-            for i in range(len(max_dims) - 1, -1, -1):
-                padding.extend([0, max_dims[i] - item.size(i)])
-            padded_item = F.pad(item, padding)
-            padded_batch.append(padded_item)
+            padded_batch[key] = [item[key] for item in batch]
 
-    return torch.stack(padded_batch)
+    return padded_batch
 
 
 """
