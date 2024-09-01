@@ -313,5 +313,5 @@ class ModelPlain(ModelBase):
         return msg
 
     def synchronize(self):
-        if dist.is_initialized():
+        if dist.is_available() and dist.is_initialized():
             dist.barrier()
