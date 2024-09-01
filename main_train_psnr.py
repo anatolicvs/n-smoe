@@ -3,7 +3,6 @@ import argparse
 import logging
 import math
 import os
-from pickle import NONE
 import sys
 from typing import Any, Dict, Optional, Tuple
 
@@ -78,6 +77,7 @@ def setup_logging(opt):
 
     return logger
 
+
 def initialize_distributed(opt):
     try:
         if opt["dist"]:
@@ -92,6 +92,7 @@ def initialize_distributed(opt):
     except Exception as e:
         raise RuntimeError(f"Failed to initialize distributed training: {e}")
     return opt
+
 
 def build_loaders(opt, logger=None):
     def log_stats(phase, dataset, batch_size, logger):
@@ -313,7 +314,7 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     if opt["rank"] == 0:
                         logger.error(f"Error saving model at step {current_step}: {e}")
 
-            if current_step % test_interval == 0:
+            if current_step % test_interval == 0 and opt["rank"] == 0:
                 local_psnr_sum: float = 0.0
                 local_count: int = 0
                 try:
@@ -351,6 +352,9 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
+
+    if opt["rank"] == 0:
+        logger.info("Training completed.")
 
 
 def cleanup():

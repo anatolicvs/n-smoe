@@ -244,7 +244,7 @@ class ModelPlain(ModelBase):
         self.netG.eval()
         with torch.no_grad():
             self.netG_forward()
-        self.synchronize()
+        # self.synchronize() # ERROR - Error during testing: Detected mismatch between collectives on ranks. Rank 0 is running collective: CollectiveFingerPrint(SequenceNumber=1649OpType=BARRIER), but Rank 1 is running collective: CollectiveFingerPrint(SequenceNumber=0OpType=GATHER).Collectives differ in the following aspects: 	 Sequence number: 1649vs 0  Op type: BARRIERvs GATHER
         self.netG.train()
 
     # ----------------------------------------
