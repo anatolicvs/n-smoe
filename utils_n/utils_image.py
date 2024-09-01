@@ -74,11 +74,30 @@ def surf(Z, cmap="rainbow", figsize=None):
     plt.show()
 
 
+# def custom_collate(batch):
+#     batch = list(filter(lambda x: x is not None, batch))
+#     if len(batch) == 0:
+#         return None
+#     return torch.utils.data.dataloader.default_collate(batch)
+
 def custom_collate(batch):
     batch = list(filter(lambda x: x is not None, batch))
     if len(batch) == 0:
         return None
-    return torch.utils.data.dataloader.default_collate(batch)
+
+    max_height = max([item.shape[1] for item in batch])
+    max_width = max([item.shape[2] for item in batch])
+
+    padded_batch = []
+    for item in batch:
+        if item.shape[1] != max_height or item.shape[2] != max_width:
+            padded_item = F.pad(item, (0, max_width - item.shape[2], 0, max_height - item.shape[1]))
+            padded_batch.append(padded_item)
+        else:
+            padded_batch.append(item)
+
+    return torch.stack(padded_batch, dim=0)
+
 
 
 """
@@ -260,7 +279,7 @@ def is_image_file(filename: str) -> bool:
 
 """
 # --------------------------------------------
-# split large images into small images 
+# split large images into small images
 # --------------------------------------------
 """
 
