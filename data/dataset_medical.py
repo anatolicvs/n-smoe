@@ -371,7 +371,7 @@ class MedicalDatasetSR(Dataset):
             "L": img_L,
             "L_p": img_L_p,
             "H": img_H,
-            "O": img_oH,
+            # "O": img_oH, # test only.
             "L_path": str(fname),
             "H_path": str(fname),
         }
