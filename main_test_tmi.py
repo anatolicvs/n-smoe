@@ -258,6 +258,7 @@ def convert_to_3_channel(images):
         for img in images
     ]
 
+
 def visualize_data(self):
     L_images = self.L.cpu().numpy()
     H_images = self.H.cpu().numpy()
@@ -277,18 +278,12 @@ def visualize_data(self):
         H_freq = fftshift(fft2(H_np))
         L_freq_bicubic = fftshift(fft2(L_np_bicubic))
 
-        L_signal_stochastic_x = np.sum(
-            np.log(np.abs(L_freq_stochastic) + 1), axis=0
-        )
-        L_signal_stochastic_y = np.sum(
-            np.log(np.abs(L_freq_stochastic) + 1), axis=1
-        )
+        L_signal_stochastic_x = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=0)
+        L_signal_stochastic_y = np.sum(np.log(np.abs(L_freq_stochastic) + 1), axis=1)
         H_signal_x = np.sum(np.log(np.abs(H_freq) + 1), axis=0)
         H_signal_y = np.sum(np.log(np.abs(H_freq) + 1), axis=1)
-        L_signal_bicubic_x = np.sum(
-            np.log(np.abs(L_freq_bicubic) + 1), axis=0)
-        L_signal_bicubic_y = np.sum(
-            np.log(np.abs(L_freq_bicubic) + 1), axis=1)
+        L_signal_bicubic_x = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=0)
+        L_signal_bicubic_y = np.sum(np.log(np.abs(L_freq_bicubic) + 1), axis=1)
 
         metrics = {}
         for label, signal_x, signal_y in [
@@ -322,15 +317,15 @@ def visualize_data(self):
         freq_spectra_row = spectra_row + 2
         table_row = freq_spectra_row + 2
 
-        ax0 = fig.add_subplot(gs[image_row: image_row + 2, 0])
+        ax0 = fig.add_subplot(gs[image_row : image_row + 2, 0])
         ax0.imshow(L_np_stochastic, cmap="gray")
         ax0.set_title("Low Res. Stochastic Deg")
 
-        ax1 = fig.add_subplot(gs[image_row: image_row + 2, 1])
+        ax1 = fig.add_subplot(gs[image_row : image_row + 2, 1])
         ax1.imshow(L_np_bicubic, cmap="gray")
         ax1.set_title("Low Res. Bicubic Deg.")
 
-        ax2 = fig.add_subplot(gs[image_row: image_row + 2, 2])
+        ax2 = fig.add_subplot(gs[image_row : image_row + 2, 2])
         ax2.imshow(H_np, cmap="gray")
         ax2.set_title("High Res. Ground Truth")
 
@@ -358,22 +353,19 @@ def visualize_data(self):
         ax8.plot(H_signal_y)
         ax8.set_title("High Res Y-Spectrum")
 
-        ax9 = fig.add_subplot(
-            gs[freq_spectra_row: freq_spectra_row + 2, 0])
+        ax9 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 0])
         ax9.imshow(np.log(np.abs(L_freq_stochastic) + 1), cmap="gray")
         ax9.set_title("Low Res Stochastic Deg. 2D Spectrum")
 
-        ax10 = fig.add_subplot(
-            gs[freq_spectra_row: freq_spectra_row + 2, 1])
+        ax10 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 1])
         ax10.imshow(np.log(np.abs(L_freq_bicubic) + 1), cmap="gray")
         ax10.set_title("Low Res Bicubic Deg. 2D Spectrum")
 
-        ax11 = fig.add_subplot(
-            gs[freq_spectra_row: freq_spectra_row + 2, 2])
+        ax11 = fig.add_subplot(gs[freq_spectra_row : freq_spectra_row + 2, 2])
         ax11.imshow(np.log(np.abs(H_freq) + 1), cmap="gray")
         ax11.set_title("High Res 2D Spectrum")
 
-        ax_table = fig.add_subplot(gs[table_row: table_row + 2, :])
+        ax_table = fig.add_subplot(gs[table_row : table_row + 2, :])
         table = Table(ax_table, bbox=[0, 0, 1, 1])
         row_labels = [
             "Metric",
@@ -419,8 +411,7 @@ def visualize_data(self):
                     else:
                         value = metrics[col_labels[j - 1]][row_label]
                         formatted_value = (
-                            value if isinstance(
-                                value, str) else f"{value:.2e}"
+                            value if isinstance(value, str) else f"{value:.2e}"
                         )
                         table.add_cell(
                             i,
@@ -439,6 +430,7 @@ def visualize_data(self):
 
     plt.tight_layout()
     plt.show()
+
 
 def visualize_with_segmentation(
     images: List[np.ndarray],
@@ -798,7 +790,7 @@ def main(json_path="options/testing/test_tmi_local.json"):
         "netG": {
             "net_type": "unet_moex1",
             "kernel": 16,
-            "sharpening_factor": 1,
+            "sharpening_factor": 1.3,
             "model_channels": 64,
             "num_res_blocks": 8,
             "attention_resolutions": [16,8,4],
