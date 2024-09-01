@@ -6,6 +6,7 @@ import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import pickle
+import datetime
 
 
 def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
@@ -29,7 +30,7 @@ def _init_dist_pytorch(backend, **kwargs):
         raise RuntimeError("No GPUs available. Please check your environment configuration.")
 
     torch.cuda.set_device(rank % num_gpus)
-    dist.init_process_group(backend=backend, init_method="env://", **kwargs)
+    dist.init_process_group(backend=backend, timeout=datetime.timedelta(seconds=1799), init_method="env://", **kwargs)
     dist.barrier()
 
 
