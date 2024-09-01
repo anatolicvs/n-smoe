@@ -86,7 +86,7 @@
 
   , "train": {
       "is_moe": true
-      , "G_lossfn_type": "l2sum"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+      , "G_lossfn_type": "ssim"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
       , "G_lossfn_weight": 1.0            // default
   
       , "G_optimizer_type": "adam"        // fixed, adam is enough
@@ -109,11 +109,10 @@
       , "G_regularizer_clipstep": null    // unused
     
       ,"G_param_strict": true
-      ,"D_param_strict": true
       ,"E_param_strict": true
 
       , "checkpoint_test": 100000           // for testing
       , "checkpoint_save": 30000           // for saving model
-      , "checkpoint_print": 1200           // for print
+      , "checkpoint_print": 1500           // for print
     }
 }
