@@ -353,6 +353,9 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
 
+    if opt["rank"] == 0:
+        logger.info("Training completed.")
+
 
 def cleanup():
     if dist.is_initialized():
