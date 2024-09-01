@@ -26,7 +26,7 @@
           "name": "train_dataset"           
           , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
           , "lq_patchsize": 32
-          , "length" : 50 
+          , "length" : -1 
           , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
           , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
           , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
@@ -38,13 +38,13 @@
           , "H_size": 220                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
           "name": "test_dataset"            
           , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
           , "lq_patchsize": 32
-          , "length" : 50
+          , "length" : -1
           , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
           , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
           , "exclude_dirs": ["/work/pb035507/dataset/rgb/test/"]
