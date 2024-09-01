@@ -341,7 +341,7 @@ def main(json_path="options/"):
 
                     avg_psr = local_psnr_sum / local_count
                     logger.info(f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>")
-
+                    synchronize()
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error during testing: {e}")
