@@ -80,24 +80,25 @@ def surf(Z, cmap="rainbow", figsize=None):
 #         return None
 #     return torch.utils.data.dataloader.default_collate(batch)
 
-def custom_collate(batch):
+def custom_pad_collate_fn(batch):
     batch = list(filter(lambda x: x is not None, batch))
     if len(batch) == 0:
         return None
 
-    max_height = max([item.shape[1] for item in batch])
-    max_width = max([item.shape[2] for item in batch])
+    max_dims = [max(item.size(dim) for item in batch) for dim in range(batch[0].dim())]
 
     padded_batch = []
     for item in batch:
-        if item.shape[1] != max_height or item.shape[2] != max_width:
-            padded_item = F.pad(item, (0, max_width - item.shape[2], 0, max_height - item.shape[1]))
-            padded_batch.append(padded_item)
-        else:
+        if all(item.size(dim) == max_dims[dim] for dim in range(item.dim())):
             padded_batch.append(item)
+        else:
+            padding = []
+            for i in range(len(max_dims) - 1, -1, -1):
+                padding.extend([0, max_dims[i] - item.size(i)])
+            padded_item = F.pad(item, padding)
+            padded_batch.append(padded_item)
 
-    return torch.stack(padded_batch, dim=0)
-
+    return torch.stack(padded_batch)
 
 
 """

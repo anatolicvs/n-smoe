@@ -130,7 +130,7 @@ def build_loaders(opt, logger=None):
                 drop_last=drop_last,
                 pin_memory=pin_memory,
                 sampler=sampler,
-                collate_fn=util.custom_collate,
+                collate_fn=util.custom_pad_collate_fn,
             )
             return loader
         except Exception as e:
