@@ -119,7 +119,7 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_P2P_LEVEL=PXB
 export NCCL_P2P_DISABLE=1
 
-# Read the WANDB API key from a text file and set it as an environment variable
+
 WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
 if [ -f "\$WANDB_KEY_FILE" ]; then
   export WANDB_API_KEY=\$(cat "\$WANDB_KEY_FILE")

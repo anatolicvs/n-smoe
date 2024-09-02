@@ -119,6 +119,14 @@ export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_P2P_LEVEL=PXB
 export NCCL_P2P_DISABLE=1
 
+WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
+if [ -f "\$WANDB_KEY_FILE" ]; then
+  export WANDB_API_KEY=\$(cat "\$WANDB_KEY_FILE")
+else
+  echo "Error: WANDB API key file not found at \$WANDB_KEY_FILE" >&2
+  exit 1
+fi
+
 if [ "$USE_APPTAINER" = true ]; then
   if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then
       echo "Error: Required environment variables (HPCWORK, WORK, WORKDIR) are not set." >&2
