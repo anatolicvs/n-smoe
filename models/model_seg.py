@@ -210,7 +210,7 @@ class ModelSeg(ModelBase):
             self.E, self.label.float()
         )
 
-        iou_score = self.iou_score(self.E, self.label)
+        #  iou_score = self.iou_score(self.E, self.label)
 
         G_loss.backward()
 
@@ -233,10 +233,10 @@ class ModelSeg(ModelBase):
         self.G_optimizer.step()
 
         self.log("G_loss", G_loss.item())
-        mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
-            iou_score.cpu().detach().numpy()
-        )
-        self.log("accuracy_iou", mean_iou)
+        # mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
+        #     iou_score.cpu().detach().numpy()
+        # )
+        # self.log("accuracy_iou", mean_iou)
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
