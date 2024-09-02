@@ -16,6 +16,6 @@
 [submodule "cvpr/SinSR"]
         path = cvpr/SinSR
         url = https://github.com/wyf0912/SinSR.git
-[submodule= "cvpr/GPEMSR"]
+[submodule "cvpr/GPEMSR"]
         path = cvpr/GPEMSR
         url =  https://github.com/jtshou/GPEMSR.git
