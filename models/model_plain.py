@@ -318,5 +318,4 @@ class ModelPlain(ModelBase):
             dist.barrier()
 
     def log(self, key, value) -> None:
-        self.log_dict[key] = value
         wandb.log({key: value})
