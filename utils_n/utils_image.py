@@ -74,11 +74,11 @@ def surf(Z, cmap="rainbow", figsize=None):
     plt.show()
 
 
-# def custom_collate(batch):
-#     batch = list(filter(lambda x: x is not None, batch))
-#     if len(batch) == 0:
-#         return None
-#     return torch.utils.data.dataloader.default_collate(batch)
+def custom_collate(batch):
+    batch = list(filter(lambda x: x is not None, batch))
+    if len(batch) == 0:
+        return None
+    return torch.utils.data.dataloader.default_collate(batch)
 
 
 def custom_pad_collate_fn(batch):

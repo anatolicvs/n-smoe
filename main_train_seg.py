@@ -6,12 +6,14 @@ import os
 import random
 import sys
 
+import click
 import numpy as np
 import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
+from dnnlib import EasyDict
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
@@ -24,6 +26,18 @@ if torch.cuda.get_device_properties(0).major >= 8:
     torch.backends.cudnn.allow_tf32 = True
 
 
+# os.environ["OMP_NUM_THREADS"] = "4"  # export OMP_NUM_THREADS=4
+# os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
+# os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
+# os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
+# os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
+
+
+def synchronize():
+    if dist.is_initialized():
+        dist.barrier()
+
+
 def set_seed(seed):
     random.seed(seed)
     np.random.seed(seed)
@@ -31,15 +45,6 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
-
-set_seed(2024)
-
-os.environ["OMP_NUM_THREADS"] = "4"  # export OMP_NUM_THREADS=4
-os.environ["OPENBLAS_NUM_THREADS"] = "4"  # export OPENBLAS_NUM_THREADS=4
-os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
-os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
-os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
 
 
 def setup_logging(opt):
@@ -80,13 +85,18 @@ def setup_logging(opt):
 
 
 def initialize_distributed(opt):
-    if opt["dist"]:
-        init_dist("pytorch")
-        opt["world_size"] = dist.get_world_size()
-        opt["rank"] = dist.get_rank()
-        torch.cuda.set_device(opt["rank"])
-    else:
-        opt["rank"], opt["world_size"] = 0, 1
+    try:
+        if opt["dist"]:
+            init_dist("pytorch")
+            opt["world_size"] = dist.get_world_size()
+            opt["rank"] = dist.get_rank()
+            local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
+            torch.cuda.set_device(local_rank)
+            synchronize()
+        else:
+            opt["rank"], opt["world_size"] = 0, 1
+    except Exception as e:
+        raise RuntimeError(f"Failed to initialize distributed training: {e}")
     return opt
 
 
@@ -128,7 +138,7 @@ def build_loaders(opt, logger=None):
                 drop_last=drop_last,
                 pin_memory=pin_memory,
                 sampler=sampler,
-                collate_fn=util.custom_collate,
+                collate_fn=util.custom_pad_collate_fn,
             )
             return loader
         except Exception as e:
@@ -176,23 +186,13 @@ def build_loaders(opt, logger=None):
 
         elif phase == "test":
             log_stats(phase, dataset, batch_size, logger)
-            sampler = (
-                DistributedSampler(
-                    dataset,
-                    num_replicas=opt["world_size"],
-                    rank=opt["rank"],
-                    shuffle=False,
-                    drop_last=False,
-                )
-                if opt["dist"]
-                else None
-            )
+
             test_loader = create_loader(
                 dataset,
                 batch_size,
                 shuffle=False,
                 workers=dataset_opt["dataloader_num_workers"],
-                sampler=sampler,
+                sampler=None,
                 drop_last=False,
                 pin_memory=torch.cuda.is_available(),
             )
@@ -206,17 +206,23 @@ def build_loaders(opt, logger=None):
     return train_loader, test_loader
 
 
-def main(json_path="options/sam2/sam2.json"):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--opt", type=str, default=json_path)
-    parser.add_argument("--launcher", type=str, default="pytorch")
-    parser.add_argument("--dist", action="store_true", default=False)
-
-    args = parser.parse_args()
+@click.command()
+@click.option(
+    "--opt",
+    type=str,
+    default="options/sam2/sam2.json",
+    help="Path to option JSON file.",
+)
+@click.option("--launcher", default="pytorch", help="job launcher")
+@click.option("--local_rank", type=int, default=0)
+@click.option("--dist", is_flag=True, default=False)
+def main(**kwargs):
+    args = EasyDict(kwargs)
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
 
     opt = initialize_distributed(opt)
+    set_seed(opt.get("seed", 2024))
     logger = None
     if opt["rank"] == 0:
         util.mkdirs(
@@ -279,8 +285,13 @@ def main(json_path="options/sam2/sam2.json"):
                 model.update_learning_rate(current_step)
             except Exception as e:
                 if opt["rank"] == 0:
-                    logger.error(f"Error during training iteration {i}: {e}")
-                continue
+                    logger.error(
+                        f"Error during training iteration {i} in epoch {epoch}: {e}"
+                    )
+                raise e
+            finally:
+                del train_data
+                torch.cuda.empty_cache()
 
             if current_step % log_interval == 0 and opt["rank"] == 0:
                 logs = model.current_log()
@@ -289,12 +300,15 @@ def main(json_path="options/sam2/sam2.json"):
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
-            if current_step % checkpoint_interval == 0 and opt["rank"] == 0:
+            if current_step % checkpoint_interval == 0:
                 try:
-                    logger.info("Saving the model.")
-                    model.save(current_step)
+                    if opt["rank"] == 0:
+                        logger.info("Saving the model.")
+                        model.save(current_step)
                 except Exception as e:
-                    logger.error(f"Error saving model at step {current_step}: {e}")
+                    if opt["rank"] == 0:
+                        logger.error(f"Error saving model at step {current_step}: {e}")
+                    raise e
 
 
 def cleanup():

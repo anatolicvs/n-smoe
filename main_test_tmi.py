@@ -1,5 +1,4 @@
 # type: ignore
-import csv
 import argparse
 import datetime
 import json
@@ -9,9 +8,9 @@ import os.path
 import random
 from typing import Any, List
 
-from matplotlib import figure
-from sklearn import metrics
+import click
 import numpy as np
+import piq
 import scipy.io
 import torch
 import torch.nn as nn
@@ -21,6 +20,7 @@ from torch.utils.data import DataLoader
 
 import models.basicblock as B
 from data.select_dataset import define_Dataset
+from dnnlib import EasyDict
 from models.network_dpsr import MSRResNet_prior as dpsr
 from models.network_rrdb import RRDB as rrdb
 from models.network_unetmoex1 import (
@@ -34,7 +34,6 @@ from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
-import piq
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -445,9 +444,9 @@ def visualize_with_segmentation(
     import matplotlib
 
     matplotlib.use(backend)
+    import cv2
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
-    import cv2
 
     def show_anns(anns, borders=True):
         if len(anns) == 0:
@@ -725,19 +724,22 @@ def visualize_data(
         plt.show()
 
 
-def main(json_path="options/testing/test_tmi_local.json"):
-    parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--opt", type=str, default=json_path, help="Path to option JSON file."
-    )
-    parser.add_argument("--launcher", default="pytorch", help="job launcher")
-    parser.add_argument("--local_rank", type=int, default=0)
-    parser.add_argument("--dist", default=False)
-    parser.add_argument("--visualize", action="store_true", default=True)
-    parser.add_argument("--backend", default="TkAgg")
+@click.command()
+@click.option(
+    "--opt",
+    type=str,
+    default="options/testing/test_tmi_local.json",
+    help="Path to option JSON file.",
+)
+@click.option("--launcher", default="pytorch", help="job launcher")
+@click.option("--local_rank", type=int, default=0)
+@click.option("--dist", is_flag=True, default=False)
+@click.option("--visualize", is_flag=True, default=False)
+@click.option("--backend", default="TkAgg")
+def main(**kwargs):
 
-    args = parser.parse_args()
-    opt = option.parse(parser.parse_args().opt, is_train=True)
+    args = EasyDict(kwargs)
+    opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
     opt["visualize"] = args.visualize
     opt["backend"] = args.backend
@@ -780,7 +782,7 @@ def main(json_path="options/testing/test_tmi_local.json"):
                 num_workers=16,
                 drop_last=False,
                 pin_memory=True,
-                collate_fn=util.custom_collate,
+                collate_fn=util.custom_pad_collate_fn,
             )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

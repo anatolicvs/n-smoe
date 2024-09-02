@@ -321,6 +321,8 @@ class MedicalDatasetSR(Dataset):
             img_H, self.h_size
         )
 
+        img_H = torch.from_numpy(img_H).float()
+
         img_crop_H = img_crop_H.astype(np.float32)
 
         if img_crop_H.ndim == 2:
@@ -371,7 +373,7 @@ class MedicalDatasetSR(Dataset):
             "L": img_L,
             "L_p": img_L_p,
             "H": img_H,
-            # "O": img_oH, # test only.
+            "O": img_oH,  # test only.
             "L_path": str(fname),
             "H_path": str(fname),
         }
