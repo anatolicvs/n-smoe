@@ -1,7 +1,7 @@
 {
-  "task": "moex3_sr_plain_v4_x4_medical_mix_act_gelu" 
+  "task": "moex3_sr_plain_v3_x4_medical_mix_act_gelu" 
   , "model": "plain" // "gan"
-  , "gpu_ids": [0,1]
+  , "gpu_ids": [0,1,2,3]
   , "dist": true
   
   , "scale": 4       // broadcast to "netG" if SISR
@@ -20,90 +20,105 @@
     , "pretrained_netD": null 
     , "pretrained_netE": null 
     }
+  ,"datasets": {
+    "train": {
+      "name": "train_dataset",
+      "dataset_type": "medical_sr",
+      "lq_patchsize": 32,
+      "length": -1,
+      "degradation_methods": [
+        "bsrgan_plus"
+      ],
+      "degradation_type": "bsrgan_plus",
+      "exclude_dirs": [
+        "/hpcwork/p0021791/dataset/rgb/train_1"
+      ],
+      "dataroot_H": [
+        "/hpcwork/p0021791/dataset/medical/data_for_train",
+        "/hpcwork/pb035507/dataset/mri/data_for_train",
+        "/hpcwork/p0021791/dataset/rgb/train_1"
+      ],
+      "use_dataset_cache": true,
+      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl",
+      "dataroot_L": null,
+      "H_size": 220,
+      "dataloader_shuffle": true,
+      "dataloader_num_workers": 32,
+      "dataloader_batch_size": 16,
+      "phase": "train" 
+    },
+    "test": {
+      "name": "test_dataset",
+      "dataset_type": "medical_sr",
+      "lq_patchsize": 32,
+      "length": -1,
+      "degradation_methods": [
+        "bsrgan_plus"
+      ],
+      "degradation_type": "bsrgan",
+      "exclude_dirs": [
+        "/work/pb035507/dataset/rgb/test/"
+      ],
+      "dataroot_H": [
+        "/hpcwork/p0021791/dataset/medical/data_for_test",
+        "/hpcwork/pb035507/dataset/mri/data_for_test",
+        "/work/pb035507/dataset/rgb/test/"
+      ],
+      "dataroot_L": null,
+      "use_dataset_cache": true,
+      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl",
+      "H_size": 220,
+      "dataloader_num_workers": 32,
+      "dataloader_batch_size": 1,
+      "phase": "test"
+    }
+  }
+    ,"netG": {
+      "net_type": "unet_moex3",
+      "kernel": 16,
+      "sharpening_factor": 1,
 
-    ,"datasets": {
-      "train": {
-          "name": "train_dataset"           
-          , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
-          , "lq_patchsize": 32
-          , "length" : -1
-          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
-          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-          , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
-          , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
-          //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
-          , "use_dataset_cache": true
-          , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
-          , "dataroot_L": null              // path of L training dataset
-          , "H_size": 220                    // patch size 40 | 64 | 96 | 128 | 192
-          , "dataloader_shuffle": true
-          , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
-      }
-      , "test": {
-          "name": "test_dataset"            
-          , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-          , "lq_patchsize": 32
-          , "length" : -1
-          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
-          , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
-          , "exclude_dirs": ["/work/pb035507/dataset/rgb/test/"]
-          , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
-          , "dataroot_L": null              // path of L testing dataset
-          , "use_dataset_cache": true
-          , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
-          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
-          , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 4 
-          }
-      }
+      "model_channels": 64,
+      "num_res_blocks": 8,
+      "attention_resolutions": [16,8,4],
+      "dropout": 0.0,
+      "channel_mult": [2,4,8],
+      "conv_resample": false,
+      "dims":2,
+      "use_checkpoint": true,
+      "use_fp16": false,
+      "num_heads": 32,
+      "resblock_updown": false,
+      "num_groups": 32,
+      "resample_2d": false,
+      "resizer_num_layers": 3,
+      "resizer_avg_pool": false,
+      "activation": "GELU",
+      "rope_theta": 10000.0,
+      "attention_type": "cross_attention",
+      "init_type": "default"
+    }
 
-      ,"netG": {
-        "net_type": "unet_moex3",
-        "kernel": 16,
-        "sharpening_factor": 1,
-
-        "model_channels": 64,
-        "num_res_blocks": 8,
-        "attention_resolutions": [16,8,4],
-        "dropout": 0.0,
-        "channel_mult": [2,4,8],
-        "conv_resample": false,
-        "dims":2,
-        "use_checkpoint": true,
-        "use_fp16": false,
-        "num_heads": 32,
-        "resblock_updown": false,
-        "num_groups": 32,
-        "resample_2d": false,
-        "resizer_num_layers": 2,
-        "resizer_avg_pool": false,
-        "activation": "GELU",
-        "rope_theta": 10000.0,
-        "attention_type": "cross_attention",
-        "init_type": "default"
-      }
-
-      , "train": {
-        "is_moe": true
-        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
-        , "G_lossfn_weight": 1.0            // default
-    
-        , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-4            // learning rate
-        , "G_optimizer_clipgrad": null      // unused
-    
-        , "G_scheduler_type": "MultiStepLR"
-        , "G_scheduler_T_max": 10000
-        , "G_scheduler_eta_min": 1e-7
-        , "G_scheduler_milestones": [20000, 40000, 60000, 80000, 100000, 200000]
-        , "G_scheduler_gamma": 0.5
-    
-        , "G_regularizer_orthstep": null    // unused
-        , "G_regularizer_clipstep": null    // unused
-    
-        , "checkpoint_test": 5000           // for testing
-        , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 500           // for print
+    , "train": {
+      "is_moe": true
+      , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+      , "G_lossfn_weight": 1.0            // default
+  
+      , "G_optimizer_type": "adam"        // fixed, adam is enough
+      , "G_optimizer_lr": 1e-5            // learning rate
+      , "G_optimizer_clipgrad": null      // unused
+  
+      , "G_scheduler_type": "MultiStepLR"
+      , "G_scheduler_T_max": 10000
+      , "G_scheduler_eta_min": 1e-7
+      , "G_scheduler_milestones": [20000, 40000, 60000, 80000, 100000, 200000]
+      , "G_scheduler_gamma": 0.5
+  
+      , "G_regularizer_orthstep": null    // unused
+      , "G_regularizer_clipstep": null    // unused
+  
+      , "checkpoint_test": 50000           // for testing
+      , "checkpoint_save": 15000           // for saving model
+      , "checkpoint_print": 1500           // for print
       }
 }
