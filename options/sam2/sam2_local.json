@@ -23,7 +23,7 @@
           , "use_dataset_cache": true
           , "dataset_cache_file" : null
           , "dataloader_num_workers": 16
-          , "dataloader_batch_size": 1
+          , "dataloader_batch_size": 2
           ,  "dataloader_shuffle" : true
         }
       }

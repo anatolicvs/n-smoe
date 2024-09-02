@@ -80,8 +80,9 @@ class ModelSeg(ModelBase):
 
     def iou_score(self, prd_mask: torch.Tensor, gt_mask: torch.Tensor):
         prd_mask = torch.sigmoid(prd_mask[:, 0])
-        inter = (gt_mask * (prd_mask > 0.5)).sum(1).sum(1)
-        iou = inter / (gt_mask.sum(1).sum(1) + (prd_mask > 0.5).sum(1).sum(1) - inter)
+        inter = (gt_mask[:, 0] * (prd_mask > 0.5)).sum(dim=[1, 2])
+        union = gt_mask[:, 0].sum(dim=[1, 2]) + (prd_mask > 0.5).sum(dim=[1, 2]) - inter
+        iou = inter / union
         return iou
 
     def define_loss(self):
