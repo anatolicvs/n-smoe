@@ -3,25 +3,22 @@ import argparse
 import logging
 import math
 import os
+import random
 import sys
 from typing import Any, Dict, Optional, Tuple
 
+import click
 import numpy as np
 import torch
 import torch.distributed as dist
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
-from models.model_gan import ModelGAN
-from models.model_plain import ModelPlain
-from models.model_plain2 import ModelPlain2
-from models.model_plain4 import ModelPlain4
-from models.model_vrt import ModelVRT
+from dnnlib import EasyDict
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
-import random
 
 
 def synchronize():
@@ -36,9 +33,6 @@ def set_seed(seed):
     if torch.cuda.is_available():
         torch.cuda.manual_seed(seed)
         torch.cuda.manual_seed_all(seed)
-
-
-set_seed(2024)
 
 
 def setup_logging(opt):
@@ -200,17 +194,18 @@ def build_loaders(opt, logger=None):
     return train_loader, test_loader
 
 
-def main(json_path="options/train_unet_moex1_psnr_local.json"):
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--opt", type=str, default=json_path)
-    parser.add_argument("--launcher", type=str, default="pytorch")
-    parser.add_argument("--dist", action="store_true", default=False)
-
-    args = parser.parse_args()
+@click.command()
+@click.option("--opt", type=str, default="options/train_unet_moex1_psnr_local.json")
+@click.option("--launcher", type=str, default="pytorch")
+@click.option("--dist", is_flag=True, default=False)
+def main(**kwargs):
+    args = EasyDict(kwargs)
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
 
     opt = initialize_distributed(opt)
+    set_seed(opt.get("seed", 2024))
+
     logger = None
     if opt["rank"] == 0:
         util.mkdirs(
@@ -295,8 +290,13 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                 model.update_learning_rate(current_step)
             except Exception as e:
                 if opt["rank"] == 0:
-                    logger.error(f"Error during training iteration {i}: {e}")
-                continue
+                    logger.error(
+                        f"Error during training iteration {i} in epoch {epoch}: {e}"
+                    )
+                raise e
+            finally:
+                del train_data
+                torch.cuda.empty_cache()
 
             if current_step % log_interval == 0 and opt["rank"] == 0:
                 logs = model.current_log()
@@ -313,6 +313,7 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(f"Error saving model at step {current_step}: {e}")
+                    raise e
 
             if current_step % test_interval == 0 and opt["rank"] == 0:
                 local_psnr_sum: float = 0.0
@@ -348,7 +349,10 @@ def main(json_path="options/train_unet_moex1_psnr_local.json"):
                     )
                 except Exception as e:
                     if opt["rank"] == 0:
-                        logger.error(f"Error during testing: {e}")
+                        logger.error(
+                            f"Error during testing at step {current_step} in epoch {epoch}: {e}"
+                        )
+                    raise e
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")

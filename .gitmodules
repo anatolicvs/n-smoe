@@ -1,8 +1,8 @@
 [submodule "gsplat"]
 	path = gsplat
 	url = https://github.com/nerfstudio-project/gsplat
-[submodule "stylegan3"]
-	path = stylegan3
+[submodule "nvidia/stylegan3"]
+	path = nvidia/stylegan3
 	url = https://github.com/NVlabs/stylegan3.git
 [submodule "torch-splatting"]
         path = torch-splatting
@@ -13,3 +13,9 @@
 [submodule "gmflow"]
         path = models/gmflow
         url = https://github.com/haofeixu/gmflow.git
+[submodule "cvpr/SinSR"]
+        path = cvpr/SinSR
+        url = https://github.com/wyf0912/SinSR.git
+[submodule "cvpr/GPEMSR"]
+        path = cvpr/GPEMSR
+        url =  https://github.com/jtshou/GPEMSR.git

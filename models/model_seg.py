@@ -19,7 +19,7 @@ class ModelSeg(ModelBase):
         if self.opt_train["E_decay"] > 0:
             self.netE = define_G(opt).to(self.device).eval()
 
-        self.iou = torch.Tensor([0.0]).to(self.netG.device)
+        self.iou = torch.Tensor([0.0]).to(self.device)
         self.iou.requires_grad = False
 
         self.b_loss: float = 1e10
@@ -57,9 +57,10 @@ class ModelSeg(ModelBase):
                 self.update_E(0)
             self.netE.eval()
 
-
-    def _loss(self, prd_mask:torch.Tensor, gt_mask:torch.Tensor, prd_scores:torch.Tensor):
-        prd_mask = torch.sigmoid(prd_mask[:,0])
+    def _loss(
+        self, prd_mask: torch.Tensor, gt_mask: torch.Tensor, prd_scores: torch.Tensor
+    ):
+        prd_mask = torch.sigmoid(prd_mask[:, 0])
 
         seg_loss = (
             -gt_mask * torch.log(prd_mask + 0.00001)
@@ -154,21 +155,21 @@ class ModelSeg(ModelBase):
             raise NotImplementedError
 
     def save_network(
-            self,
-            save_dir: str,
-            network: torch.nn.Module,
-            network_label: str,
-            iter_label: str,
-        ) -> None:
-            save_filename = f"{iter_label}_{network_label}.pth"
-            save_path = os.path.join(save_dir, save_filename)
-            network = self.get_bare_model(network)
-            state_dict = {key: param.cpu() for key, param in network.state_dict().items()}
+        self,
+        save_dir: str,
+        network: torch.nn.Module,
+        network_label: str,
+        iter_label: str,
+    ) -> None:
+        save_filename = f"{iter_label}_{network_label}.pth"
+        save_path = os.path.join(save_dir, save_filename)
+        network = self.get_bare_model(network)
+        # state_dict = {key: param.cpu() for key, param in network.state_dict().items()}
 
-            checkpoint = {
-                            "model": state_dict,
-                        }
-            torch.save(checkpoint, save_path)
+        checkpoint = {
+            "model": network.sam2.state_dict(),
+        }
+        torch.save(checkpoint, save_path)
 
     def save(self, iter_label):
         if self.log_dict["G_loss"] < self.b_loss:

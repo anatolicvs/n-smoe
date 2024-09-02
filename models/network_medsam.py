@@ -1,6 +1,5 @@
 import torch
 import torch.nn as nn
-from sam2.sam2_image_predictor import SAM2ImagePredictor
 
 
 class MedSAM2(nn.Module):
@@ -8,11 +7,8 @@ class MedSAM2(nn.Module):
         super().__init__(*args, **kwargs)
 
         self.sam2 = sam2
-        self.predictor = SAM2ImagePredictor(self.sam2)
         # for param in self.sam2.sam_prompt_encoder.parameters():
         #     param.requires_grad = False
-    def foward(self, image, box):
-        self.predictor.set_image(image)
 
     def forward(self, image, box):
         """
@@ -67,3 +63,9 @@ class MedSAM2(nn.Module):
         _features = {"image_embed": feats[-1], "high_res_feats": feats[:-1]}
 
         return _features
+
+
+# from sam2.sam2_image_predictor import SAM2ImagePredictor
+# self.predictor = SAM2ImagePredictor(self.sam2)
+# def foward(self, image, box):
+#     self.predictor.set_image(image)

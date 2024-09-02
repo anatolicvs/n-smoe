@@ -50,6 +50,7 @@ class MedicalDatasetSR(Dataset):
         self.degradation_methods: List[str] = opt.get("degradation_methods", ["dpsr"])
         self.k = loadmat(opt.get("kernel_path")) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
+        self.use_imgH = opt.get("use_imgH", False)
 
     def load_samples(self) -> List[FastMRIRawDataSample]:
         if self.use_dataset_cache and os.path.exists(self.dataset_cache_file):
@@ -321,6 +322,9 @@ class MedicalDatasetSR(Dataset):
             img_H, self.h_size
         )
 
+        if self.use_imgH:
+            img_H = torch.from_numpy(img_H).float()
+
         img_crop_H = img_crop_H.astype(np.float32)
 
         if img_crop_H.ndim == 2:
@@ -371,7 +375,7 @@ class MedicalDatasetSR(Dataset):
             "L": img_L,
             "L_p": img_L_p,
             "H": img_H,
-            # "O": img_oH, # test only.
+            "O": img_oH if self.use_imgH else None,
             "L_path": str(fname),
             "H_path": str(fname),
         }
