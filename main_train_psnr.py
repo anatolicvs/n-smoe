@@ -11,6 +11,7 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
+import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -213,6 +214,27 @@ def main(**kwargs):
         )
         logger = setup_logging(opt)
 
+        wandb_config = {
+            "task": opt.get("task", "fine_tune_sam2"),
+            "model": opt.get("model", "seg"),
+            "gpu_ids": opt.get("gpu_ids", [0]),
+            "learning_rate": opt["train"]["G_optimizer_lr"],
+            "batch_size": opt["datasets"]["train"]["dataloader_batch_size"],
+            "optimizer": opt["train"]["G_optimizer_type"],
+            "num_epochs": opt["train"].get("num_epochs", 4000000),
+            "model_architecture": opt["netG"].get("net_type", "sam2"),
+            "dataset": opt["datasets"]["train"]["name"],
+            "scheduler_type": opt["train"]["G_scheduler_type"],
+            "E_decay": opt["train"]["E_decay"],
+            "checkpoint_test": opt["train"]["checkpoint_test"],
+            "checkpoint_save": opt["train"]["checkpoint_save"],
+            "checkpoint_print": opt["train"]["checkpoint_print"],
+        }
+
+        wandb_dir = os.path.join(opt["path"]["log"], "wandb_logs")
+        util.mkdirs([wandb_dir])
+        wandb.init(project=opt["task"], config=wandb_config, dir=wandb_dir)
+
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],
         net_type="G",
@@ -305,6 +327,14 @@ def main(**kwargs):
                     message += f" {k}: {v:.3e}"
                 logger.info(message)
 
+                wandb.log(
+                    {
+                        "epoch": epoch,
+                        "step": current_step,
+                        "learning_rate": model.current_learning_rate(),
+                    }
+                )
+
             if current_step % checkpoint_interval == 0:
                 try:
                     if opt["rank"] == 0:
@@ -336,17 +366,32 @@ def main(**kwargs):
                         local_psnr_sum += current_psnr
                         local_count += 1
 
-                        logger.info(
-                            f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+                        log_message = f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+
+                        logger.info(log_message)
+
+                        wandb.log(
+                            {
+                                "info": log_message,
+                                "PSNR": current_psnr,
+                                "GPU": opt["rank"],
+                                "Image Name": image_name_ext,
+                            }
                         )
 
                         del visuals, E_img, H_img
                         torch.cuda.empty_cache()
 
-                    avg_psr = local_psnr_sum / local_count
-                    logger.info(
-                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psr:.2f} dB>"
+                    avg_psnr: float = local_psnr_sum / local_count
+                    log_message: str = (
+                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
                     )
+                    logger.info(log_message)
+
+                    wandb.log(
+                        {"epoch": epoch, "step": current_step, "avg_psnr": avg_psnr}
+                    )
+
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(

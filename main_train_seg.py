@@ -10,6 +10,7 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
+import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -31,6 +32,10 @@ if torch.cuda.get_device_properties(0).major >= 8:
 # os.environ["MKL_NUM_THREADS"] = "6"  # export MKL_NUM_THREADS=6
 # os.environ["VECLIB_MAXIMUM_THREADS"] = "4"  # export VECLIB_MAXIMUM_THREADS=4
 # os.environ["NUMEXPR_NUM_THREADS"] = "6"  # export NUMEXPR_NUM_THREADS=6
+
+os.environ["WANDB_API_KEY"] = (
+    "85dfdc6beb4e686e78f3f86efb0fcdff0092db00"  # will be removed
+)
 
 
 def synchronize():
@@ -229,6 +234,27 @@ def main(**kwargs):
             [path for key, path in opt["path"].items() if "pretrained" not in key]
         )
         logger = setup_logging(opt)
+
+        wandb_config = {
+            "task": opt.get("task", "fine_tune_sam2"),
+            "model": opt.get("model", "seg"),
+            "gpu_ids": opt.get("gpu_ids", [0]),
+            "learning_rate": opt["train"]["G_optimizer_lr"],
+            "batch_size": opt["datasets"]["train"]["dataloader_batch_size"],
+            "optimizer": opt["train"]["G_optimizer_type"],
+            "num_epochs": opt["train"].get("num_epochs", 4000000),
+            "model_architecture": opt["netG"].get("net_type", "sam2"),
+            "dataset": opt["datasets"]["train"]["name"],
+            "scheduler_type": opt["train"]["G_scheduler_type"],
+            "E_decay": opt["train"]["E_decay"],
+            "checkpoint_test": opt["train"]["checkpoint_test"],
+            "checkpoint_save": opt["train"]["checkpoint_save"],
+            "checkpoint_print": opt["train"]["checkpoint_print"],
+        }
+
+        wandb_dir = os.path.join(opt["path"]["log"], "wandb_logs")
+        util.mkdirs([wandb_dir])
+        wandb.init(project=opt["task"], config=wandb_config, dir=wandb_dir)
 
     init_iter_G, init_path_G = option.find_last_checkpoint(
         opt["path"]["models"],

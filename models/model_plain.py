@@ -1,18 +1,18 @@
 from collections import OrderedDict
-import torch
-import torch.nn as nn
-from torch.optim import lr_scheduler
-from torch.optim import Adam
 
-from models.select_network import define_G
-from models.model_base import ModelBase
+import torch
+import torch.distributed as dist
+import torch.nn as nn
+import wandb
+from torch.optim import Adam, lr_scheduler
+
 from models.loss import CharbonnierLoss
 from models.loss_ssim import SSIMLoss
-
-import torch.distributed as dist
-
+from models.model_base import ModelBase
+from models.select_network import define_G
 from utils_n.utils_model import test_mode
-from utils_n.utils_regularizers import regularizer_orth, regularizer_clip
+from utils_n.utils_regularizers import regularizer_clip, regularizer_orth
+
 
 class ModelPlain(ModelBase):
     def __init__(self, opt):
@@ -156,7 +156,7 @@ class ModelPlain(ModelBase):
                     patience=self.opt_train.get("G_scheduler_patience", 1000),
                     factor=0.1,
                     verbose=True,
-                    min_lr= self.opt_train.get("G_scheduler_lr_min", 0),
+                    min_lr=self.opt_train.get("G_scheduler_lr_min", 0),
                 )
             )
         else:
@@ -233,6 +233,7 @@ class ModelPlain(ModelBase):
 
         # self.log_dict['G_loss'] = G_loss.item()/self.E.size()[0]  # if `reduction='sum'`
         self.log_dict["G_loss"] = G_loss.item()
+        self.log("G_loss", G_loss.item())
 
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
@@ -315,3 +316,7 @@ class ModelPlain(ModelBase):
     def synchronize(self):
         if dist.is_available() and dist.is_initialized():
             dist.barrier()
+
+    def log(self, key, value) -> None:
+        self.log_dict[key] = value
+        wandb.log({key: value})

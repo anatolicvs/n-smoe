@@ -1,5 +1,5 @@
 {
-    "task": "fine_tune_sam2" 
+    "task": "fine_tune_sam2_v1" 
     , "model": "seg" 
     , "gpu_ids": [0]
 

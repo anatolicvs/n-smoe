@@ -1,16 +1,15 @@
 from collections import OrderedDict
-import torch
-import torch.nn as nn
-from torch.optim import lr_scheduler
-from torch.optim import Adam
+
 import piq
-from models.select_network import define_G, define_D
-from models.model_base import ModelBase
+import torch
+import wandb
+import torch.nn as nn
+from torch.optim import Adam, lr_scheduler
+
 from models.loss import GANLoss, PerceptualLoss
 from models.loss_ssim import SSIMLoss
-import matplotlib.pyplot as plt
-from matplotlib.gridspec import GridSpec
-import numpy as np
+from models.model_base import ModelBase
+from models.select_network import define_D, define_G
 
 
 class ModelGAN(ModelBase):
@@ -30,16 +29,6 @@ class ModelGAN(ModelBase):
             if self.opt_train["E_decay"] > 0:
                 self.netE = define_G(opt).to(self.device).eval()
 
-    """
-    # ----------------------------------------
-    # Preparation before training with data
-    # Save model during training
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # initialize training
-    # ----------------------------------------
     def init_train(self):
         self.load()  # load model
         self.netG.train()  # set training mode,for BN
@@ -337,13 +326,17 @@ class ModelGAN(ModelBase):
 
         self.H = self.H.to(self.E.device)
 
+        G_loss = torch.tensor(0.0).to(self.device)
+        F_loss = torch.tensor(0.0).to(self.device)
+        D_loss = torch.tensor(0.0).to(self.device)
+
         if (
             current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters
-        ):  # updata D first
-            if self.opt_train["G_lossfn_weight"] > 0:
+        ):  # update D first
+            if self.opt_train["G_lossfn_weight"] > 0 and self.G_lossfn is not None:
                 G_loss = self.G_lossfn_weight * self.G_lossfn(self.E, self.H)
                 loss_G_total += G_loss  # 1) pixel loss
-            if self.opt_train["F_lossfn_weight"] > 0:
+            if self.opt_train["F_lossfn_weight"] > 0 and self.F_lossfn is not None:
                 F_loss = self.F_lossfn_weight * self.F_lossfn(self.E, self.H)
                 loss_G_total += F_loss  # 2) VGG feature loss
 
@@ -422,14 +415,20 @@ class ModelGAN(ModelBase):
         if current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters:
             if self.opt_train["G_lossfn_weight"] > 0:
                 self.log_dict["G_loss"] = G_loss.item()
+                self.log("G_loss", G_loss.item())
             if self.opt_train["F_lossfn_weight"] > 0:
                 self.log_dict["F_loss"] = F_loss.item()
+                self.log("F_loss", F_loss.item())
             self.log_dict["D_loss"] = D_loss.item()
+            self.log("D_loss", D_loss.item())
 
         # self.log_dict['l_d_real'] = l_d_real.item()
         # self.log_dict['l_d_fake'] = l_d_fake.item()
-        self.log_dict["D_real"] = torch.mean(pred_d_real.detach())
-        self.log_dict["D_fake"] = torch.mean(pred_d_fake.detach())
+        self.log_dict["D_real"] = torch.mean(pred_d_real.detach()).item()
+        self.log_dict["D_fake"] = torch.mean(pred_d_fake.detach()).item()
+
+        self.log("D_real", torch.mean(pred_d_real.detach()).item())
+        self.log("D_fake", torch.mean(pred_d_fake.detach()).item())
 
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
@@ -498,3 +497,7 @@ class ModelGAN(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
+
+    def log(self, key, value) -> None:
+        self.log_dict[key] = value
+        wandb.log({key: value})

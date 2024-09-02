@@ -107,7 +107,9 @@ class ModelBase(ABC):
             # )
 
             network = DistributedDataParallel(
-                network, device_ids=[dist.get_rank() % torch.cuda.device_count()], output_device=(dist.get_rank() % torch.cuda.device_count()),
+                network,
+                device_ids=[dist.get_rank() % torch.cuda.device_count()],
+                output_device=(dist.get_rank() % torch.cuda.device_count()),
                 find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
@@ -213,3 +215,6 @@ class ModelBase(ABC):
 
     def _set_static_graph(self, network: torch.nn.Module) -> None:
         network._set_static_graph()
+
+    def log(self, *args, **kwargs) -> None:
+        pass

@@ -1,12 +1,14 @@
 import os
+from collections import OrderedDict
+
 import torch
 import torch.nn as nn
-from torch.optim import AdamW
-from torch.optim import lr_scheduler
+import wandb
+from monai.losses.dice import DiceLoss
+from torch.optim import AdamW, lr_scheduler
+
 from models.model_base import ModelBase
 from models.select_network import define_G
-from collections import OrderedDict
-from monai.losses.dice import DiceLoss
 
 
 class ModelSeg(ModelBase):
@@ -220,6 +222,7 @@ class ModelSeg(ModelBase):
 
         self.G_optimizer.step()
         self.log_dict["G_loss"] = G_loss.item()
+        self.log("G_loss", G_loss.item())
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
@@ -247,3 +250,7 @@ class ModelSeg(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
+
+    def log(self, key, value) -> None:
+        self.log_dict[key] = value
+        wandb.log({key: value})

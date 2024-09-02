@@ -64,7 +64,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="32:00:00"
+TIME="100:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -78,10 +78,16 @@ if [ ! -w "$OUTPUT_DIR" ] || [ ! -w "$ERROR_DIR" ]; then
 fi
 
 mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
+mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp directory"; exit 1; }
 
 PARTITION="c23g"
 
-JOB_SCRIPT=$(mktemp)
+JOB_SCRIPT=$(mktemp /home/p0021791/tmp/job_script.XXXXXX)
+if [ ! -f "$JOB_SCRIPT" ]; then
+    echo "Failed to create a temporary job script file." >&2
+    exit 1
+fi
+
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
@@ -101,13 +107,26 @@ cat <<-EOT > "$JOB_SCRIPT"
 
 echo "Starting job at: \$(date)"
 nvidia-smi
-echo "GPUs available: $(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
+echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
+export TORCH_DISTRIBUTED_DEBUG=INFO
 export TORCH_NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 export NCCL_DEBUG=INFO
 export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_TIMEOUT=1200
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export NCCL_P2P_LEVEL=PXB
+export NCCL_P2P_DISABLE=1
+
+# Read the WANDB API key from a text file and set it as an environment variable
+WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
+if [ -f "\$WANDB_KEY_FILE" ]; then
+  export WANDB_API_KEY=\$(cat "\$WANDB_KEY_FILE")
+else
+  echo "Error: WANDB API key file not found at \$WANDB_KEY_FILE" >&2
+  exit 1
+fi
 
 if [ "$USE_APPTAINER" = true ]; then
   if [ -z "$HPCWORK" ] || [ -z "$WORK" ] || [ -z "$WORKDIR" ]; then
@@ -124,6 +143,8 @@ fi
 
 echo "Job completed at: \$(date)"
 EOT
+
+chmod +x "$JOB_SCRIPT"
 
 job_id=$(sbatch "$JOB_SCRIPT" | awk '{print $4}')
 
