@@ -7,7 +7,7 @@
     , "merge_bn_startpoint": 400000  
         
     , "path": {
-        "root": "/hpcwork/p0021791/segmentation"
+        "root": "/mnt/d/segmentation"
         , "pretrained_netG": null 
         , "pretrained_netD": null 
         , "pretrained_netE": null
@@ -19,7 +19,7 @@
             "name": "seg"            
           , "dataset_type": "seg_npy"      
           , "bbox_shift" : 5      
-          , "dataroot_H": "/hpcwork/p0021791/dataset/medical/FLARE22/npy"
+          , "dataroot_H": "/mnt/d/dataset/FLARE22/npy"
           , "use_dataset_cache": true
           , "dataset_cache_file" : null
           , "dataloader_num_workers": 16
@@ -27,11 +27,11 @@
           ,  "dataloader_shuffle" : true
         }
       }
-      
+
       , "netG": {
         "net_type": "sam2"
         , "model_cfg" : "sam2_hiera_l.yaml"
-        , "sam2_checkpoint" : "/hpcwork/p0021791/zoo/sam2/sam2_hiera/sam2_hiera_large.pt"
+        , "sam2_checkpoint" : "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt"
         , "init_type": "default"
     }
 

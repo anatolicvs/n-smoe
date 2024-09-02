@@ -236,7 +236,7 @@ class ModelSeg(ModelBase):
         mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
             iou_score.cpu().detach().numpy()
         )
-        self.log_dict["mean_iou"] = mean_iou
+        self.log_dict["accuracy_iou"] = mean_iou
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
