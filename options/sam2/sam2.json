@@ -54,12 +54,11 @@
       , "G_scheduler_cycle_momentum": false
       , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
       , "G_scheduler_gamma": 0.5
-      , "G_optimizer_reuse": true
+      , "G_optimizer_reuse": false
   
     
-      , "G_param_strict": true
-      , "D_param_strict": true
-      , "E_param_strict": true
+      , "G_param_strict": false
+      , "E_param_strict": false
   
       , "checkpoint_test": 20           
       , "checkpoint_save": 20        

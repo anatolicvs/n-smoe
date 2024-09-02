@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict
-
+import numpy as np
 import torch
 import torch.nn as nn
 import wandb
@@ -25,6 +25,7 @@ class ModelSeg(ModelBase):
         self.iou.requires_grad = False
 
         self.b_loss: float = 1e10
+        self.mean_iou = 0
 
     def init_train(self):
         self.load()
@@ -76,6 +77,12 @@ class ModelSeg(ModelBase):
 
         self.iou = iou
         return loss
+
+    def iou_score(self, prd_mask: torch.Tensor, gt_mask: torch.Tensor):
+        prd_mask = torch.sigmoid(prd_mask[:, 0])
+        inter = (gt_mask * (prd_mask > 0.5)).sum(1).sum(1)
+        iou = inter / (gt_mask.sum(1).sum(1) + (prd_mask > 0.5).sum(1).sum(1) - inter)
+        return iou
 
     def define_loss(self):
         self.G_seg_loss = DiceLoss(
@@ -202,6 +209,9 @@ class ModelSeg(ModelBase):
         G_loss = self.G_seg_loss(self.E, self.label) + self.G_ce_loss(
             self.E, self.label.float()
         )
+
+        iou_score = self.iou_score(self.E, self.label)
+
         G_loss.backward()
 
         # ------------------------------------
@@ -223,6 +233,10 @@ class ModelSeg(ModelBase):
         self.G_optimizer.step()
         self.log_dict["G_loss"] = G_loss.item()
         self.log("G_loss", G_loss.item())
+        mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
+            iou_score.cpu().detach().numpy()
+        )
+        self.log_dict["mean_iou"] = mean_iou
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
