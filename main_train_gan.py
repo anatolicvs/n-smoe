@@ -6,12 +6,12 @@ import os
 import random
 import sys
 from typing import Any, Dict, Optional, Tuple
-
+import wandb
 import click
 import numpy as np
 import torch
 import torch.distributed as dist
-import wandb
+
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -325,15 +325,15 @@ def main(**kwargs):
                 message = f"<epoch:{epoch:3d}, iter:{current_step:8,d}, lr:{model.current_learning_rate():.3e}>"
                 for k, v in logs.items():
                     message += f" {k}: {v:.3e}"
-                logger.info(message)
-
-                wandb.log(
-                    {
+                    
+                    wandb.log({
                         "epoch": epoch,
+                        f"{k}" : v 
                         "step": current_step,
                         "learning_rate": model.current_learning_rate(),
-                    }
-                )
+                    })
+                
+                logger.info(message)
 
             if current_step % checkpoint_interval == 0:
                 try:

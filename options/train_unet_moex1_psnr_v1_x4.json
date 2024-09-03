@@ -1,7 +1,8 @@
 {
   "task": "moex1_sr_plain_v11_x4_mri_rgb_act_gelu" 
   , "model": "plain" // "gan"
-  , "gpu_ids": [0, 1,2,3]
+  , "gpu_ids": [0,1,2,3]
+  , "dist": true
   
   , "scale": 4       // broadcast to "netG" if SISR
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
@@ -111,8 +112,8 @@
       ,"G_param_strict": true
       ,"E_param_strict": true
 
-      , "checkpoint_test": 100000           // for testing
-      , "checkpoint_save": 5000           // for saving model
+      , "checkpoint_test": 50000           // for testing
+      , "checkpoint_save": 14000           // for saving model
       , "checkpoint_print": 2000           // for print
     }
 }

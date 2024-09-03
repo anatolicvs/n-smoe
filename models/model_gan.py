@@ -2,7 +2,7 @@ from collections import OrderedDict
 
 import piq
 import torch
-import wandb
+# import wandb
 import torch.nn as nn
 from torch.optim import Adam, lr_scheduler
 
@@ -415,20 +415,20 @@ class ModelGAN(ModelBase):
         if current_step % self.D_update_ratio == 0 and current_step > self.D_init_iters:
             if self.opt_train["G_lossfn_weight"] > 0:
                 self.log_dict["G_loss"] = G_loss.item()
-                self.log("G_loss", G_loss.item())
+                # self.log("G_loss", G_loss.item())
             if self.opt_train["F_lossfn_weight"] > 0:
                 self.log_dict["F_loss"] = F_loss.item()
-                self.log("F_loss", F_loss.item())
+                # self.log("F_loss", F_loss.item())
             self.log_dict["D_loss"] = D_loss.item()
-            self.log("D_loss", D_loss.item())
+            # self.log("D_loss", D_loss.item())
 
         # self.log_dict['l_d_real'] = l_d_real.item()
         # self.log_dict['l_d_fake'] = l_d_fake.item()
         self.log_dict["D_real"] = torch.mean(pred_d_real.detach()).item()
         self.log_dict["D_fake"] = torch.mean(pred_d_fake.detach()).item()
 
-        self.log("D_real", torch.mean(pred_d_real.detach()).item())
-        self.log("D_fake", torch.mean(pred_d_fake.detach()).item())
+        # self.log("D_real", torch.mean(pred_d_real.detach()).item())
+        # self.log("D_fake", torch.mean(pred_d_fake.detach()).item())
 
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
@@ -498,5 +498,5 @@ class ModelGAN(ModelBase):
         msg = self.describe_params(self.netG)
         return msg
 
-    def log(self, key, value) -> None:
-        wandb.log({key: value})
+    # def log(self, key, value) -> None:
+    #     wandb.log({key: value})
