@@ -335,8 +335,6 @@ def main(**kwargs):
                     
                 logger.info(message)
 
-                
-
             if current_step % checkpoint_interval == 0:
                 try:
                     if opt["rank"] == 0:

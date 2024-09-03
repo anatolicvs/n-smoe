@@ -328,7 +328,7 @@ def main(**kwargs):
                     
                     wandb.log({
                         "epoch": epoch,
-                        f"{k}" : v 
+                        f"{k}" : v,
                         "step": current_step,
                         "learning_rate": model.current_learning_rate(),
                     })
