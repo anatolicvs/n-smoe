@@ -11,7 +11,7 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
-import wandb
+
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -213,6 +213,8 @@ def main(**kwargs):
             [path for key, path in opt["path"].items() if "pretrained" not in key]
         )
         logger = setup_logging(opt)
+
+        import wandb
 
         wandb_config = {
             "task": opt.get("task", "fine_tune_sam2"),

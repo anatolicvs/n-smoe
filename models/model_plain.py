@@ -3,7 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-import wandb
+# import wandb
 from torch.optim import Adam, lr_scheduler
 
 from models.loss import CharbonnierLoss
@@ -233,7 +233,7 @@ class ModelPlain(ModelBase):
 
         # self.log_dict['G_loss'] = G_loss.item()/self.E.size()[0]  # if `reduction='sum'`
         self.log_dict["G_loss"] = G_loss.item()
-        self.log("G_loss", G_loss.item())
+        # self.log("G_loss", G_loss.item())
 
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
@@ -317,5 +317,5 @@ class ModelPlain(ModelBase):
         if dist.is_available() and dist.is_initialized():
             dist.barrier()
 
-    def log(self, key, value) -> None:
-        wandb.log({key: value})
+    # def log(self, key, value) -> None:
+    #     wandb.log({key: value})
