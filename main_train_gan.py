@@ -196,13 +196,11 @@ def build_loaders(opt, logger=None):
 
 
 @click.command()
-@click.option("--opt", type=str, default="options/train_unet_moex1_psnr_local.json")
+@click.option("--opt", type=str, default="options/train_unet_moex1_gan_local.json")
 @click.option("--launcher", type=str, default="pytorch")
 @click.option("--dist", is_flag=True, default=False)
 def main(**kwargs):
     args = EasyDict(kwargs)
-
-    args = parser.parse_args()
     opt = option.parse(args.opt, is_train=True)
     opt["dist"] = args.dist
 
@@ -215,6 +213,7 @@ def main(**kwargs):
             [path for key, path in opt["path"].items() if "pretrained" not in key]
         )
         logger = setup_logging(opt)
+
         wandb_config = {
             "task": opt.get("task", "fine_tune_sam2"),
             "model": opt.get("model", "seg"),
@@ -232,7 +231,7 @@ def main(**kwargs):
             "checkpoint_print": opt["train"]["checkpoint_print"],
         }
 
-        wandb_dir: str = os.path.join(opt["path"]["log"], "wandb_logs")
+        wandb_dir = os.path.join(opt["path"]["log"], "wandb_logs")
         util.mkdirs([wandb_dir])
         wandb.init(project=opt["task"], config=wandb_config, dir=wandb_dir)
 
@@ -368,11 +367,13 @@ def main(**kwargs):
                         local_count += 1
 
                         log_message = f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+
                         logger.info(log_message)
 
                         wandb.log(
                             {
                                 "info": log_message,
+                                "Local Count": local_count,
                                 "PSNR": current_psnr,
                                 "GPU": opt["rank"],
                                 "Image Name": image_name_ext,
@@ -391,6 +392,7 @@ def main(**kwargs):
                     wandb.log(
                         {"epoch": epoch, "step": current_step, "avg_psnr": avg_psnr}
                     )
+
                 except Exception as e:
                     if opt["rank"] == 0:
                         logger.error(

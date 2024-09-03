@@ -4,6 +4,15 @@
 [submodule "nvidia/stylegan3"]
 	path = nvidia/stylegan3
 	url = https://github.com/NVlabs/stylegan3.git
+[submodule "nvidia/denoising-diffusion-gan"]
+	path = nvidia/denoising-diffusion-gan
+	url = https://github.com/NVlabs/denoising-diffusion-gan.git
+[submodule "nvidia/DoRA"]
+	path = nvidia/DoRA
+	url = https://github.com/NVlabs/DoRA.git
+[submodule "nvidia/VILA"]
+	path = nvidia/VILA
+	url = https://github.com/NVlabs/VILA.git
 [submodule "torch-splatting"]
         path = torch-splatting
         url = https://github.com/hbb1/torch-splatting.git

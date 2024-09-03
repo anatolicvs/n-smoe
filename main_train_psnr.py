@@ -373,6 +373,7 @@ def main(**kwargs):
                         wandb.log(
                             {
                                 "info": log_message,
+                                "Local Count": local_count,
                                 "PSNR": current_psnr,
                                 "GPU": opt["rank"],
                                 "Image Name": image_name_ext,
