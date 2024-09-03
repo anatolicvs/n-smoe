@@ -80,8 +80,9 @@ class ModelSeg(ModelBase):
 
     def iou_score(self, prd_mask: torch.Tensor, gt_mask: torch.Tensor):
         prd_mask = torch.sigmoid(prd_mask[:, 0])
-        inter = (gt_mask * (prd_mask > 0.5)).sum(1).sum(1)
-        iou = inter / (gt_mask.sum(1).sum(1) + (prd_mask > 0.5).sum(1).sum(1) - inter)
+        inter = (gt_mask[:, 0] * (prd_mask > 0.5)).sum(dim=[1, 2])
+        union = gt_mask[:, 0].sum(dim=[1, 2]) + (prd_mask > 0.5).sum(dim=[1, 2]) - inter
+        iou = inter / union
         return iou
 
     def define_loss(self):
@@ -210,7 +211,7 @@ class ModelSeg(ModelBase):
             self.E, self.label.float()
         )
 
-        #  iou_score = self.iou_score(self.E, self.label)
+        iou_score = self.iou_score(self.E, self.label)
 
         G_loss.backward()
 
@@ -233,10 +234,10 @@ class ModelSeg(ModelBase):
         self.G_optimizer.step()
 
         self.log("G_loss", G_loss.item())
-        # mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
-        #     iou_score.cpu().detach().numpy()
-        # )
-        # self.log("accuracy_iou", mean_iou)
+        mean_iou = self.mean_iou * 0.99 + 0.01 * np.mean(
+            iou_score.cpu().detach().numpy()
+        )
+        self.log("accuracy_iou", mean_iou)
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 

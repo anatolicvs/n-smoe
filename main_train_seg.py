@@ -215,7 +215,7 @@ def build_loaders(opt, logger=None):
 @click.option(
     "--opt",
     type=str,
-    default="options/sam2/sam2.json",
+    default="options/sam2/sam2_local.json",
     help="Path to option JSON file.",
 )
 @click.option("--launcher", default="pytorch", help="job launcher")

@@ -1,5 +1,5 @@
 {
-    "task": "unet_unet_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "local_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/mnt/d/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null // "/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth"   
       , "pretrained_netD": null 
       , "pretrained_netE": null 
@@ -106,9 +106,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 150           // for testing
-        , "checkpoint_save": 150           // for saving model
-        , "checkpoint_print": 50           // for print
+        , "checkpoint_test": 50           // for testing
+        , "checkpoint_save": 50           // for saving model
+        , "checkpoint_print": 10           // for print
       }
   }
   
