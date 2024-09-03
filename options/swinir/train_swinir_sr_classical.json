@@ -1,44 +1,72 @@
 {
   "task": "swinir_sr_classical_patch48_x2"     //  classical image sr for x2/x3/x4/x8. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
-  , "gpu_ids": [0,1,2,3,4,5,6,7]
+  , "gpu_ids": [0,1]
   , "dist": true
 
   , "scale": 2       // 2 | 3 | 4 | 8
-  , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
+  , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+  , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
 
   , "path": {
-    "root": "superresolution"            // "denoising" | "superresolution" | "dejpeg"
-    , "pretrained_netG": null      // path of pretrained model. We fine-tune X3/X4/X8 models from X2 model, so that `G_optimizer_lr` and `G_scheduler_milestones` can be halved to save time.
-    , "pretrained_netE": null      // path of pretrained model
+    "root": "/hpcwork/p0021791/superresolution"  
+    , "pretrained_netG": null // "/hpcwork/p0021791/superresolution/unet_unet_unet_moex3_sr_plain_v1_x4_medical_mix_act_gelu/models/15000_G.pth"
+    , "pretrained_netD": null 
+    , "pretrained_netE": null 
   }
 
-  , "datasets": {
+  ,"datasets": {
     "train": {
-      "name": "train_dataset"           // just name
-      , "dataset_type": "sr"         // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "jpeg"
-      , "dataroot_H": "trainsets/trainH"// path of H training dataset. DIV2K (800 training images)
-      , "dataroot_L": "trainsets/trainL"              // path of L training dataset
-
-      , "H_size": 96                   // 96/144|192/384 | 128/192/256/512. LR patch size is set to 48 or 64 when compared with RCAN or RRDB.
-
-      , "dataloader_shuffle": true
-      , "dataloader_num_workers": 16
-      , "dataloader_batch_size": 32      // batch size 1 | 16 | 32 | 48 | 64 | 128. Total batch size =4x8=32 in SwinIR
-    }
-    , "test": {
-      "name": "test_dataset"            // just name
-      , "dataset_type": "sr"         // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "jpeg"
-      , "dataroot_H": "testsets/Set5/HR"  // path of H testing dataset
-      , "dataroot_L": "testsets/Set5/LR_bicubic/X2"              // path of L testing dataset
-
+      "name": "train_dataset",
+      "dataset_type": "medical_sr",
+      "lq_patchsize": 32,
+      "length": -1,
+      "degradation_methods": [
+        "bsrgan_plus"
+      ],
+      "degradation_type": "bsrgan_plus",
+      "exclude_dirs": [],
+      "dataroot_H": [
+        "/hpcwork/p0021791/dataset/medical/data_for_train",
+        "/hpcwork/pb035507/dataset/mri/data_for_train"
+      ],
+      "use_dataset_cache": true,
+      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_training_medico_v1.pkl",
+      "dataroot_L": null,
+      "H_size": 220,
+      "dataloader_shuffle": true,
+      "dataloader_num_workers": 32,
+      "dataloader_batch_size": 16,
+      "phase": "train" 
+    },
+    "test": {
+      "name": "test_dataset",
+      "dataset_type": "medical_sr",
+      "lq_patchsize": 32,
+      "length": -1,
+      "degradation_methods": [
+        "bsrgan_plus"
+      ],
+      "degradation_type": "bsrgan",
+      "exclude_dirs": [],
+      "dataroot_H": [
+        "/hpcwork/p0021791/dataset/medical/data_for_test",
+        "/hpcwork/pb035507/dataset/mri/data_for_test"
+      ],
+      "dataroot_L": null,
+      "use_dataset_cache": true,
+      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_v1.pkl",
+      "H_size": 220,
+      "dataloader_num_workers": 32,
+      "dataloader_batch_size": 1,
+      "phase": "test"
     }
   }
 
   , "netG": {
     "net_type": "swinir" 
     , "upscale": 2                      // 2 | 3  | 4 | 8
-    , "in_chans": 3 
+    , "in_chans": 1 
     , "img_size": 48                    // For fair comparison, LR patch size is set to 48 or 64 when compared with RCAN or RRDB.
     , "window_size": 8  
     , "img_range": 1.0 
