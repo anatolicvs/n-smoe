@@ -1,7 +1,7 @@
 #!/usr/bin/zsh
 
 USE_APPTAINER=true
-BUILT_VERSION="1.0"
+BUILT_VERSION="1.1"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 
@@ -64,7 +64,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="32:00:00"
+TIME="100:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 

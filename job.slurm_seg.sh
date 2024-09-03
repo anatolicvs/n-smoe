@@ -1,8 +1,8 @@
 #!/usr/bin/zsh
 
 USE_APPTAINER=true
-BUILT_VERSION="1.0"
-DISTRIBUTED_TRAINING=true
+BUILT_VERSION="1.1"
+DISTRIBUTED_TRAINING=false
 GPUS=${GPUS:-1}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do

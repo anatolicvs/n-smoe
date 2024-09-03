@@ -11,7 +11,7 @@
 # Has to be used without an project!
 
 USE_APPTAINER=true
-BUILT_VERSION="1.0"
+BUILT_VERSION="1.1"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 

@@ -7,6 +7,7 @@ class MedSAM2(nn.Module):
         super().__init__(*args, **kwargs)
 
         self.sam2 = sam2
+        # enabled for training
         # for param in self.sam2.sam_prompt_encoder.parameters():
         #     param.requires_grad = False
 
