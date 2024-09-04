@@ -1,5 +1,5 @@
 {
-    "task": "tmi_model_test" 
+    "task": "sr" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     

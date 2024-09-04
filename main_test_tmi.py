@@ -21,19 +21,13 @@ from torch.utils.data import DataLoader
 import models.basicblock as B
 from data.select_dataset import define_Dataset
 from dnnlib import EasyDict
-from models.network_dpsr import MSRResNet_prior as dpsr
-from models.network_rrdb import RRDB as rrdb
-from models.network_unetmoex1 import (
-    Autoencoder,
-    AutoencoderConfig,
-    EncoderConfig,
-    MoEConfig,
-)
+
 from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
 from utils_n.utils_dist import get_dist_info, init_dist
+import torch.nn.functional as F
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -482,7 +476,7 @@ def visualize_with_segmentation(
         3,
         len(images) + 1,
         height_ratios=[2, 2, 0.5],  # Adjusting the height ratios for better space usage
-        width_ratios=[2, 2, 1, 1, 1, 1, 1],
+        width_ratios=[2, 2, 1, 1, 1, 1, 1, 1],
         hspace=0.01,  # Reducing space between rows
         wspace=0.01,  # Reducing space between columns
     )
@@ -724,6 +718,12 @@ def visualize_data(
         plt.show()
 
 
+def default_resizer(inputs, target_size):
+    return F.interpolate(
+        inputs, size=target_size, mode="bilinear", align_corners=False, antialias=True
+    )
+
+
 @click.command()
 @click.option(
     "--opt",
@@ -785,514 +785,559 @@ def main(**kwargs):
                 collate_fn=util.custom_pad_collate_fn,
             )
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    task = opt.get("task", "sr_x2")
 
-    json_moex1 = """
-    {
-        "netG": {
-            "net_type": "unet_moex1",
-            "kernel": 16,
-            "sharpening_factor": 1.3,
-            "model_channels": 64,
-            "num_res_blocks": 8,
-            "attention_resolutions": [16,8,4],
-            "dropout": 0.2,
-            "num_groups": 8,
-            "num_heads": 32,
-            "num_head_channels": 32,
-            "use_new_attention_order": true,
-            "use_checkpoint": true,
-            "resblock_updown": false,
-            "channel_mult": [1,2,4,8],
-            "resample_2d": false,
-            "pool": "attention",
-            "activation": "GELU",
-            "resizer_num_layers": 2,
-            "resizer_avg_pool": false,
-            "scale": 2,
-            "n_channels": 1
-        }
-    }
-    """
+    if task == "sr_x2":
+        from models.network_dpsr import MSRResNet_prior as dpsr
+        from models.network_rrdb import RRDB as rrdb
+        from models.network_unetmoex1 import (
+            Autoencoder,
+            AutoencoderConfig,
+            EncoderConfig,
+            MoEConfig,
+        )
 
-    netG_moex1 = json.loads(json_moex1)["netG"]
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    z = 2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
-
-    encoder_cfg = EncoderConfig(
-        model_channels=netG_moex1["model_channels"],
-        num_res_blocks=netG_moex1["num_res_blocks"],
-        attention_resolutions=netG_moex1["attention_resolutions"],
-        dropout=netG_moex1["dropout"],
-        num_groups=netG_moex1["num_groups"],
-        scale_factor=netG_moex1["scale"],
-        num_heads=netG_moex1["num_heads"],
-        num_head_channels=netG_moex1["num_head_channels"],
-        use_new_attention_order=netG_moex1["use_new_attention_order"],
-        use_checkpoint=netG_moex1["use_checkpoint"],
-        resblock_updown=netG_moex1["resblock_updown"],
-        channel_mult=netG_moex1["channel_mult"],
-        resample_2d=netG_moex1["resample_2d"],
-        pool=netG_moex1["pool"],
-        activation=netG_moex1["activation"],
-    )
-
-    decoder_cfg = MoEConfig(
-        kernel=netG_moex1["kernel"],
-        sharpening_factor=netG_moex1["sharpening_factor"],
-    )
-
-    autoenocer_cfg = AutoencoderConfig(
-        EncoderConfig=encoder_cfg,
-        DecoderConfig=decoder_cfg,
-        d_in=netG_moex1["n_channels"],
-        d_out=z,
-        phw=opt["phw"],
-        overlap=opt["overlap"],
-    )
-
-    model_moex1 = Autoencoder(cfg=autoenocer_cfg)
-
-    model_moex1.load_state_dict(
-        torch.load(opt["pretrained_models"]["moex1"], weights_only=True), strict=True
-    )
-    model_moex1.eval()
-    for k, v in model_moex1.named_parameters():
-        v.requires_grad = False
-    model_moex1 = model_moex1.to(device)
-
-    json_dpsr = """
+        json_moex1 = """
         {
-        "netG": {
-            "net_type": "dpsr",
-            "in_nc": 1,
-            "out_nc": 1,
-            "nc": 96,
-            "nb": 16,
-            "gc": 32,
-            "ng": 2,
-            "reduction": 16,
-            "act_mode": "R",
-            "upsample_mode": "pixelshuffle",
-            "downsample_mode": "strideconv",
-            "init_type": "orthogonal",
-            "init_bn_type": "uniform",
-            "init_gain": 0.2,
-            "scale": 2,
-            "n_channels": 1,
-            "ang_res": 5,
-            "phw": 16,
-            "overlap": 10
+            "netG": {
+                "net_type": "unet_moex1",
+                "kernel": 16,
+                "sharpening_factor": 1.3,
+                "model_channels": 64,
+                "num_res_blocks": 8,
+                "attention_resolutions": [16,8,4],
+                "dropout": 0.2,
+                "num_groups": 8,
+                "num_heads": 32,
+                "num_head_channels": 32,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "resblock_updown": false,
+                "channel_mult": [1,2,4,8],
+                "resample_2d": false,
+                "pool": "attention",
+                "activation": "GELU",
+                "resizer_num_layers": 2,
+                "resizer_avg_pool": false,
+                "scale": 2,
+                "n_channels": 1
             }
-         }
+        }
         """
 
-    netG_dpsr = json.loads(json_dpsr)["netG"]
+        netG_moex1 = json.loads(json_moex1)["netG"]
 
-    model_dpsr = dpsr(
-        in_nc=netG_dpsr["in_nc"],
-        out_nc=netG_dpsr["out_nc"],
-        nc=netG_dpsr["nc"],
-        nb=netG_dpsr["nb"],
-        upscale=netG_dpsr["scale"],
-        act_mode=netG_dpsr["act_mode"],
-        upsample_mode=netG_dpsr["upsample_mode"],
-    )
+        z = 2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
 
-    model_dpsr.load_state_dict(
-        torch.load(opt["pretrained_models"]["dpsr"], weights_only=True), strict=True
-    )
-    model_dpsr.eval()
-    for k, v in model_dpsr.named_parameters():
-        v.requires_grad = False
-    model_dpsr = model_dpsr.to(device)
+        encoder_cfg = EncoderConfig(
+            model_channels=netG_moex1["model_channels"],
+            num_res_blocks=netG_moex1["num_res_blocks"],
+            attention_resolutions=netG_moex1["attention_resolutions"],
+            dropout=netG_moex1["dropout"],
+            num_groups=netG_moex1["num_groups"],
+            scale_factor=netG_moex1["scale"],
+            num_heads=netG_moex1["num_heads"],
+            num_head_channels=netG_moex1["num_head_channels"],
+            use_new_attention_order=netG_moex1["use_new_attention_order"],
+            use_checkpoint=netG_moex1["use_checkpoint"],
+            resblock_updown=netG_moex1["resblock_updown"],
+            channel_mult=netG_moex1["channel_mult"],
+            resample_2d=netG_moex1["resample_2d"],
+            pool=netG_moex1["pool"],
+            activation=netG_moex1["activation"],
+        )
 
-    json_rrdb = """
-    {
-        "netG": {
-            "net_type": "rrdb",
-            "in_nc": 1,
-            "out_nc": 1,
-            "nc": 64,
-            "nb": 23,
-            "gc": 32,
-            "ng": 2,
-            "reduction": 16,
-            "act_mode": "R",
-            "upsample_mode": "upconv",
-            "downsample_mode": "strideconv",
-            "init_type": "orthogonal",
-            "init_bn_type": "uniform",
-            "init_gain": 0.2,
-            "scale": 2,
-            "n_channels": 1,
-            "ang_res": 5
+        decoder_cfg = MoEConfig(
+            kernel=netG_moex1["kernel"],
+            sharpening_factor=netG_moex1["sharpening_factor"],
+        )
+
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            d_in=netG_moex1["n_channels"],
+            d_out=z,
+            phw=opt["phw"],
+            overlap=opt["overlap"],
+        )
+
+        model_moex1 = Autoencoder(cfg=autoenocer_cfg)
+
+        model_moex1.load_state_dict(
+            torch.load(opt["pretrained_models"]["moex1"], weights_only=True), strict=True
+        )
+        model_moex1.eval()
+        for k, v in model_moex1.named_parameters():
+            v.requires_grad = False
+        model_moex1 = model_moex1.to(device)
+
+        json_dpsr = """
+            {
+            "netG": {
+                "net_type": "dpsr",
+                "in_nc": 1,
+                "out_nc": 1,
+                "nc": 96,
+                "nb": 16,
+                "gc": 32,
+                "ng": 2,
+                "reduction": 16,
+                "act_mode": "R",
+                "upsample_mode": "pixelshuffle",
+                "downsample_mode": "strideconv",
+                "init_type": "orthogonal",
+                "init_bn_type": "uniform",
+                "init_gain": 0.2,
+                "scale": 2,
+                "n_channels": 1,
+                "ang_res": 5,
+                "phw": 16,
+                "overlap": 10
+                }
+            }
+            """
+
+        netG_dpsr = json.loads(json_dpsr)["netG"]
+
+        model_dpsr = dpsr(
+            in_nc=netG_dpsr["in_nc"],
+            out_nc=netG_dpsr["out_nc"],
+            nc=netG_dpsr["nc"],
+            nb=netG_dpsr["nb"],
+            upscale=netG_dpsr["scale"],
+            act_mode=netG_dpsr["act_mode"],
+            upsample_mode=netG_dpsr["upsample_mode"],
+        )
+
+        model_dpsr.load_state_dict(
+            torch.load(opt["pretrained_models"]["dpsr"], weights_only=True), strict=True
+        )
+        model_dpsr.eval()
+        for k, v in model_dpsr.named_parameters():
+            v.requires_grad = False
+        model_dpsr = model_dpsr.to(device)
+
+        json_rrdb = """
+        {
+            "netG": {
+                "net_type": "rrdb",
+                "in_nc": 1,
+                "out_nc": 1,
+                "nc": 64,
+                "nb": 23,
+                "gc": 32,
+                "ng": 2,
+                "reduction": 16,
+                "act_mode": "R",
+                "upsample_mode": "upconv",
+                "downsample_mode": "strideconv",
+                "init_type": "orthogonal",
+                "init_bn_type": "uniform",
+                "init_gain": 0.2,
+                "scale": 2,
+                "n_channels": 1,
+                "ang_res": 5
+            }
         }
-       }
-    """
-    netG_rrdb = json.loads(json_rrdb)["netG"]
+        """
+        netG_rrdb = json.loads(json_rrdb)["netG"]
 
-    model_esrgan = rrdb(
-        in_nc=netG_rrdb["in_nc"],
-        out_nc=netG_rrdb["out_nc"],
-        nc=netG_rrdb["nc"],
-        nb=netG_rrdb["nb"],
-        gc=netG_rrdb["gc"],
-        upscale=netG_rrdb["scale"],
-        act_mode=netG_rrdb["act_mode"],
-        upsample_mode=netG_rrdb["upsample_mode"],
-    )
-
-    model_esrgan.load_state_dict(
-        torch.load(opt["pretrained_models"]["esrgan"], weights_only=True), strict=True
-    )
-    model_esrgan.eval()
-    for k, v in model_esrgan.named_parameters():
-        v.requires_grad = False
-    model_esrgan = model_esrgan.to(device)
-
-    # titles = [
-    #     "High Resolution",
-    #     "Low Resolution Crop",
-    #     "High Resolution Crop",
-    #     "N-SMoE",
-    #     "DPSR",
-    # ]
-
-    model_cfg = "sam2_hiera_l.yaml"
-
-    sam2 = build_sam2(
-        model_cfg,
-        opt["pretrained_models"]["sam2"],
-        device="cuda",
-        apply_postprocessing=True,
-    )
-
-    # mask_generator = SAM2AutomaticMaskGenerator(
-    #     model=sam2,
-    #     points_per_side=256,  # Very high density for the finest details
-    #     points_per_batch=128,  # More points per batch for thorough segmentation
-    #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
-    #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
-    #     stability_score_offset=1.0,
-    #     mask_threshold=0.0,
-    #     box_nms_thresh=0.7,
-    #     crop_n_layers=4,  # More layers for multi-level cropping
-    #     crop_nms_thresh=0.7,
-    #     crop_overlap_ratio=512 / 1500,
-    #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
-    #     min_mask_region_area=20,  # Small region processing to remove artifacts
-    #     output_mode="binary_mask",
-    #     use_m2m=True,  # Enable M2M refinement
-    #     multimask_output=True,
-    # )
-
-    mask_generator = SAM2AutomaticMaskGenerator(
-        model=sam2,
-        # points_per_side=64,
-        # points_per_batch=128,
-        # pred_iou_thresh=0.7,
-        # stability_score_thresh=0.92,
-        # stability_score_offset=0.7,
-        # crop_n_layers=1,
-        # box_nms_thresh=0.7,
-        # crop_n_points_downscale_factor=2,
-        # min_mask_region_area=25.0,
-        # use_m2m=True,
-    )
-
-    avg_psnr = 0.0
-    idx = 0
-
-    psnr_moex_list: list[torch.float] = []
-    psnr_dpsr_list: list[torch.float] = []
-    psnr_esrgan_list = []
-
-    ssim_moex_list: list[torch.float] = []
-    ssim_dpsr_list: list[torch.float] = []
-    ssim_esrgan_list: list[torch.float] = []
-
-    lpips_moex_list: list[torch.float] = []
-    lpips_dpsr_list: list[torch.float] = []
-    lpips_esrgan_list: list[torch.float] = []
-
-    dists_moex_list: list[torch.float] = []
-    dists_dpsr_list: list[torch.float] = []
-    dists_esrgan_list: list[torch.float] = []
-
-    dataset_name = opt["datasets"]["test"]["name"]
-    degrdation = opt["datasets"]["test"]["degradation_type"]
-    H_img_size = opt["datasets"]["test"]["H_size"]
-    scale: str = f'x{opt["scale"]}'
-
-    timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    methods: List[str] = ["DPSR", "ESRGAN", "N-SMoE"]
-    csv_dir = os.path.join(opt["path"]["root"], dataset_name)
-    util.mkdir(csv_dir)
-    fmetric_name = os.path.join(
-        csv_dir,
-        degrdation
-        + "_"
-        + dataset_name
-        + "_"
-        + timestamp.replace(" ", "_").replace(":", "-"),
-    )
-    for test_data in test_loader:
-        if test_data is None:
-            continue
-
-        idx += 1
-        image_name_ext = os.path.basename(test_data["L_path"][0])
-        img_name, ext = os.path.splitext(image_name_ext)
-
-        img_dir = os.path.join(opt["path"]["images"], img_name)
-        util.mkdir(img_dir)
-
-        fname = os.path.join(
-            img_dir,
-            f"{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}",
+        model_esrgan = rrdb(
+            in_nc=netG_rrdb["in_nc"],
+            out_nc=netG_rrdb["out_nc"],
+            nc=netG_rrdb["nc"],
+            nb=netG_rrdb["nb"],
+            gc=netG_rrdb["gc"],
+            upscale=netG_rrdb["scale"],
+            act_mode=netG_rrdb["act_mode"],
+            upsample_mode=netG_rrdb["upsample_mode"],
         )
-        figure_path = f"{fname}.pdf"
-        seg_figure_path = os.path.join(
-            img_dir,
-            f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+
+        model_esrgan.load_state_dict(
+            torch.load(opt["pretrained_models"]["esrgan"], weights_only=True), strict=True
         )
-        with torch.no_grad():
-            E_img_moex1 = model_moex1(
-                test_data["L_p"].to(device), test_data["L"].size()
+        model_esrgan.eval()
+        for k, v in model_esrgan.named_parameters():
+            v.requires_grad = False
+        model_esrgan = model_esrgan.to(device)
+
+        # titles = [
+        #     "High Resolution",
+        #     "Low Resolution Crop",
+        #     "High Resolution Crop",
+        #     "N-SMoE",
+        #     "DPSR",
+        # ]
+
+        model_cfg = "sam2_hiera_l.yaml"
+
+        sam2 = build_sam2(
+            model_cfg,
+            opt["pretrained_models"]["sam2"],
+            device="cuda",
+            apply_postprocessing=True,
+        )
+
+        # mask_generator = SAM2AutomaticMaskGenerator(
+        #     model=sam2,
+        #     points_per_side=256,  # Very high density for the finest details
+        #     points_per_batch=128,  # More points per batch for thorough segmentation
+        #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
+        #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
+        #     stability_score_offset=1.0,
+        #     mask_threshold=0.0,
+        #     box_nms_thresh=0.7,
+        #     crop_n_layers=4,  # More layers for multi-level cropping
+        #     crop_nms_thresh=0.7,
+        #     crop_overlap_ratio=512 / 1500,
+        #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
+        #     min_mask_region_area=20,  # Small region processing to remove artifacts
+        #     output_mode="binary_mask",
+        #     use_m2m=True,  # Enable M2M refinement
+        #     multimask_output=True,
+        # )
+
+        mask_generator = SAM2AutomaticMaskGenerator(
+            model=sam2,
+            points_per_side=128,
+            points_per_batch=128,
+            pred_iou_thresh=0.7,
+            stability_score_thresh=0.92,
+            stability_score_offset=0.7,
+            crop_n_layers=1,
+            box_nms_thresh=0.7,
+            crop_n_points_downscale_factor=2,
+            min_mask_region_area=25.0,
+            use_m2m=True,
+        )
+
+        avg_psnr = 0.0
+        idx = 0
+
+        psnr_moex_list: list[torch.float] = []
+        psnr_dpsr_list: list[torch.float] = []
+        psnr_esrgan_list = []
+        psnr_bicubic_list = []
+
+        ssim_moex_list: list[torch.float] = []
+        ssim_dpsr_list: list[torch.float] = []
+        ssim_esrgan_list: list[torch.float] = []
+        ssim_bicubic_list: list[torch.float] = []
+
+        lpips_moex_list: list[torch.float] = []
+        lpips_dpsr_list: list[torch.float] = []
+        lpips_esrgan_list: list[torch.float] = []
+        lpips_bicubic_list: list[torch.float] = []
+
+        dists_moex_list: list[torch.float] = []
+        dists_dpsr_list: list[torch.float] = []
+        dists_esrgan_list: list[torch.float] = []
+        dists_bicubic_list: list[torch.float] = []
+
+        dataset_name = opt["datasets"]["test"]["name"]
+        degrdation = opt["datasets"]["test"]["degradation_type"]
+        H_img_size = opt["datasets"]["test"]["H_size"]
+        scale: str = f'x{opt["scale"]}'
+
+        timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        methods: List[str] = ["Bicubic", "DPSR", "ESRGAN", "N-SMoE"]
+        csv_dir = os.path.join(opt["path"]["root"], dataset_name)
+        util.mkdir(csv_dir)
+        fmetric_name = os.path.join(
+            csv_dir,
+            degrdation
+            + "_"
+            + dataset_name
+            + "_"
+            + timestamp.replace(" ", "_").replace(":", "-"),
+        )
+        for test_data in test_loader:
+            if test_data is None:
+                continue
+
+            idx += 1
+            image_name_ext = os.path.basename(test_data["L_path"][0])
+            img_name, ext = os.path.splitext(image_name_ext)
+
+            img_dir = os.path.join(opt["path"]["images"], img_name)
+            util.mkdir(img_dir)
+
+            fname = os.path.join(
+                img_dir,
+                f"{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}",
+            )
+            figure_path = f"{fname}.pdf"
+            seg_figure_path = os.path.join(
+                img_dir,
+                f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+            )
+            with torch.no_grad():
+                E_img_moex1 = model_moex1(
+                    test_data["L_p"].to(device), test_data["L"].size()
+                )
+
+                E_img_dpsr = model_dpsr(test_data["L"].to(device))
+                E_img_esrgan = model_esrgan(test_data["L"].to(device))
+                E_bicubic = default_resizer(test_data["L"], test_data["H"].size()[2:])
+            # gt_img = (test_data["H"].mul(255.0).clamp(0, 255).to(torch.uint8)).to(device)
+            # E_img_moex_t = E_img_moex1.mul(255.0).clamp(0, 255).to(torch.uint8)
+            # E_img_dpsr_t = E_img_dpsr.mul(255.0).clamp(0, 255).to(torch.uint8)
+            # E_img_esrgan_t = E_img_esrgan.mul(255.0).clamp(0, 255).to(torch.uint8)
+
+            gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
+            E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
+            E_img_dpsr_t = E_img_dpsr.clamp(0, 1).to(torch.float)
+            E_img_esrgan_t = E_img_esrgan.clamp(0, 1).to(torch.float)
+            E_bicubic_t = E_bicubic.clamp(0, 1).to(torch.float).to(device)
+
+            psnr_moex1 = piq.psnr(E_img_moex_t, gt_img, data_range=1).float()
+            psnr_dpsr = piq.psnr(E_img_dpsr_t, gt_img, data_range=1).float()
+            psnr_esrgan = piq.psnr(E_img_esrgan_t, gt_img, data_range=1).float()
+            psnr_bicubic = piq.psnr(E_bicubic_t, gt_img, data_range=1).float()
+
+            ssim_moex1 = piq.ssim(E_img_moex_t, gt_img, data_range=1, reduction="mean")
+            ssim_dpsr = piq.ssim(E_img_dpsr_t, gt_img, data_range=1, reduction="mean")
+            ssim_esrgan = piq.ssim(E_img_esrgan_t, gt_img, data_range=1, reduction="mean")
+            ssim_bicubic = piq.ssim(E_bicubic_t, gt_img, data_range=1, reduction="mean")
+
+            lpips_moex1 = piq.LPIPS()(E_img_moex_t, gt_img).item()
+            lpips_dpsr = piq.LPIPS()(E_img_dpsr_t, gt_img).item()
+            lpips_esrgan = piq.LPIPS()(E_img_esrgan_t, gt_img).item()
+            lpips_bicubic = piq.LPIPS()(E_bicubic_t, gt_img).item()
+
+            dists_moex1 = piq.DISTS()(E_img_moex_t, gt_img).item()
+            dists_dpsr = piq.DISTS()(E_img_dpsr_t, gt_img).item()
+            dists_esrgan = piq.DISTS()(E_img_esrgan_t, gt_img).item()
+            dists_bicubic = piq.DISTS()(E_bicubic_t, gt_img).item()
+
+            brisque_moex1 = piq.brisque(E_img_moex_t, data_range=1.0, reduction="none")
+            brisque_dpsr = piq.brisque(E_img_dpsr_t, data_range=1.0, reduction="none")
+            brisque_esrgan = piq.brisque(E_img_esrgan_t, data_range=1.0, reduction="none")
+            brisque_bicubic = piq.brisque(E_bicubic_t, data_range=1.0, reduction="none")
+
+            print(
+                f"PSNR N-SMoE: {psnr_moex1}, PSNR DPSR: {psnr_dpsr}, PSNR ESRGAN: {psnr_esrgan}, PSNR Bicubic: {psnr_bicubic}",
             )
 
-            E_img_dpsr = model_dpsr(test_data["L"].to(device))
-            E_img_esrgan = model_esrgan(test_data["L"].to(device))
+            print(
+                f"SSIM N-SMoE: {ssim_moex1}, SSIM DPSR: {ssim_dpsr}, SSIM ESRGAN: {ssim_esrgan}, SSIM Bicubic: {ssim_bicubic}"
+            )
 
-        # gt_img = (test_data["H"].mul(255.0).clamp(0, 255).to(torch.uint8)).to(device)
-        # E_img_moex_t = E_img_moex1.mul(255.0).clamp(0, 255).to(torch.uint8)
-        # E_img_dpsr_t = E_img_dpsr.mul(255.0).clamp(0, 255).to(torch.uint8)
-        # E_img_esrgan_t = E_img_esrgan.mul(255.0).clamp(0, 255).to(torch.uint8)
+            print(
+                f"LPIPS N-SMoE: {lpips_moex1}, LPIPS DPSR: {lpips_dpsr}, LPIPS ESRGAN: {lpips_esrgan}, LPIPS Bicubic: {lpips_bicubic}"
+            )
 
-        gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
-        E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
-        E_img_dpsr_t = E_img_dpsr.clamp(0, 1).to(torch.float)
-        E_img_esrgan_t = E_img_esrgan.clamp(0, 1).to(torch.float)
+            print(
+                f"DISTS N-SMoE: {dists_moex1}, DISTS DPSR: {dists_dpsr}, DISTS ESRGAN: {dists_esrgan}, DISTS Bicubic: {dists_bicubic}"
+            )
 
-        psnr_moex1 = piq.psnr(E_img_moex_t, gt_img, data_range=1).float()
-        psnr_dpsr = piq.psnr(E_img_dpsr_t, gt_img, data_range=1).float()
-        psnr_esrgan = piq.psnr(E_img_esrgan_t, gt_img, data_range=1).float()
+            print(
+                f"Brisque N-SMoE: {brisque_moex1}, Brisque DPSR: {brisque_dpsr}, Brisque ESRGAN: {brisque_esrgan}, Brisque Bicubic: {brisque_bicubic}"
+            )
 
-        ssim_moex1 = piq.ssim(E_img_moex_t, gt_img, data_range=1, reduction="mean")
-        ssim_dpsr = piq.ssim(E_img_dpsr_t, gt_img, data_range=1, reduction="mean")
-        ssim_esrgan = piq.ssim(E_img_esrgan_t, gt_img, data_range=1, reduction="mean")
+            psnr_moex_list.append(psnr_moex1)
+            psnr_dpsr_list.append(psnr_dpsr)
+            psnr_esrgan_list.append(psnr_esrgan)
+            psnr_bicubic_list.append(psnr_bicubic)
 
-        lpips_moex1 = piq.LPIPS()(E_img_moex_t, gt_img).item()
-        lpips_dpsr = piq.LPIPS()(E_img_dpsr_t, gt_img).item()
-        lpips_esrgan = piq.LPIPS()(E_img_esrgan_t, gt_img).item()
+            ssim_moex_list.append(ssim_moex1)
+            ssim_dpsr_list.append(ssim_dpsr)
+            ssim_esrgan_list.append(ssim_esrgan)
+            ssim_bicubic_list.append(ssim_bicubic)
 
-        dists_moex1 = piq.DISTS()(E_img_moex_t, gt_img).item()
-        dists_dpsr = piq.DISTS()(E_img_dpsr_t, gt_img).item()
-        dists_esrgan = piq.DISTS()(E_img_esrgan_t, gt_img).item()
+            lpips_moex_list.append(lpips_moex1)
+            lpips_dpsr_list.append(lpips_dpsr)
+            lpips_esrgan_list.append(lpips_esrgan)
+            lpips_bicubic_list.append(lpips_bicubic)
 
-        brisque_moex1 = piq.brisque(E_img_moex_t, data_range=1.0, reduction="none")
-        brisque_dpsr = piq.brisque(E_img_dpsr_t, data_range=1.0, reduction="none")
-        brisque_esrgan = piq.brisque(E_img_esrgan_t, data_range=1.0, reduction="none")
+            dists_moex_list.append(dists_moex1)
+            dists_dpsr_list.append(dists_dpsr)
+            dists_esrgan_list.append(dists_esrgan)
+            dists_bicubic_list.append(dists_bicubic)
 
-        print(
-            f"PSNR N-SMoE: {psnr_moex1}, PSNR DPSR: {psnr_dpsr}, PSNR ESRGAN: {psnr_esrgan}"
-        )
+            E_img_moex1 = util.tensor2uint(E_img_moex1)
+            E_img_dpsr = util._tensor2uint(E_img_dpsr)
+            E_img_esrgan = util._tensor2uint(E_img_esrgan)
+            E_bicubic = util._tensor2uint(E_bicubic)
 
-        print(
-            f"SSIM N-SMoE: {ssim_moex1}, SSIM DPSR: {ssim_dpsr}, SSIM ESRGAN: {ssim_esrgan}"
-        )
+            L_crop_img = util.tensor2uint(test_data["L"])
+            H_crop_img = util.tensor2uint(test_data["H"])
 
-        print(
-            f"LPIPS N-SMoE: {lpips_moex1}, LPIPS DPSR: {lpips_dpsr}, LPIPS ESRGAN: {lpips_esrgan}"
-        )
+            img_H = util.tensor2uint(test_data["O"])
+            # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
+            img_H = util.modcrop(img_H, border)
 
-        print(
-            f"DISTS N-SMoE: {dists_moex1}, DISTS DPSR: {dists_dpsr}, DISTS ESRGAN: {dists_esrgan}"
-        )
+            images: dict[str, Any] = {
+                "H_img": img_H,
+                "H_img_size": H_img_size,
+                "L_crop_img": L_crop_img,
+                "H_crop_img": H_crop_img,
+                "E_Bicubic_img": E_bicubic,
+                "E_SMoE_img": E_img_moex1,
+                "E_DPSR_img": E_img_dpsr,
+                "E_ESRGAN_img": E_img_esrgan,
+                "Degradation_Model": degrdation,
+                "scale": scale,
+            }
 
-        print(
-            f"Brisque N-SMoE: {brisque_moex1}, Brisque DPSR: {brisque_dpsr}, Brisque ESRGAN: {brisque_esrgan}"
-        )
+            scipy.io.savemat(f"{fname}.mat", images)
 
-        psnr_moex_list.append(psnr_moex1)
-        psnr_dpsr_list.append(psnr_dpsr)
-        psnr_esrgan_list.append(psnr_esrgan)
+            # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
-        ssim_moex_list.append(ssim_moex1)
-        ssim_dpsr_list.append(ssim_dpsr)
-        ssim_esrgan_list.append(ssim_esrgan)
+            titles: list[str] = [
+                "High Resolution",
+                "Noisy Low Resolution Crop",
+                "Ground Truth Crop",
+                "Bicubic",
+                "N-SMoE",
+                "DPSR",
+                "ESRGAN",
+            ]
 
-        lpips_moex_list.append(lpips_moex1)
-        lpips_dpsr_list.append(lpips_dpsr)
-        lpips_esrgan_list.append(lpips_esrgan)
+            visualize_with_segmentation(
+                [
+                    img_H,
+                    L_crop_img,
+                    H_crop_img,
+                    E_bicubic,
+                    E_img_moex1,
+                    E_img_dpsr,
+                    E_img_esrgan,
+                ],
+                titles,
+                mask_generator,
+                cmap="gray",
+                save_path=seg_figure_path,
+                visualize=opt["visualize"],
+                backend=opt["backend"],
+            )
 
-        dists_moex_list.append(dists_moex1)
-        dists_dpsr_list.append(dists_dpsr)
-        dists_esrgan_list.append(dists_esrgan)
+            visualize_data(
+                [L_crop_img, H_crop_img, E_bicubic, E_img_moex1, E_img_dpsr, E_img_esrgan],
+                titles[1:],
+                cmap="gray",
+                save_path=figure_path,
+                visualize=opt["visualize"],
+                backend=opt["backend"],
+            )
 
-        E_img_moex1 = util.tensor2uint(E_img_moex1)
-        E_img_dpsr = util._tensor2uint(E_img_dpsr)
-        E_img_esrgan = util._tensor2uint(E_img_esrgan)
+            current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
+            logger.info(
+                "{:->4d}--> {:>10s} | {:<4.2f}dB".format(idx, image_name_ext, current_psnr)
+            )
 
-        L_crop_img = util.tensor2uint(test_data["L"])
-        H_crop_img = util.tensor2uint(test_data["H"])
+            avg_psnr += current_psnr
 
-        img_H = util.tensor2uint(test_data["O"])
-        # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
-        img_H = util.modcrop(img_H, border)
+        avg_psnr_moex = torch.tensor(psnr_moex_list).mean().float()
+        avg_psnr_dpsr = torch.tensor(psnr_dpsr_list).mean().float()
+        avg_psnr_esrgan = torch.tensor(psnr_esrgan_list).mean().float()
 
-        images: dict[str, Any] = {
-            "H_img": img_H,
-            "H_img_size": H_img_size,
-            "L_crop_img": L_crop_img,
-            "H_crop_img": H_crop_img,
-            "E_SMoE_img": E_img_moex1,
-            "E_DPSR_img": E_img_dpsr,
-            "E_ESRGAN_img": E_img_esrgan,
-            "Degradation_Model": degrdation,
-            "scale": scale,
-        }
+        avg_ssim_moex = torch.tensor(ssim_moex_list).mean().float()
+        avg_ssim_dpsr = torch.tensor(ssim_dpsr_list).mean().float()
+        avg_ssim_esrgan = torch.tensor(ssim_esrgan_list).mean().float()
 
-        scipy.io.savemat(f"{fname}.mat", images)
+        avg_lpips_moex = torch.tensor(lpips_moex_list).mean().float()
+        avg_lpips_dpsr = torch.tensor(lpips_dpsr_list).mean().float()
+        avg_lpips_esrgan = torch.tensor(lpips_esrgan_list).mean().float()
 
-        # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
+        avg_dists_moex = torch.tensor(dists_moex_list).mean().float()
+        avg_dists_dpsr = torch.tensor(dists_dpsr_list).mean().float()
+        avg_dists_esrgan = torch.tensor(dists_esrgan_list).mean().float()
 
-        titles: list[str] = [
-            "High Resolution",
-            "Noisy Low Resolution Crop",
-            "Ground Truth Crop",
-            "N-SMoE",
-            "DPSR",
-            "ESRGAN",
+        print(f"Average PSNR N-SMoE: {avg_psnr_moex}")
+        print(f"Average PSNR DPSR: {avg_psnr_dpsr}")
+        print(f"Average PSNR ESRGAN: {avg_psnr_esrgan}")
+
+        print(f"Average SSIM N-SMoE: {avg_ssim_moex}")
+        print(f"Average SSIM DPSR: {avg_ssim_dpsr}")
+        print(f"Average SSIM ESRGAN: {avg_ssim_esrgan}")
+
+        print(f"Average LPIPS N-SMoE: {avg_lpips_moex}")
+        print(f"Average LPIPS DPSR: {avg_lpips_dpsr}")
+        print(f"Average LPIPS ESRGAN: {avg_lpips_esrgan}")
+
+        print(f"Average DISTS N-SMoE: {avg_dists_moex}")
+        print(f"Average DISTS DPSR: {avg_dists_dpsr}")
+        print(f"Average DISTS ESRGAN: {avg_dists_esrgan}")
+
+        psnr_values: List[torch.Tensor] = [
+            avg_psnr_dpsr,
+            avg_psnr_esrgan,
+            avg_psnr_moex,
         ]
 
-        visualize_with_segmentation(
-            [img_H, L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
-            titles,
-            mask_generator,
-            cmap="gray",
-            save_path=seg_figure_path,
-            visualize=opt["visualize"],
-            backend=opt["backend"],
-        )
+        ssim_values: List[torch.Tensor] = [
+            avg_ssim_dpsr,
+            avg_ssim_esrgan,
+            avg_ssim_moex,
+        ]
 
-        visualize_data(
-            [L_crop_img, H_crop_img, E_img_moex1, E_img_dpsr, E_img_esrgan],
-            titles[1:],
-            cmap="gray",
-            save_path=figure_path,
-            visualize=opt["visualize"],
-            backend=opt["backend"],
-        )
+        lpips_values: List[torch.Tensor] = [
+            avg_lpips_dpsr,
+            avg_lpips_esrgan,
+            avg_lpips_moex,
+        ]
 
-        current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
-        logger.info(
-            "{:->4d}--> {:>10s} | {:<4.2f}dB".format(idx, image_name_ext, current_psnr)
-        )
+        dists_values: List[torch.Tensor] = [
+            avg_dists_dpsr,
+            avg_dists_esrgan,
+            avg_dists_moex,
+        ]
 
-        avg_psnr += current_psnr
+        diff_psnr_values: List[torch.Tensor] = [
+            psnr_values[-1] - psnr for psnr in psnr_values[:-1]
+        ]
+        diff_ssim_values: List[torch.Tensor] = [
+            ssim_values[-1] - ssim for ssim in ssim_values[:-1]
+        ]
 
-    avg_psnr_moex = torch.tensor(psnr_moex_list).mean().float()
-    avg_psnr_dpsr = torch.tensor(psnr_dpsr_list).mean().float()
-    avg_psnr_esrgan = torch.tensor(psnr_esrgan_list).mean().float()
+        with open((fmetric_name + "_metrics.csv"), "a", newline="") as csvfile:
+            csvwriter = csv.writer(csvfile)
 
-    avg_ssim_moex = torch.tensor(ssim_moex_list).mean().float()
-    avg_ssim_dpsr = torch.tensor(ssim_dpsr_list).mean().float()
-    avg_ssim_esrgan = torch.tensor(ssim_esrgan_list).mean().float()
-
-    avg_lpips_moex = torch.tensor(lpips_moex_list).mean().float()
-    avg_lpips_dpsr = torch.tensor(lpips_dpsr_list).mean().float()
-    avg_lpips_esrgan = torch.tensor(lpips_esrgan_list).mean().float()
-
-    avg_dists_moex = torch.tensor(dists_moex_list).mean().float()
-    avg_dists_dpsr = torch.tensor(dists_dpsr_list).mean().float()
-    avg_dists_esrgan = torch.tensor(dists_esrgan_list).mean().float()
-
-    print(f"Average PSNR N-SMoE: {avg_psnr_moex}")
-    print(f"Average PSNR DPSR: {avg_psnr_dpsr}")
-    print(f"Average PSNR ESRGAN: {avg_psnr_esrgan}")
-
-    print(f"Average SSIM N-SMoE: {avg_ssim_moex}")
-    print(f"Average SSIM DPSR: {avg_ssim_dpsr}")
-    print(f"Average SSIM ESRGAN: {avg_ssim_esrgan}")
-
-    print(f"Average LPIPS N-SMoE: {avg_lpips_moex}")
-    print(f"Average LPIPS DPSR: {avg_lpips_dpsr}")
-    print(f"Average LPIPS ESRGAN: {avg_lpips_esrgan}")
-
-    print(f"Average DISTS N-SMoE: {avg_dists_moex}")
-    print(f"Average DISTS DPSR: {avg_dists_dpsr}")
-    print(f"Average DISTS ESRGAN: {avg_dists_esrgan}")
-
-    psnr_values: List[torch.Tensor] = [
-        avg_psnr_dpsr,
-        avg_psnr_esrgan,
-        avg_psnr_moex,
-    ]
-
-    ssim_values: List[torch.Tensor] = [
-        avg_ssim_dpsr,
-        avg_ssim_esrgan,
-        avg_ssim_moex,
-    ]
-
-    lpips_values: List[torch.Tensor] = [
-        avg_lpips_dpsr,
-        avg_lpips_esrgan,
-        avg_lpips_moex,
-    ]
-
-    dists_values: List[torch.Tensor] = [
-        avg_dists_dpsr,
-        avg_dists_esrgan,
-        avg_dists_moex,
-    ]
-
-    diff_psnr_values: List[torch.Tensor] = [
-        psnr_values[-1] - psnr for psnr in psnr_values[:-1]
-    ]
-    diff_ssim_values: List[torch.Tensor] = [
-        ssim_values[-1] - ssim for ssim in ssim_values[:-1]
-    ]
-
-    with open((fmetric_name + "_metrics.csv"), "a", newline="") as csvfile:
-        csvwriter = csv.writer(csvfile)
-
-        csvwriter.writerow(
-            [
-                "Dataset",
-                "Degradation",
-                "Scale",
-                "Image_Size",
-                "Method",
-                "PSNR",
-                "SSIM",
-                "LPIPS",
-                "DISTS",
-                "Diff_PSNR",
-                "Diff_SSIM",
-            ]
-        )
-
-        for i, method in enumerate(methods):
             csvwriter.writerow(
                 [
-                    dataset_name,
-                    degrdation,
-                    scale,
-                    H_img_size,
-                    method,
-                    psnr_values[i].item(),
-                    ssim_values[i].item(),
-                    lpips_values[i].item(),
-                    dists_values[i].item(),
-                    diff_psnr_values[i].item() if i < len(diff_psnr_values) else "N/A",
-                    diff_ssim_values[i].item() if i < len(diff_ssim_values) else "N/A",
+                    "Dataset",
+                    "Degradation",
+                    "Scale",
+                    "Image_Size",
+                    "Method",
+                    "PSNR",
+                    "SSIM",
+                    "LPIPS",
+                    "DISTS",
+                    "Diff_PSNR",
+                    "Diff_SSIM",
                 ]
             )
-        print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 
+            for i, method in enumerate(methods):
+                csvwriter.writerow(
+                    [
+                        dataset_name,
+                        degrdation,
+                        scale,
+                        H_img_size,
+                        method,
+                        psnr_values[i].item(),
+                        ssim_values[i].item(),
+                        lpips_values[i].item(),
+                        dists_values[i].item(),
+                        diff_psnr_values[i].item() if i < len(diff_psnr_values) else "N/A",
+                        diff_ssim_values[i].item() if i < len(diff_ssim_values) else "N/A",
+                    ]
+                )
+            print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
+
+    elif task == "sr_x4":
+        print("Super Resolution x4 task")
+    
+    elif task == "sharpening"
+        print("Sharpening task")
+
+    elif task == "upsampling":
+        print("Upsampling task")
 
 if __name__ == "__main__":
     main()
