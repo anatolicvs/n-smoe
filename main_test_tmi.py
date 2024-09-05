@@ -444,6 +444,7 @@ def visualize_with_segmentation(
 
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["font.size"] = 11
+    plt.rcParams["text.usetex"] = True
 
     def calculate_metrics(gt_mask, pred_mask):
         gt_seg = gt_mask[0]["segmentation"]
@@ -510,6 +511,8 @@ def visualize_with_segmentation(
 
     ground_truth_index = 2
     gt_mask = None
+    vi_scores = {}
+    are_scores = {}
 
     for i in range(1, len(images)):
         ax_img = fig.add_subplot(gs[0, i + 1])
@@ -528,16 +531,41 @@ def visualize_with_segmentation(
 
         if i > ground_truth_index:
             vi_score, are_score = calculate_metrics(gt_mask, mask)
+            vi_scores[i] = vi_score
+            are_scores[i] = are_score
 
-            display_title = f"{titles[i]}\nVI: {vi_score:.4f}\nARE: {are_score:.4f}"
+    sorted_vi = sorted(vi_scores.items(), key=lambda x: x[1])
+    sorted_are = sorted(are_scores.items(), key=lambda x: x[1])
+
+    for i in range(1, len(images)):
+        ax_title = fig.add_subplot(gs[2, i + 1])
+
+        if i > ground_truth_index:
+            vi_score = vi_scores[i]
+            are_score = are_scores[i]
+
+            vi_text = f"VI: {vi_score:.4f}"
+            are_text = f"ARE: {are_score:.4f}"
+
+            if i == sorted_vi[0][0]:
+                vi_text = r"\textbf{" + vi_text + "}"
+            elif i == sorted_vi[1][0]:
+                vi_text = r"\underline{" + vi_text + "}"
+
+            if i == sorted_are[0][0]:
+                are_text = r"\textbf{" + are_text + "}"
+            elif i == sorted_are[1][0]:
+                are_text = r"\underline{" + are_text + "}"
+
+            display_title = f"{titles[i]}\\n{vi_text}\\n{are_text}"
             ax_title.text(
                 0.5,
-                -1,
+                -0.2,
                 display_title,
                 fontsize=10,
-                weight="bold",
                 va="center",
                 ha="center",
+                usetex=True,
             )
         else:
             display_title = titles[i]
@@ -677,7 +705,7 @@ def visualize_data(
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
     reference_title = "Ground Truth Crop"
-    low_res_title = "Noisy Low Resolution Crop"
+    low_res_title = "Noisy LR Crop"
     reference_index = titles.index(reference_title)
     reference_image = images[reference_index].squeeze()
 
@@ -1879,8 +1907,8 @@ def main(**kwargs):
             # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
             titles: list[str] = [
-                "High Resolution",
-                "Noisy Low Resolution Crop",
+                "HR",
+                "Noisy LR Crop",
                 "Ground Truth Crop",
                 "Bicubic",
                 "N-SMoE",
