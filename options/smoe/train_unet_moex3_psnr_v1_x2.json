@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_plain_v4_x2_medical_mix_act_gelu" 
+    "task": "moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_16" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -25,14 +25,14 @@
             "name": "train_dataset"           
             , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
             , "lq_patchsize": 32
-            , "length" : -1
+            , "length" : -1 
             , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
             , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
             , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train","/hpcwork/p0021791/dataset/rgb/train_1"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
             //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
             , "use_dataset_cache": true
-            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl"
+            , "dataset_cache_file" :  "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1.pkl" // "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1_len_50.pkl"
             , "dataroot_L": null              // path of L training dataset
             , "H_size": 220                    // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_shuffle": true
@@ -50,7 +50,7 @@
             , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test","/work/pb035507/dataset/rgb/test/"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
             , "dataroot_L": null              // path of L testing dataset
             , "use_dataset_cache": true
-            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl"
+            , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1.pkl" // "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1_50.pkl"
             , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
             , "dataloader_num_workers": 32
             , "dataloader_batch_size": 1 
@@ -62,30 +62,30 @@
           "kernel": 16,
           "sharpening_factor": 1,
   
-          "model_channels": 64,
+          "model_channels": 72,
           "num_res_blocks": 8,
-          "attention_resolutions": [16,8,4],
-          "dropout": 0.2,
-          "channel_mult": [2,4,8],
-          "conv_resample": false,
-          "dims":2,
+          "attention_resolutions": [16,8, 4],
+          "dropout": 0.1,
+          "num_groups": 36,
+          "num_heads": 36,
+          "use_new_attention_order": true,
           "use_checkpoint": true,
           "use_fp16": false,
-          "num_heads": 32,
-          "resblock_updown": false,
-          "num_groups": 32,
+          "resblock_updown": true,
+          "channel_mult": [2,4,8],
+          "conv_resample": true,
           "resample_2d": false,
-          "resizer_num_layers": 2,
-          "resizer_avg_pool": false,
-          "activation": "GELU",
-          "rope_theta": 10000.0,
           "attention_type": "cross_attention",
+          "activation": "GELU",
+          "rope_theta": 960000.0,
+          "resizer_num_layers": 8,
+          "resizer_avg_pool": false,
           "init_type": "default"
         }
 
         , "train": {
         "is_moe": true
-        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+        , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
@@ -95,14 +95,16 @@
         , "G_scheduler_type": "MultiStepLR"
         , "G_scheduler_T_max": 10000
         , "G_scheduler_eta_min": 1e-7
-        , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
+        , "G_scheduler_milestones": [20000, 40000, 60000, 80000, 100000, 200000]
         , "G_scheduler_gamma": 0.5
+        , "G_optimizer_reuse": true
     
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
-    
-        , "checkpoint_test": 5000           // for testing
-        , "checkpoint_save": 5000           // for saving model
-        , "checkpoint_print": 250           // for print
+        , "G_param_strict": true
+
+        , "checkpoint_test": 30000           // for testing
+        , "checkpoint_save": 15000           // for saving model
+        , "checkpoint_print": 2000          // for print
       }
   }
