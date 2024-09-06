@@ -46,7 +46,7 @@
       , "G_scheduler_type": "MultiStepLR"
       
       , "G_scheduler_T_max": 200000
-      , "G_scheduler_eta_min": 1e-6
+      , "G_scheduler_eta_min": 1e-5
       , "G_scheduler_max_lr": 1e-3
       , "G_scheduler_step_size_up": 30000
       , "G_scheduler_step_size_down": 30000
@@ -61,7 +61,7 @@
       , "E_param_strict": false
   
       , "checkpoint_test": 20           
-      , "checkpoint_save": 2000        
-      , "checkpoint_print": 100         
+      , "checkpoint_save": 10000        
+      , "checkpoint_print": 1000         
     }
   }
