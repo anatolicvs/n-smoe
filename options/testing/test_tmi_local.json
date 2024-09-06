@@ -1,5 +1,5 @@
 {
-    "task": "sr_x2" //"sharpening" 
+    "task": "sharpening" //"sharpening" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     

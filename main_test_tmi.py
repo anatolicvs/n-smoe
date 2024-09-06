@@ -539,33 +539,32 @@ def visualize_with_segmentation(
 
     for i in range(1, len(images)):
         ax_title = fig.add_subplot(gs[2, i + 1])
-
         if i > ground_truth_index:
             vi_score = vi_scores[i]
             are_score = are_scores[i]
 
-            vi_text = f"VI: {vi_score:.4f}"
+            vi_text = f"VoI: {vi_score:.4f}"
             are_text = f"ARE: {are_score:.4f}"
 
             if i == sorted_vi[0][0]:
-                vi_text = r"\textbf{" + vi_text + "}"
+                vi_text = r"\textbf{VoI: %.4f}" % vi_score
             elif i == sorted_vi[1][0]:
-                vi_text = r"\underline{" + vi_text + "}"
+                vi_text = r"\underline{VoI: %.4f}" % vi_score
 
             if i == sorted_are[0][0]:
-                are_text = r"\textbf{" + are_text + "}"
+                are_text = r"\textbf{ARE: %.4f}" % are_score
             elif i == sorted_are[1][0]:
-                are_text = r"\underline{" + are_text + "}"
+                are_text = r"\underline{ARE: %.4f}" % are_score
 
-            display_title = f"{titles[i]}\\n{vi_text}\\n{are_text}"
+            display_title = f"{titles[i]}\n{vi_text}\n{are_text}"
+
             ax_title.text(
                 0.5,
-                -0.2,
+                0.0,
                 display_title,
-                fontsize=10,
                 va="center",
                 ha="center",
-                usetex=True,
+                transform=ax_title.transAxes,
             )
         else:
             display_title = titles[i]
@@ -573,16 +572,17 @@ def visualize_with_segmentation(
                 0.5,
                 0.5,
                 display_title,
-                fontsize=10,
                 weight="bold",
                 va="center",
                 ha="center",
+                transform=ax_title.transAxes,
             )
 
-        ax_title.axis("off")
+    plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
+    plt.subplots_adjust(wspace=0.02, hspace=0)
 
-    plt.tight_layout(pad=0.05)
-    plt.subplots_adjust(wspace=0.02, hspace=0.02)
+    for ax in fig.get_axes():
+        ax.axis("off")
 
     if save_path:
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
@@ -699,8 +699,12 @@ def visualize_data(
     from skimage.metrics import peak_signal_noise_ratio as psnr
     from skimage.metrics import structural_similarity as ssim
 
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.size"] = 11
+    plt.rcParams["text.usetex"] = True
+
     num_images = len(images)
-    fig = plt.figure(figsize=(18, 10), constrained_layout=True)
+    fig = plt.figure(figsize=(16, 8), constrained_layout=True)
     gs = GridSpec(5, num_images, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
@@ -714,7 +718,10 @@ def visualize_data(
 
     for i, (img, title) in enumerate(zip(images, titles)):
         ax_img = fig.add_subplot(gs[0, i])
-        ax_img.imshow(img, cmap=cmap)
+        if img is not None and img.size > 0:
+            ax_img.imshow(img, cmap=cmap, aspect="auto")
+        else:
+            print(f"Warning: Invalid image data for {title}")
         ax_img.axis("on")
         for spine in ax_img.spines.values():
             spine.set_color(axes_colors[i % len(axes_colors)])
@@ -726,7 +733,38 @@ def visualize_data(
             )
             psnr_values[title] = current_psnr
             ssim_values[title] = current_ssim
-            title += f"\nPSNR: {current_psnr:.2f} dB, SSIM: {current_ssim:.4f}"
+
+    sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
+    sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
+
+    for i, (img, title) in enumerate(zip(images, titles)):
+        ax_img = fig.add_subplot(gs[0, i])
+        if img is not None and img.size > 0:
+            ax_img.imshow(img, cmap=cmap, aspect="auto")
+        else:
+            print(f"Warning: Invalid image data for {title}")
+        ax_img.axis("on")
+        for spine in ax_img.spines.values():
+            spine.set_color(axes_colors[i % len(axes_colors)])
+
+        if title != reference_title and title != low_res_title:
+            current_psnr = psnr_values[title]
+            current_ssim = ssim_values[title]
+
+            psnr_text = f"PSNR: {current_psnr:.2f}"
+            ssim_text = f"SSIM: {current_ssim:.4f}"
+
+            if title == sorted_psnr[0][0]:
+                psnr_text = r"\textbf{" + psnr_text + "}"
+            elif title == sorted_psnr[1][0]:
+                psnr_text = r"\underline{" + psnr_text + "}"
+
+            if title == sorted_ssim[0][0]:
+                ssim_text = r"\textbf{" + ssim_text + "}"
+            elif title == sorted_ssim[1][0]:
+                ssim_text = r"\underline{" + ssim_text + "}"
+
+            title += f"\n${psnr_text}$ dB\n${ssim_text}$"
 
         ax_img.set_title(
             title, fontsize=12, family="Times New Roman", fontweight="bold"
@@ -766,6 +804,9 @@ def visualize_data(
         )
         ax_2d_spectrum.axis("on")
 
+    plt.tight_layout(pad=0, h_pad=0, w_pad=0)
+    # plt.subplots_adjust(wspace=0.5, hspace=0.5)
+
     if save_path:
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
     if visualize:
@@ -789,6 +830,7 @@ def visualize_sharpening_results(
 
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["font.size"] = 11
+    plt.rcParams["text.usetex"] = True  # Enable LaTeX rendering
 
     fig = plt.figure(figsize=(16, 6))
     gs = GridSpec(2, 5, figure=fig, height_ratios=[1, 1])
@@ -798,7 +840,7 @@ def visualize_sharpening_results(
 
     ax_L = fig.add_subplot(gs[0, 0])
     ax_L.imshow(img_L, cmap="gray")
-    ax_L.set_title("Low Resolution")
+    ax_L.set_title("Low Resolution", fontweight="bold")
     ax_L.axis("on")
     for spine in ax_L.spines.values():
         spine.set_color(spine_color)
@@ -807,7 +849,7 @@ def visualize_sharpening_results(
 
     ax_H = fig.add_subplot(gs[0, 1])
     ax_H.imshow(img_H, cmap="gray")
-    ax_H.set_title("High Resolution")
+    ax_H.set_title("High Resolution", fontweight="bold")
     ax_H.axis("on")
     for spine in ax_H.spines.values():
         spine.set_color(spine_color)
@@ -821,22 +863,21 @@ def visualize_sharpening_results(
 
     ax_psnr = fig.add_subplot(gs[0, 2])
     ax_psnr.plot(factors, psnr_values, "bo-")
-    ax_psnr.set_title("PSNR (dB)")
+    ax_psnr.set_title("PSNR (dB)", fontweight="bold")
     ax_psnr.set_xlabel("Sharpening Factor (SF)")
-
     ax_psnr.grid(True)
     ax_psnr.tick_params(axis="both", which="major", labelsize=8)
 
     ax_ssim = fig.add_subplot(gs[0, 3])
     ax_ssim.plot(factors, ssim_values, "ro-")
-    ax_ssim.set_title("SSIM")
+    ax_ssim.set_title("SSIM", fontweight="bold")
     ax_ssim.set_xlabel("SF")
     ax_ssim.grid(True)
     ax_ssim.tick_params(axis="both", which="major", labelsize=8)
 
     ax_si = fig.add_subplot(gs[0, 4])
     ax_si.plot(factors, si_values, "go-")
-    ax_si.set_title("Sharpness Index")
+    ax_si.set_title("Sharpness Index", fontweight="bold")
     ax_si.set_xlabel("SF")
     ax_si.grid(True)
     ax_si.tick_params(axis="both", which="major", labelsize=8)
@@ -851,7 +892,7 @@ def visualize_sharpening_results(
         ax.text(
             0.5,
             -0.05,
-            f"SF: {factor}",
+            f"$SF: {factor}$",
             ha="center",
             va="top",
             transform=ax.transAxes,
@@ -861,7 +902,9 @@ def visualize_sharpening_results(
     plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.1)
 
     if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight", dpi=300)
+        plt.savefig(
+            save_path, format="pdf", bbox_inches="tight", dpi=300, transparent=True
+        )
     if visualize:
         plt.show()
     plt.close()
@@ -1353,23 +1396,23 @@ def main(**kwargs):
                 "ESRGAN",
             ]
 
-            visualize_with_segmentation(
-                [
-                    img_H,
-                    L_crop_img,
-                    H_crop_img,
-                    E_bicubic,
-                    E_img_moex1,
-                    E_img_dpsr,
-                    E_img_esrgan,
-                ],
-                titles,
-                mask_generator,
-                cmap="gray",
-                save_path=seg_figure_path,
-                visualize=opt["visualize"],
-                backend=opt["backend"],
-            )
+            # visualize_with_segmentation(
+            #     [
+            #         img_H,
+            #         L_crop_img,
+            #         H_crop_img,
+            #         E_bicubic,
+            #         E_img_moex1,
+            #         E_img_dpsr,
+            #         E_img_esrgan,
+            #     ],
+            #     titles,
+            #     mask_generator,
+            #     cmap="gray",
+            #     save_path=seg_figure_path,
+            #     visualize=opt["visualize"],
+            #     backend=opt["backend"],
+            # )
 
             visualize_data(
                 [
