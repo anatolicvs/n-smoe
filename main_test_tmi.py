@@ -34,6 +34,9 @@ if torch.cuda.get_device_properties(0).major >= 8:
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
 
+import matplotlib
+
+matplotlib.use("TkAgg")
 
 """
 # --------------------------------------------
@@ -251,7 +254,7 @@ def convert_to_3_channel(images):
     ]
 
 
-def visualize_data_old(self):
+def visualize_data_with_spectra(self):
     L_images = self.L.cpu().numpy()
     H_images = self.H.cpu().numpy()
 
@@ -431,19 +434,15 @@ def visualize_with_segmentation(
     cmap: str = "gray",
     save_path: str = None,
     visualize: bool = False,
-    backend: str = "TkAgg",
     error_map: bool = False,
 ):
-    import matplotlib
-
-    matplotlib.use(backend)
     import cv2
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
     from skimage.metrics import variation_of_information, adapted_rand_error
 
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 11
+    plt.rcParams["font.size"] = 12
     plt.rcParams["text.usetex"] = True
 
     def calculate_metrics(gt_mask, pred_mask):
@@ -590,6 +589,128 @@ def visualize_with_segmentation(
         plt.show()
 
 
+def visualize_with_error_map(
+    images: List[np.ndarray],
+    titles: List[str],
+    cmap: str = "gray",
+    save_path: str = None,
+    visualize: bool = True,
+) -> None:
+    import matplotlib.pyplot as plt
+    from matplotlib.gridspec import GridSpec
+    from skimage.metrics import peak_signal_noise_ratio as psnr
+    from skimage.metrics import structural_similarity as ssim
+
+    plt.rcParams["font.family"] = "Times New Roman"
+    plt.rcParams["font.size"] = 11
+    plt.rcParams["text.usetex"] = True
+
+    fig = plt.figure(figsize=(14, 4))
+    gs = GridSpec(
+        3,
+        len(images),
+        height_ratios=[2, 2, 0.5],
+        width_ratios=[2] + [1] * (len(images) - 1),
+        hspace=0.01,
+        wspace=0.01,
+    )
+
+    reference_title = "Ground Truth Crop"
+    reference_index = titles.index(reference_title)
+    reference_image = images[reference_index].squeeze()
+
+    psnr_values = {}
+    ssim_values = {}
+
+    ax_img_hr = fig.add_subplot(gs[0:2, 0])
+    ax_img_hr.imshow(images[0], cmap=cmap)
+    ax_img_hr.axis("off")
+    ax_img_hr.set_title(titles[0], fontsize=12, fontweight="bold")
+
+    for i in range(1, len(images)):
+        img = images[i]
+        title = titles[i]
+
+        ax_img = fig.add_subplot(gs[0, i])
+        ax_img.imshow(img, cmap=cmap)
+        ax_img.axis("off")
+
+        if i > 2:  # Skip error map and metrics for ground truth and low-res images
+            ax_error_map = fig.add_subplot(gs[1, i])
+            error_map = np.abs(reference_image - img)
+            error_map = (error_map - error_map.min()) / (
+                error_map.max() - error_map.min()
+            )
+            im = ax_error_map.imshow(error_map, cmap="coolwarm", vmin=0, vmax=1)
+            ax_error_map.axis("off")
+
+            try:
+                current_psnr = psnr(reference_image, img)
+                current_ssim = ssim(
+                    reference_image,
+                    img,
+                    data_range=reference_image.max() - reference_image.min(),
+                )
+                psnr_values[title] = current_psnr
+                ssim_values[title] = current_ssim
+            except Exception as e:
+                print(f"Error calculating PSNR/SSIM for {title}: {str(e)}")
+
+    sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
+    sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
+
+    for i in range(1, len(images)):
+        title = titles[i]
+        ax_title = fig.add_subplot(gs[2, i])
+        ax_title.axis("off")
+
+        if i > 2 and title in psnr_values and title in ssim_values:
+            psnr_text = f"PSNR: {psnr_values[title]:.2f}"
+            ssim_text = f"SSIM: {ssim_values[title]:.4f}"
+
+            if title == sorted_psnr[0][0]:
+                psnr_text = r"\textbf{" + psnr_text + "}"
+            elif title == sorted_psnr[1][0]:
+                psnr_text = r"\underline{" + psnr_text + "}"
+
+            if title == sorted_ssim[0][0]:
+                ssim_text = r"\textbf{" + ssim_text + "}"
+            elif title == sorted_ssim[1][0]:
+                ssim_text = r"\underline{" + ssim_text + "}"
+
+            display_title = f"{title}\n${psnr_text}$ dB\n${ssim_text}$"
+            ax_title.text(
+                0.5,
+                0.0,
+                display_title,
+                ha="center",
+                va="center",
+                transform=ax_title.transAxes,
+                fontsize=10,
+            )
+        else:
+            display_title = title
+
+            ax_title.text(
+                0.5,
+                4.5,
+                display_title,
+                ha="center",
+                va="center",
+                transform=ax_title.transAxes,
+                fontsize=10,
+            )
+
+    plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
+    plt.subplots_adjust(wspace=0.02, hspace=0)
+
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=300)
+    if visualize:
+        plt.show()
+    plt.close(fig)
+
+
 def visualize_data_pair(images, titles):
     import matplotlib
 
@@ -688,11 +809,7 @@ def visualize_data(
     cmap: str = "gray",
     save_path: str = None,
     visualize: bool = True,
-    backend: str = "TkAgg",
 ) -> None:
-    import matplotlib
-
-    matplotlib.use(backend)
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
     from numpy.fft import fft2, fftshift
@@ -700,11 +817,11 @@ def visualize_data(
     from skimage.metrics import structural_similarity as ssim
 
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 11
+    plt.rcParams["font.size"] = 12
     plt.rcParams["text.usetex"] = True
 
     num_images = len(images)
-    fig = plt.figure(figsize=(16, 8), constrained_layout=True)
+    fig = plt.figure(figsize=(16, 9), constrained_layout=True)
     gs = GridSpec(5, num_images, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
@@ -820,16 +937,13 @@ def visualize_sharpening_results(
     metrics: Dict[float, Dict[str, float]],
     save_path: str = None,
     visualize: bool = True,
-    backend: str = "TkAgg",
 ):
-    import matplotlib
 
-    matplotlib.use(backend)
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
 
     plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 11
+    plt.rcParams["font.size"] = 12
     plt.rcParams["text.usetex"] = True  # Enable LaTeX rendering
 
     fig = plt.figure(figsize=(16, 6))
@@ -892,9 +1006,10 @@ def visualize_sharpening_results(
         ax.text(
             0.5,
             -0.05,
-            f"$SF: {factor}$",
+            r"$\alpha= %.2f$" % factor,
             ha="center",
             va="top",
+            usetex=True,
             transform=ax.transAxes,
             fontsize=12,
         )
@@ -1269,6 +1384,12 @@ def main(**kwargs):
                 img_dir,
                 f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
             )
+
+            error_map_figure_path = os.path.join(
+                img_dir,
+                f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+            )
+
             with torch.no_grad():
                 E_img_moex1 = model_moex1(
                     test_data["L_p"].to(device), test_data["L"].size()
@@ -1411,9 +1532,23 @@ def main(**kwargs):
             #     cmap="gray",
             #     save_path=seg_figure_path,
             #     visualize=opt["visualize"],
-            #     backend=opt["backend"],
             # )
 
+            visualize_with_error_map(
+                [
+                    img_H,
+                    L_crop_img,
+                    H_crop_img,
+                    E_bicubic,
+                    E_img_moex1,
+                    E_img_dpsr,
+                    E_img_esrgan,
+                ],
+                titles,
+                cmap="gray",
+                save_path=error_map_figure_path,
+                visualize=opt["visualize"],
+            )
             visualize_data(
                 [
                     L_crop_img,
@@ -1427,7 +1562,6 @@ def main(**kwargs):
                 cmap="gray",
                 save_path=figure_path,
                 visualize=opt["visualize"],
-                backend=opt["backend"],
             )
 
             current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
@@ -1974,7 +2108,6 @@ def main(**kwargs):
                 cmap="gray",
                 save_path=seg_figure_path,
                 visualize=opt["visualize"],
-                backend=opt["backend"],
             )
 
             visualize_data(
@@ -1990,7 +2123,6 @@ def main(**kwargs):
                 cmap="gray",
                 save_path=figure_path,
                 visualize=opt["visualize"],
-                backend=opt["backend"],
             )
 
             current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
@@ -2266,7 +2398,6 @@ def main(**kwargs):
                 metrics,
                 save_path=si_figure_path,
                 visualize=opt["visualize"],
-                backend=opt["backend"],
             )
         eng.quit()
 
