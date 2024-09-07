@@ -596,10 +596,20 @@ def visualize_with_error_map(
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
+    import numpy as np
     import matplotlib.pyplot as plt
     from matplotlib.gridspec import GridSpec
+    from matplotlib.colors import LinearSegmentedColormap
     from skimage.metrics import peak_signal_noise_ratio as psnr
     from skimage.metrics import structural_similarity as ssim
+    from skimage.metrics import mean_squared_error as mse
+
+    def create_error_cmap():
+        colors = ["navy", "blue", "cyan", "limegreen", "yellow", "red"]
+        return LinearSegmentedColormap.from_list("custom_diverging", colors, N=256)
+
+    def calculate_error_map(gt_image, reconstructed_image):
+        return (gt_image.astype(float) - reconstructed_image.astype(float)) ** 2
 
     plt.rcParams["font.family"] = "Times New Roman"
     plt.rcParams["font.size"] = 11
@@ -621,11 +631,16 @@ def visualize_with_error_map(
 
     psnr_values = {}
     ssim_values = {}
+    mse_values = {}
+
+    error_cmap = create_error_cmap()
 
     ax_img_hr = fig.add_subplot(gs[0:2, 0])
     ax_img_hr.imshow(images[0], cmap=cmap)
     ax_img_hr.axis("off")
     ax_img_hr.set_title(titles[0], fontsize=12, fontweight="bold")
+
+    max_error = 0
 
     for i in range(1, len(images)):
         img = images[i]
@@ -635,13 +650,17 @@ def visualize_with_error_map(
         ax_img.imshow(img, cmap=cmap)
         ax_img.axis("off")
 
-        if i > 2:  # Skip error map and metrics for ground truth and low-res images
-            ax_error_map = fig.add_subplot(gs[1, i])
-            error_map = np.abs(reference_image - img)
-            error_map = (error_map - error_map.min()) / (
+        if i > 2:
+            error_map = calculate_error_map(reference_image, img)
+            error_map_normalized = (error_map - error_map.min()) / (
                 error_map.max() - error_map.min()
             )
-            im = ax_error_map.imshow(error_map, cmap="coolwarm", vmin=0, vmax=1)
+            max_error = max(max_error, error_map.max())
+
+            ax_error_map = fig.add_subplot(gs[1, i])
+            im = ax_error_map.imshow(
+                error_map_normalized, cmap=error_cmap, vmin=0, vmax=1
+            )
             ax_error_map.axis("off")
 
             try:
@@ -651,13 +670,16 @@ def visualize_with_error_map(
                     img,
                     data_range=reference_image.max() - reference_image.min(),
                 )
+                current_mse = mse(reference_image, img)
                 psnr_values[title] = current_psnr
                 ssim_values[title] = current_ssim
+                mse_values[title] = current_mse
             except Exception as e:
-                print(f"Error calculating PSNR/SSIM for {title}: {str(e)}")
+                print(f"Error calculating PSNR/SSIM/MSE for {title}: {str(e)}")
 
     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
+    sorted_mse = sorted(mse_values.items(), key=lambda x: x[1])
 
     for i in range(1, len(images)):
         title = titles[i]
@@ -667,6 +689,7 @@ def visualize_with_error_map(
         if i > 2 and title in psnr_values and title in ssim_values:
             psnr_text = f"PSNR: {psnr_values[title]:.2f}"
             ssim_text = f"SSIM: {ssim_values[title]:.4f}"
+            mse_text = f"MSE: {mse_values[title]:.4f}"
 
             if title == sorted_psnr[0][0]:
                 psnr_text = r"\textbf{" + psnr_text + "}"
@@ -678,7 +701,7 @@ def visualize_with_error_map(
             elif title == sorted_ssim[1][0]:
                 ssim_text = r"\underline{" + ssim_text + "}"
 
-            display_title = f"{title}\n${psnr_text}$ dB\n${ssim_text}$"
+            display_title = f"{title}\n${psnr_text}$ dB\n${ssim_text}$\n${mse_text}$"
             ax_title.text(
                 0.5,
                 0.0,
@@ -821,7 +844,7 @@ def visualize_data(
     plt.rcParams["text.usetex"] = True
 
     num_images = len(images)
-    fig = plt.figure(figsize=(16, 9), constrained_layout=True)
+    fig = plt.figure(figsize=(17, 9), constrained_layout=True)
     gs = GridSpec(5, num_images, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
