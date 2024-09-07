@@ -24,8 +24,9 @@
         ,"sam2":  "/mnt/d/zoo/sam2/finetuned/88000_G.pth" // "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt" // "/home/ozkan/works/n-smoe/.checkpoints/sam2-finetuned.pt" 
       }
       , "datasets": {
-         "test": {
-            "name": "FLARE22" //"FLARE22"            
+         "FLARE22": {
+            "name": "FLARE22"
+          , "scale": 2  
           , "dataset_type": "medical_sr"            
           , "lq_patchsize": 96
           , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"

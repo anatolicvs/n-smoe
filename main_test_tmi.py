@@ -247,13 +247,6 @@ class SRResNet(nn.Module):
         return x
 
 
-def convert_to_3_channel(images):
-    return [
-        np.repeat(img[:, :, None], 3, axis=-1) if len(img.shape) == 2 else img
-        for img in images
-    ]
-
-
 def visualize_data_with_spectra(self):
     L_images = self.L.cpu().numpy()
     H_images = self.H.cpu().numpy()
@@ -1054,6 +1047,104 @@ def default_resizer(inputs, target_size):
     )
 
 
+def gen_latex_table(psnr, ssim, lpips, dists, methods, scales, datasets, caption):
+    def best_vals(values, best_values):
+        formatted = []
+        for v in values:
+            if v == best_values["best"]:
+                formatted.append("\\textbf{" + f"{v:.4f}" + "}")
+            elif v == best_values["second_best"]:
+                formatted.append("\\underline{" + f"{v:.4f}" + "}")
+            else:
+                formatted.append(f"{v:.4f}")
+        return formatted
+
+    latex_str = r"\begin{table*}[!t]" + "\n"
+    latex_str += r"\caption{" + caption + "}" + "\n"
+    latex_str += r"\centering" + "\n"
+    latex_str += r"\resizebox{\textwidth}{!}{" + "\n"
+    latex_str += (
+        r"\begin{tabular}{@{} l c "
+        + " ".join(["c c c c " for _ in datasets])
+        + "@{}}"
+        + "\n"
+    )
+    latex_str += r"\toprule" + "\n"
+    latex_str += (
+        r"\textbf{Methods} & \textbf{Scale} & "
+        + " & ".join(
+            [r"\multicolumn{4}{c}{\textbf{" + dataset + "}}" for dataset in datasets]
+        )
+        + r" \\"
+        + "\n"
+    )
+    latex_str += r"\cmidrule(lr){3-" + str(2 + 4 * len(datasets)) + "}" + "\n"
+    latex_str += (
+        " & & "
+        + " & ".join(
+            [
+                r"\textbf{PSNR $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{LPIPS $\downarrow$} & \textbf{DISTS $\downarrow$}"
+                for _ in datasets
+            ]
+        )
+        + r" \\"
+        + "\n"
+    )
+    latex_str += r"\midrule" + "\n"
+
+    for scale in scales:
+        scale_values = {metric: [] for metric in ["psnr", "ssim", "lpips", "dists"]}
+        for method in methods:
+            for dataset in datasets:
+                scale_values["psnr"].append(psnr[method][dataset][scale])
+                scale_values["ssim"].append(ssim[method][dataset][scale])
+                scale_values["lpips"].append(lpips[method][dataset][scale])
+                scale_values["dists"].append(dists[method][dataset][scale])
+
+        best_metrics = {}
+        for metric, values in scale_values.items():
+            sorted_values = sorted(
+                values, reverse=True if metric in ["psnr", "ssim"] else False
+            )
+            best_metrics[metric] = {
+                "best": sorted_values[0],
+                "second_best": (
+                    sorted_values[1] if len(sorted_values) > 1 else sorted_values[0]
+                ),
+            }
+
+        for method in methods:
+            latex_str += method + " & " + scale + " & "
+            for dataset in datasets:
+                values = [
+                    psnr[method][dataset][scale],
+                    ssim[method][dataset][scale],
+                    lpips[method][dataset][scale],
+                    dists[method][dataset][scale],
+                ]
+                metrics = ["psnr", "ssim", "lpips", "dists"]
+                formatted = []
+                for idx, val in enumerate(values):
+                    metric_best = best_metrics[metrics[idx]]
+                    if val == metric_best["best"]:
+                        formatted.append("\\textbf{" + f"{val:.4f}" + "}")
+                    elif val == metric_best["second_best"]:
+                        formatted.append("\\underline{" + f"{val:.4f}" + "}")
+                    else:
+                        formatted.append(f"{val:.4f}")
+                latex_str += " & ".join(formatted) + " & "
+            latex_str = latex_str.strip(" & ") + r" \\" + "\n"
+        latex_str += r"\midrule" + "\n"
+
+    latex_str += r"\bottomrule" + "\n"
+    latex_str += r"\end{tabular}" + "\n"
+    latex_str += r"}" + "\n"
+    latex_str += r"\label{table_comparison}" + "\n"
+    latex_str += r"\end{table*}"
+
+    return latex_str
+
+
 @click.command()
 @click.option(
     "--opt",
@@ -1103,22 +1194,6 @@ def main(**kwargs):
     torch.cuda.manual_seed_all(seed)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    degrdation = opt["datasets"]["test"]["degradation_type"]
-    dataset_name = opt["datasets"]["test"]["name"]
-
-    for phase, dataset_opt in opt["datasets"].items():
-        if phase == "test":
-            test_set = define_Dataset(dataset_opt)
-            test_loader = DataLoader(
-                test_set,
-                batch_size=1,
-                shuffle=False,
-                num_workers=16,
-                drop_last=False,
-                pin_memory=True,
-                collate_fn=util.custom_pad_collate_fn,
-            )
 
     task = opt.get("task", "sr_x2")
 
@@ -1348,361 +1423,397 @@ def main(**kwargs):
             # min_mask_region_area=25.0,
             # use_m2m=True,
         )
+        
 
-        avg_psnr = 0.0
-        idx = 0
 
-        psnr_moex_list: list[torch.float] = []
-        psnr_dpsr_list: list[torch.float] = []
-        psnr_esrgan_list = []
-        psnr_bicubic_list = []
-
-        ssim_moex_list: list[torch.float] = []
-        ssim_dpsr_list: list[torch.float] = []
-        ssim_esrgan_list: list[torch.float] = []
-        ssim_bicubic_list: list[torch.float] = []
-
-        lpips_moex_list: list[torch.float] = []
-        lpips_dpsr_list: list[torch.float] = []
-        lpips_esrgan_list: list[torch.float] = []
-        lpips_bicubic_list: list[torch.float] = []
-
-        dists_moex_list: list[torch.float] = []
-        dists_dpsr_list: list[torch.float] = []
-        dists_esrgan_list: list[torch.float] = []
-        dists_bicubic_list: list[torch.float] = []
-
-        H_img_size = opt["datasets"]["test"]["H_size"]
-        scale: str = f'x{opt["scale"]}'
-
-        timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         methods: List[str] = ["Bicubic", "DPSR", "ESRGAN", "N-SMoE"]
-        csv_dir = os.path.join(opt["path"]["root"], dataset_name)
-        util.mkdir(csv_dir)
-        fmetric_name = os.path.join(
-            csv_dir,
-            degrdation
-            + "_"
-            + dataset_name
-            + "_"
-            + timestamp.replace(" ", "_").replace(":", "-"),
-        )
-        for test_data in test_loader:
-            if test_data is None:
-                continue
+        psnr = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
+        ssim = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
+        lpips = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
+        dists = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
+        brisque = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
+        
 
-            idx += 1
-            image_name_ext = os.path.basename(test_data["L_path"][0])
-            img_name, ext = os.path.splitext(image_name_ext)
-
-            img_dir = os.path.join(opt["path"]["images"], img_name)
-            util.mkdir(img_dir)
-
-            fname = os.path.join(
-                img_dir,
-                f"{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}",
-            )
-            figure_path = f"{fname}.pdf"
-            seg_figure_path = os.path.join(
-                img_dir,
-                f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+        for phase, dataset_opt in opt["datasets"].items():
+            test_set = define_Dataset(dataset_opt)
+            test_loader = DataLoader(
+                test_set,
+                batch_size=1,
+                shuffle=False,
+                num_workers=16,
+                drop_last=False,
+                pin_memory=True,
+                collate_fn=util.custom_pad_collate_fn,
             )
 
-            error_map_figure_path = os.path.join(
-                img_dir,
-                f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+            H_img_size = dataset_opt["H_size"]
+            degrdation = dataset_opt["degradation_type"]
+            scale = f'x{dataset_opt["scale"]}'
+            dataset_name = dataset_opt["name"]
+
+            timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            csv_dir = os.path.join(opt["path"]["root"], dataset_name)
+            util.mkdir(csv_dir)
+            fmetric_name = os.path.join(
+                csv_dir,
+                degrdation
+                + "_"
+                + dataset_name
+                + "_"
+                + timestamp.replace(" ", "_").replace(":", "-"),
             )
 
-            with torch.no_grad():
-                E_img_moex1 = model_moex1(
-                    test_data["L_p"].to(device), test_data["L"].size()
+            avg_psnr = 0.0
+            idx = 0
+
+            psnr_moex_list: list[torch.float] = []
+            psnr_dpsr_list: list[torch.float] = []
+            psnr_esrgan_list = []
+            psnr_bicubic_list = []
+
+            ssim_moex_list: list[torch.float] = []
+            ssim_dpsr_list: list[torch.float] = []
+            ssim_esrgan_list: list[torch.float] = []
+            ssim_bicubic_list: list[torch.float] = []
+
+            lpips_moex_list: list[torch.float] = []
+            lpips_dpsr_list: list[torch.float] = []
+            lpips_esrgan_list: list[torch.float] = []
+            lpips_bicubic_list: list[torch.float] = []
+
+            dists_moex_list: list[torch.float] = []
+            dists_dpsr_list: list[torch.float] = []
+            dists_esrgan_list: list[torch.float] = []
+            dists_bicubic_list: list[torch.float] = []
+
+            for test_data in test_loader:
+                if test_data is None:
+                    continue
+
+                idx += 1
+                image_name_ext = os.path.basename(test_data["L_path"][0])
+                img_name, ext = os.path.splitext(image_name_ext)
+
+                img_dir = os.path.join(opt["path"]["images"], img_name)
+                util.mkdir(img_dir)
+
+                fname = os.path.join(
+                    img_dir,
+                    f"{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}",
+                )
+                figure_path = f"{fname}.pdf"
+                seg_figure_path = os.path.join(
+                    img_dir,
+                    f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
                 )
 
-                E_img_dpsr = model_dpsr(test_data["L"].to(device))
-                E_img_esrgan = model_esrgan(test_data["L"].to(device))
-                E_bicubic = default_resizer(test_data["L"], test_data["H"].size()[2:])
-            # gt_img = (test_data["H"].mul(255.0).clamp(0, 255).to(torch.uint8)).to(device)
-            # E_img_moex_t = E_img_moex1.mul(255.0).clamp(0, 255).to(torch.uint8)
-            # E_img_dpsr_t = E_img_dpsr.mul(255.0).clamp(0, 255).to(torch.uint8)
-            # E_img_esrgan_t = E_img_esrgan.mul(255.0).clamp(0, 255).to(torch.uint8)
+                error_map_figure_path = os.path.join(
+                    img_dir,
+                    f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
+                )
 
-            gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
-            E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
-            E_img_dpsr_t = E_img_dpsr.clamp(0, 1).to(torch.float)
-            E_img_esrgan_t = E_img_esrgan.clamp(0, 1).to(torch.float)
-            E_bicubic_t = E_bicubic.clamp(0, 1).to(torch.float).to(device)
+                with torch.no_grad():
+                    E_img_moex1 = model_moex1(
+                        test_data["L_p"].to(device), test_data["L"].size()
+                    )
 
-            psnr_moex1 = piq.psnr(E_img_moex_t, gt_img, data_range=1).float()
-            psnr_dpsr = piq.psnr(E_img_dpsr_t, gt_img, data_range=1).float()
-            psnr_esrgan = piq.psnr(E_img_esrgan_t, gt_img, data_range=1).float()
-            psnr_bicubic = piq.psnr(E_bicubic_t, gt_img, data_range=1).float()
+                    E_img_dpsr = model_dpsr(test_data["L"].to(device))
+                    E_img_esrgan = model_esrgan(test_data["L"].to(device))
+                    E_bicubic = default_resizer(
+                        test_data["L"], test_data["H"].size()[2:]
+                    )
 
-            ssim_moex1 = piq.ssim(E_img_moex_t, gt_img, data_range=1, reduction="mean")
-            ssim_dpsr = piq.ssim(E_img_dpsr_t, gt_img, data_range=1, reduction="mean")
-            ssim_esrgan = piq.ssim(
-                E_img_esrgan_t, gt_img, data_range=1, reduction="mean"
-            )
-            ssim_bicubic = piq.ssim(E_bicubic_t, gt_img, data_range=1, reduction="mean")
+                gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
+                E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
+                E_img_dpsr_t = E_img_dpsr.clamp(0, 1).to(torch.float)
+                E_img_esrgan_t = E_img_esrgan.clamp(0, 1).to(torch.float)
+                E_bicubic_t = E_bicubic.clamp(0, 1).to(torch.float).to(device)
 
-            lpips_moex1 = piq.LPIPS()(E_img_moex_t, gt_img).item()
-            lpips_dpsr = piq.LPIPS()(E_img_dpsr_t, gt_img).item()
-            lpips_esrgan = piq.LPIPS()(E_img_esrgan_t, gt_img).item()
-            lpips_bicubic = piq.LPIPS()(E_bicubic_t, gt_img).item()
+                psnr_moex1 = piq.psnr(E_img_moex_t, gt_img, data_range=1).float()
+                psnr_dpsr = piq.psnr(E_img_dpsr_t, gt_img, data_range=1).float()
+                psnr_esrgan = piq.psnr(E_img_esrgan_t, gt_img, data_range=1).float()
+                psnr_bicubic = piq.psnr(E_bicubic_t, gt_img, data_range=1).float()
 
-            dists_moex1 = piq.DISTS()(E_img_moex_t, gt_img).item()
-            dists_dpsr = piq.DISTS()(E_img_dpsr_t, gt_img).item()
-            dists_esrgan = piq.DISTS()(E_img_esrgan_t, gt_img).item()
-            dists_bicubic = piq.DISTS()(E_bicubic_t, gt_img).item()
+                ssim_moex1 = piq.ssim(
+                    E_img_moex_t, gt_img, data_range=1, reduction="mean"
+                )
+                ssim_dpsr = piq.ssim(
+                    E_img_dpsr_t, gt_img, data_range=1, reduction="mean"
+                )
+                ssim_esrgan = piq.ssim(
+                    E_img_esrgan_t, gt_img, data_range=1, reduction="mean"
+                )
+                ssim_bicubic = piq.ssim(
+                    E_bicubic_t, gt_img, data_range=1, reduction="mean"
+                )
 
-            brisque_moex1 = piq.brisque(E_img_moex_t, data_range=1.0, reduction="none")
-            brisque_dpsr = piq.brisque(E_img_dpsr_t, data_range=1.0, reduction="none")
-            brisque_esrgan = piq.brisque(
-                E_img_esrgan_t, data_range=1.0, reduction="none"
-            )
-            brisque_bicubic = piq.brisque(E_bicubic_t, data_range=1.0, reduction="none")
+                lpips_moex1 = piq.LPIPS()(E_img_moex_t, gt_img).item()
+                lpips_dpsr = piq.LPIPS()(E_img_dpsr_t, gt_img).item()
+                lpips_esrgan = piq.LPIPS()(E_img_esrgan_t, gt_img).item()
+                lpips_bicubic = piq.LPIPS()(E_bicubic_t, gt_img).item()
 
-            print(
-                f"PSNR N-SMoE: {psnr_moex1}, PSNR DPSR: {psnr_dpsr}, PSNR ESRGAN: {psnr_esrgan}, PSNR Bicubic: {psnr_bicubic}",
-            )
+                dists_moex1 = piq.DISTS()(E_img_moex_t, gt_img).item()
+                dists_dpsr = piq.DISTS()(E_img_dpsr_t, gt_img).item()
+                dists_esrgan = piq.DISTS()(E_img_esrgan_t, gt_img).item()
+                dists_bicubic = piq.DISTS()(E_bicubic_t, gt_img).item()
 
-            print(
-                f"SSIM N-SMoE: {ssim_moex1}, SSIM DPSR: {ssim_dpsr}, SSIM ESRGAN: {ssim_esrgan}, SSIM Bicubic: {ssim_bicubic}"
-            )
+                brisque_moex1 = piq.brisque(
+                    E_img_moex_t, data_range=1.0, reduction="none"
+                )
+                brisque_dpsr = piq.brisque(
+                    E_img_dpsr_t, data_range=1.0, reduction="none"
+                )
+                brisque_esrgan = piq.brisque(
+                    E_img_esrgan_t, data_range=1.0, reduction="none"
+                )
+                brisque_bicubic = piq.brisque(
+                    E_bicubic_t, data_range=1.0, reduction="none"
+                )
 
-            print(
-                f"LPIPS N-SMoE: {lpips_moex1}, LPIPS DPSR: {lpips_dpsr}, LPIPS ESRGAN: {lpips_esrgan}, LPIPS Bicubic: {lpips_bicubic}"
-            )
+                print(
+                    f"PSNR N-SMoE: {psnr_moex1}, PSNR DPSR: {psnr_dpsr}, PSNR ESRGAN: {psnr_esrgan}, PSNR Bicubic: {psnr_bicubic}",
+                )
 
-            print(
-                f"DISTS N-SMoE: {dists_moex1}, DISTS DPSR: {dists_dpsr}, DISTS ESRGAN: {dists_esrgan}, DISTS Bicubic: {dists_bicubic}"
-            )
+                print(
+                    f"SSIM N-SMoE: {ssim_moex1}, SSIM DPSR: {ssim_dpsr}, SSIM ESRGAN: {ssim_esrgan}, SSIM Bicubic: {ssim_bicubic}"
+                )
 
-            print(
-                f"Brisque N-SMoE: {brisque_moex1}, Brisque DPSR: {brisque_dpsr}, Brisque ESRGAN: {brisque_esrgan}, Brisque Bicubic: {brisque_bicubic}"
-            )
+                print(
+                    f"LPIPS N-SMoE: {lpips_moex1}, LPIPS DPSR: {lpips_dpsr}, LPIPS ESRGAN: {lpips_esrgan}, LPIPS Bicubic: {lpips_bicubic}"
+                )
 
-            psnr_moex_list.append(psnr_moex1)
-            psnr_dpsr_list.append(psnr_dpsr)
-            psnr_esrgan_list.append(psnr_esrgan)
-            psnr_bicubic_list.append(psnr_bicubic)
+                print(
+                    f"DISTS N-SMoE: {dists_moex1}, DISTS DPSR: {dists_dpsr}, DISTS ESRGAN: {dists_esrgan}, DISTS Bicubic: {dists_bicubic}"
+                )
 
-            ssim_moex_list.append(ssim_moex1)
-            ssim_dpsr_list.append(ssim_dpsr)
-            ssim_esrgan_list.append(ssim_esrgan)
-            ssim_bicubic_list.append(ssim_bicubic)
+                print(
+                    f"Brisque N-SMoE: {brisque_moex1}, Brisque DPSR: {brisque_dpsr}, Brisque ESRGAN: {brisque_esrgan}, Brisque Bicubic: {brisque_bicubic}"
+                )
 
-            lpips_moex_list.append(lpips_moex1)
-            lpips_dpsr_list.append(lpips_dpsr)
-            lpips_esrgan_list.append(lpips_esrgan)
-            lpips_bicubic_list.append(lpips_bicubic)
+                psnr_moex_list.append(psnr_moex1)
+                psnr_dpsr_list.append(psnr_dpsr)
+                psnr_esrgan_list.append(psnr_esrgan)
+                psnr_bicubic_list.append(psnr_bicubic)
 
-            dists_moex_list.append(dists_moex1)
-            dists_dpsr_list.append(dists_dpsr)
-            dists_esrgan_list.append(dists_esrgan)
-            dists_bicubic_list.append(dists_bicubic)
+                ssim_moex_list.append(ssim_moex1)
+                ssim_dpsr_list.append(ssim_dpsr)
+                ssim_esrgan_list.append(ssim_esrgan)
+                ssim_bicubic_list.append(ssim_bicubic)
 
-            E_img_moex1 = util.tensor2uint(E_img_moex1)
-            E_img_dpsr = util._tensor2uint(E_img_dpsr)
-            E_img_esrgan = util._tensor2uint(E_img_esrgan)
-            E_bicubic = util._tensor2uint(E_bicubic)
+                lpips_moex_list.append(lpips_moex1)
+                lpips_dpsr_list.append(lpips_dpsr)
+                lpips_esrgan_list.append(lpips_esrgan)
+                lpips_bicubic_list.append(lpips_bicubic)
 
-            L_crop_img = util.tensor2uint(test_data["L"])
-            H_crop_img = util.tensor2uint(test_data["H"])
+                dists_moex_list.append(dists_moex1)
+                dists_dpsr_list.append(dists_dpsr)
+                dists_esrgan_list.append(dists_esrgan)
+                dists_bicubic_list.append(dists_bicubic)
 
-            img_H = util.tensor2uint(test_data["O"])
-            # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
-            img_H = util.modcrop(img_H, border)
+                E_img_moex1 = util.tensor2uint(E_img_moex1)
+                E_img_dpsr = util._tensor2uint(E_img_dpsr)
+                E_img_esrgan = util._tensor2uint(E_img_esrgan)
+                E_bicubic = util._tensor2uint(E_bicubic)
 
-            images: dict[str, Any] = {
-                "H_img": img_H,
-                "H_img_size": H_img_size,
-                "L_crop_img": L_crop_img,
-                "H_crop_img": H_crop_img,
-                "E_Bicubic_img": E_bicubic,
-                "E_SMoE_img": E_img_moex1,
-                "E_DPSR_img": E_img_dpsr,
-                "E_ESRGAN_img": E_img_esrgan,
-                "Degradation_Model": degrdation,
-                "scale": scale,
-            }
+                L_crop_img = util.tensor2uint(test_data["L"])
+                H_crop_img = util.tensor2uint(test_data["H"])
 
-            scipy.io.savemat(f"{fname}.mat", images)
+                img_H = util.tensor2uint(test_data["O"])
+                # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
+                img_H = util.modcrop(img_H, border)
 
-            # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
+                images: dict[str, Any] = {
+                    "H_img": img_H,
+                    "H_img_size": H_img_size,
+                    "L_crop_img": L_crop_img,
+                    "H_crop_img": H_crop_img,
+                    "E_Bicubic_img": E_bicubic,
+                    "E_SMoE_img": E_img_moex1,
+                    "E_DPSR_img": E_img_dpsr,
+                    "E_ESRGAN_img": E_img_esrgan,
+                    "Degradation_Model": degrdation,
+                    "scale": scale,
+                }
 
-            titles: list[str] = [
-                "HR",
-                "Noisy LR Crop",
-                "Ground Truth Crop",
-                "Bicubic",
-                "N-SMoE",
-                "DPSR",
-                "ESRGAN",
+                scipy.io.savemat(f"{fname}.mat", images)
+
+                # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
+
+                titles: list[str] = [
+                    "HR",
+                    "Noisy LR Crop",
+                    "Ground Truth Crop",
+                    "Bicubic",
+                    "N-SMoE",
+                    "DPSR",
+                    "ESRGAN",
+                ]
+
+                # visualize_with_segmentation(
+                #     [
+                #         img_H,
+                #         L_crop_img,
+                #         H_crop_img,
+                #         E_bicubic,
+                #         E_img_moex1,
+                #         E_img_dpsr,
+                #         E_img_esrgan,
+                #     ],
+                #     titles,
+                #     mask_generator,
+                #     cmap="gray",
+                #     save_path=seg_figure_path,
+                #     visualize=opt["visualize"],
+                # )
+
+                visualize_with_error_map(
+                    [
+                        img_H,
+                        L_crop_img,
+                        H_crop_img,
+                        E_bicubic,
+                        E_img_moex1,
+                        E_img_dpsr,
+                        E_img_esrgan,
+                    ],
+                    titles,
+                    cmap="gray",
+                    save_path=error_map_figure_path,
+                    visualize=opt["visualize"],
+                )
+                visualize_data(
+                    [
+                        L_crop_img,
+                        H_crop_img,
+                        E_bicubic,
+                        E_img_moex1,
+                        E_img_dpsr,
+                        E_img_esrgan,
+                    ],
+                    titles[1:],
+                    cmap="gray",
+                    save_path=figure_path,
+                    visualize=opt["visualize"],
+                )
+
+                current_psnr = util.calculate_psnr(
+                    E_img_moex1, H_crop_img, border=border
+                )
+                logger.info(
+                    "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
+                        idx, image_name_ext, current_psnr
+                    )
+                )
+
+                avg_psnr += current_psnr
+
+            avg_psnr_moex = torch.tensor(psnr_moex_list).mean().float()
+            avg_psnr_dpsr = torch.tensor(psnr_dpsr_list).mean().float()
+            avg_psnr_esrgan = torch.tensor(psnr_esrgan_list).mean().float()
+
+            avg_ssim_moex = torch.tensor(ssim_moex_list).mean().float()
+            avg_ssim_dpsr = torch.tensor(ssim_dpsr_list).mean().float()
+            avg_ssim_esrgan = torch.tensor(ssim_esrgan_list).mean().float()
+
+            avg_lpips_moex = torch.tensor(lpips_moex_list).mean().float()
+            avg_lpips_dpsr = torch.tensor(lpips_dpsr_list).mean().float()
+            avg_lpips_esrgan = torch.tensor(lpips_esrgan_list).mean().float()
+
+            avg_dists_moex = torch.tensor(dists_moex_list).mean().float()
+            avg_dists_dpsr = torch.tensor(dists_dpsr_list).mean().float()
+            avg_dists_esrgan = torch.tensor(dists_esrgan_list).mean().float()
+
+            print(f"Average PSNR N-SMoE: {avg_psnr_moex}")
+            print(f"Average PSNR DPSR: {avg_psnr_dpsr}")
+            print(f"Average PSNR ESRGAN: {avg_psnr_esrgan}")
+
+            print(f"Average SSIM N-SMoE: {avg_ssim_moex}")
+            print(f"Average SSIM DPSR: {avg_ssim_dpsr}")
+            print(f"Average SSIM ESRGAN: {avg_ssim_esrgan}")
+
+            print(f"Average LPIPS N-SMoE: {avg_lpips_moex}")
+            print(f"Average LPIPS DPSR: {avg_lpips_dpsr}")
+            print(f"Average LPIPS ESRGAN: {avg_lpips_esrgan}")
+
+            print(f"Average DISTS N-SMoE: {avg_dists_moex}")
+            print(f"Average DISTS DPSR: {avg_dists_dpsr}")
+            print(f"Average DISTS ESRGAN: {avg_dists_esrgan}")
+
+            psnr_values: List[torch.Tensor] = [
+                avg_psnr_dpsr,
+                avg_psnr_esrgan,
+                avg_psnr_moex,
             ]
 
-            # visualize_with_segmentation(
-            #     [
-            #         img_H,
-            #         L_crop_img,
-            #         H_crop_img,
-            #         E_bicubic,
-            #         E_img_moex1,
-            #         E_img_dpsr,
-            #         E_img_esrgan,
-            #     ],
-            #     titles,
-            #     mask_generator,
-            #     cmap="gray",
-            #     save_path=seg_figure_path,
-            #     visualize=opt["visualize"],
-            # )
+            ssim_values: List[torch.Tensor] = [
+                avg_ssim_dpsr,
+                avg_ssim_esrgan,
+                avg_ssim_moex,
+            ]
 
-            visualize_with_error_map(
-                [
-                    img_H,
-                    L_crop_img,
-                    H_crop_img,
-                    E_bicubic,
-                    E_img_moex1,
-                    E_img_dpsr,
-                    E_img_esrgan,
-                ],
-                titles,
-                cmap="gray",
-                save_path=error_map_figure_path,
-                visualize=opt["visualize"],
-            )
-            visualize_data(
-                [
-                    L_crop_img,
-                    H_crop_img,
-                    E_bicubic,
-                    E_img_moex1,
-                    E_img_dpsr,
-                    E_img_esrgan,
-                ],
-                titles[1:],
-                cmap="gray",
-                save_path=figure_path,
-                visualize=opt["visualize"],
-            )
+            lpips_values: List[torch.Tensor] = [
+                avg_lpips_dpsr,
+                avg_lpips_esrgan,
+                avg_lpips_moex,
+            ]
 
-            current_psnr = util.calculate_psnr(E_img_moex1, H_crop_img, border=border)
-            logger.info(
-                "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
-                    idx, image_name_ext, current_psnr
-                )
-            )
+            dists_values: List[torch.Tensor] = [
+                avg_dists_dpsr,
+                avg_dists_esrgan,
+                avg_dists_moex,
+            ]
 
-            avg_psnr += current_psnr
+            diff_psnr_values: List[torch.Tensor] = [
+                psnr_values[-1] - psnr for psnr in psnr_values[:-1]
+            ]
+            diff_ssim_values: List[torch.Tensor] = [
+                ssim_values[-1] - ssim for ssim in ssim_values[:-1]
+            ]
 
-        avg_psnr_moex = torch.tensor(psnr_moex_list).mean().float()
-        avg_psnr_dpsr = torch.tensor(psnr_dpsr_list).mean().float()
-        avg_psnr_esrgan = torch.tensor(psnr_esrgan_list).mean().float()
+            with open((fmetric_name + "_metrics.csv"), "a", newline="") as csvfile:
+                csvwriter = csv.writer(csvfile)
 
-        avg_ssim_moex = torch.tensor(ssim_moex_list).mean().float()
-        avg_ssim_dpsr = torch.tensor(ssim_dpsr_list).mean().float()
-        avg_ssim_esrgan = torch.tensor(ssim_esrgan_list).mean().float()
-
-        avg_lpips_moex = torch.tensor(lpips_moex_list).mean().float()
-        avg_lpips_dpsr = torch.tensor(lpips_dpsr_list).mean().float()
-        avg_lpips_esrgan = torch.tensor(lpips_esrgan_list).mean().float()
-
-        avg_dists_moex = torch.tensor(dists_moex_list).mean().float()
-        avg_dists_dpsr = torch.tensor(dists_dpsr_list).mean().float()
-        avg_dists_esrgan = torch.tensor(dists_esrgan_list).mean().float()
-
-        print(f"Average PSNR N-SMoE: {avg_psnr_moex}")
-        print(f"Average PSNR DPSR: {avg_psnr_dpsr}")
-        print(f"Average PSNR ESRGAN: {avg_psnr_esrgan}")
-
-        print(f"Average SSIM N-SMoE: {avg_ssim_moex}")
-        print(f"Average SSIM DPSR: {avg_ssim_dpsr}")
-        print(f"Average SSIM ESRGAN: {avg_ssim_esrgan}")
-
-        print(f"Average LPIPS N-SMoE: {avg_lpips_moex}")
-        print(f"Average LPIPS DPSR: {avg_lpips_dpsr}")
-        print(f"Average LPIPS ESRGAN: {avg_lpips_esrgan}")
-
-        print(f"Average DISTS N-SMoE: {avg_dists_moex}")
-        print(f"Average DISTS DPSR: {avg_dists_dpsr}")
-        print(f"Average DISTS ESRGAN: {avg_dists_esrgan}")
-
-        psnr_values: List[torch.Tensor] = [
-            avg_psnr_dpsr,
-            avg_psnr_esrgan,
-            avg_psnr_moex,
-        ]
-
-        ssim_values: List[torch.Tensor] = [
-            avg_ssim_dpsr,
-            avg_ssim_esrgan,
-            avg_ssim_moex,
-        ]
-
-        lpips_values: List[torch.Tensor] = [
-            avg_lpips_dpsr,
-            avg_lpips_esrgan,
-            avg_lpips_moex,
-        ]
-
-        dists_values: List[torch.Tensor] = [
-            avg_dists_dpsr,
-            avg_dists_esrgan,
-            avg_dists_moex,
-        ]
-
-        diff_psnr_values: List[torch.Tensor] = [
-            psnr_values[-1] - psnr for psnr in psnr_values[:-1]
-        ]
-        diff_ssim_values: List[torch.Tensor] = [
-            ssim_values[-1] - ssim for ssim in ssim_values[:-1]
-        ]
-
-        with open((fmetric_name + "_metrics.csv"), "a", newline="") as csvfile:
-            csvwriter = csv.writer(csvfile)
-
-            csvwriter.writerow(
-                [
-                    "Dataset",
-                    "Degradation",
-                    "Scale",
-                    "Image_Size",
-                    "Method",
-                    "PSNR",
-                    "SSIM",
-                    "LPIPS",
-                    "DISTS",
-                    "Diff_PSNR",
-                    "Diff_SSIM",
-                ]
-            )
-
-            for i, method in enumerate(methods):
                 csvwriter.writerow(
                     [
-                        dataset_name,
-                        degrdation,
-                        scale,
-                        H_img_size,
-                        method,
-                        psnr_values[i].item(),
-                        ssim_values[i].item(),
-                        lpips_values[i].item(),
-                        dists_values[i].item(),
-                        (
-                            diff_psnr_values[i].item()
-                            if i < len(diff_psnr_values)
-                            else "N/A"
-                        ),
-                        (
-                            diff_ssim_values[i].item()
-                            if i < len(diff_ssim_values)
-                            else "N/A"
-                        ),
+                        "Dataset",
+                        "Degradation",
+                        "Scale",
+                        "Image_Size",
+                        "Method",
+                        "PSNR",
+                        "SSIM",
+                        "LPIPS",
+                        "DISTS",
+                        "Diff_PSNR",
+                        "Diff_SSIM",
                     ]
                 )
-            print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
+
+                for i, method in enumerate(methods):
+                    csvwriter.writerow(
+                        [
+                            dataset_name,
+                            degrdation,
+                            scale,
+                            H_img_size,
+                            method,
+                            psnr_values[i].item(),
+                            ssim_values[i].item(),
+                            lpips_values[i].item(),
+                            dists_values[i].item(),
+                            (
+                                diff_psnr_values[i].item()
+                                if i < len(diff_psnr_values)
+                                else "N/A"
+                            ),
+                            (
+                                diff_ssim_values[i].item()
+                                if i < len(diff_ssim_values)
+                                else "N/A"
+                            ),
+                        ]
+                    )
+                print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 
     elif task == "sr_x4":
         from models.network_dpsr import MSRResNet_prior as dpsr
