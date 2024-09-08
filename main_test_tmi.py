@@ -1540,7 +1540,6 @@ def main(**kwargs):
                     f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
                 )
 
-
                 models = {
                     "N-SMoE": model_moex1,
                     "DPSR": model_dpsr,
