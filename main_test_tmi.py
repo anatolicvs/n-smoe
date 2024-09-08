@@ -1145,6 +1145,21 @@ def gen_latex_table(psnr, ssim, lpips, dists, methods, scales, datasets, caption
     return latex_str
 
 
+def process_data(data, models, device):
+
+   results = {}
+   for method, model in models.items():
+       with torch.no_grad():
+           if method == 'N-SMoE':
+               E_img = model(data["L_p"].to(device), data["L"].size())
+           else:
+               E_img = model(data["L"].to(device))
+
+            gt = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
+            E_img = E_img.clamp(0, 1).to(torch.float)
+
+
+
 @click.command()
 @click.option(
     "--opt",
@@ -1825,7 +1840,7 @@ def main(**kwargs):
                         ]
                     )
 
-                    
+
 
                 print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 

@@ -2114,6 +2114,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
         )
         self.decoder = MoE(cfg.DecoderConfig)
+        self.scale_factor: int = 1
 
     @staticmethod
     def reconstruct(
