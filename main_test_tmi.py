@@ -1423,16 +1423,11 @@ def main(**kwargs):
             # min_mask_region_area=25.0,
             # use_m2m=True,
         )
-        
-
 
         methods: List[str] = ["Bicubic", "DPSR", "ESRGAN", "N-SMoE"]
-        psnr = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
-        ssim = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
-        lpips = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
-        dists = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
-        brisque = {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods}
-        
+        metrics = ["psnr", "ssim", "lpips", "dists", "brisque"]
+        metric_data = {metric: {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods} for metric in metrics}
+
 
         for phase, dataset_opt in opt["datasets"].items():
             test_set = define_Dataset(dataset_opt)
@@ -1450,6 +1445,10 @@ def main(**kwargs):
             degrdation = dataset_opt["degradation_type"]
             scale = f'x{dataset_opt["scale"]}'
             dataset_name = dataset_opt["name"]
+
+            for method in methods:
+                for metric in metrics:
+                metric_data[metric][method][dataset_name][scale] = []
 
             timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             csv_dir = os.path.join(opt["path"]["root"], dataset_name)
@@ -1710,54 +1709,66 @@ def main(**kwargs):
             avg_psnr_moex = torch.tensor(psnr_moex_list).mean().float()
             avg_psnr_dpsr = torch.tensor(psnr_dpsr_list).mean().float()
             avg_psnr_esrgan = torch.tensor(psnr_esrgan_list).mean().float()
+            avg_psnr_bicubic = torch.tensor(psnr_bicubic_list).mean().float()
 
             avg_ssim_moex = torch.tensor(ssim_moex_list).mean().float()
             avg_ssim_dpsr = torch.tensor(ssim_dpsr_list).mean().float()
             avg_ssim_esrgan = torch.tensor(ssim_esrgan_list).mean().float()
+            avg_ssim_bicubic = torch.tensor(ssim_bicubic_list).mean().float()
 
             avg_lpips_moex = torch.tensor(lpips_moex_list).mean().float()
             avg_lpips_dpsr = torch.tensor(lpips_dpsr_list).mean().float()
             avg_lpips_esrgan = torch.tensor(lpips_esrgan_list).mean().float()
+            avg_lpips_bicubic = torch.tensor(lpips_bicubic_list).mean().float()
 
             avg_dists_moex = torch.tensor(dists_moex_list).mean().float()
             avg_dists_dpsr = torch.tensor(dists_dpsr_list).mean().float()
             avg_dists_esrgan = torch.tensor(dists_esrgan_list).mean().float()
+            avg_dists_bicubic = torch.tensor(dists_bicubic_list).mean().float()
 
             print(f"Average PSNR N-SMoE: {avg_psnr_moex}")
             print(f"Average PSNR DPSR: {avg_psnr_dpsr}")
             print(f"Average PSNR ESRGAN: {avg_psnr_esrgan}")
+            print(f"Average PSNR Bicubic: {avg_psnr_bicubic}")
 
             print(f"Average SSIM N-SMoE: {avg_ssim_moex}")
             print(f"Average SSIM DPSR: {avg_ssim_dpsr}")
             print(f"Average SSIM ESRGAN: {avg_ssim_esrgan}")
+            print(f"Average SSIM Bicubic: {avg_ssim_bicubic}")
 
             print(f"Average LPIPS N-SMoE: {avg_lpips_moex}")
             print(f"Average LPIPS DPSR: {avg_lpips_dpsr}")
             print(f"Average LPIPS ESRGAN: {avg_lpips_esrgan}")
+            print(f"Average LPIPS Bicubic: {avg_lpips_bicubic}")
 
             print(f"Average DISTS N-SMoE: {avg_dists_moex}")
             print(f"Average DISTS DPSR: {avg_dists_dpsr}")
             print(f"Average DISTS ESRGAN: {avg_dists_esrgan}")
+            print(f"Average DISTS Bicubic: {avg_dists_bicubic}")
 
             psnr_values: List[torch.Tensor] = [
+                avg_psnr_bicubic,
                 avg_psnr_dpsr,
                 avg_psnr_esrgan,
                 avg_psnr_moex,
             ]
 
             ssim_values: List[torch.Tensor] = [
+                avg_ssim_bicubic,
                 avg_ssim_dpsr,
                 avg_ssim_esrgan,
                 avg_ssim_moex,
             ]
 
             lpips_values: List[torch.Tensor] = [
+                avg_lpips_bicubic,
                 avg_lpips_dpsr,
                 avg_lpips_esrgan,
                 avg_lpips_moex,
             ]
 
             dists_values: List[torch.Tensor] = [
+                avg_dists_bicubic,
                 avg_dists_dpsr,
                 avg_dists_esrgan,
                 avg_dists_moex,
@@ -1813,6 +1824,9 @@ def main(**kwargs):
                             ),
                         ]
                     )
+
+                    
+
                 print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 
     elif task == "sr_x4":
