@@ -1146,7 +1146,6 @@ def gen_latex_table(psnr, ssim, lpips, dists, methods, scales, datasets, caption
 
 
 def process_data(data, models, device):
-
    results = {}
    for method, model in models.items():
        with torch.no_grad():
@@ -1158,6 +1157,21 @@ def process_data(data, models, device):
             gt = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
             E_img = E_img.clamp(0, 1).to(torch.float)
 
+            psnr = piq.psnr(E_img, gt, data_range=1).float()
+            ssim = piq.ssim(E_img, gt, data_range=1, reduction="mean")
+            lpips = piq.LPIPS()(E_img, gt).item()
+            dists = piq.DISTS()(E_img, gt).item()
+            brisque = piq.brisque(E_img, data_range=1.0, reduction="none")
+
+            results[method] = {
+                "PSNR": psnr,
+                "SSIM": ssim,
+                "LPIPS": lpips,
+                "DISTS": dists,
+                "Brisque": brisque,
+            }
+
+   return results
 
 
 @click.command()
