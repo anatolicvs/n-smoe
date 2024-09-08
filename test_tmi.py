@@ -1151,6 +1151,8 @@ def process_data(data, models, device):
         with torch.no_grad():
             if method == 'N-SMoE':
                 E_img = model(data["L_p"].to(device), data["L"].size())
+            elif method == 'Bicubic':
+                E_img = model(data["L"].to(device))
             else:
                 E_img = model(data["L"].to(device))
 
@@ -1545,69 +1547,14 @@ def main(**kwargs):
                     "N-SMoE": model_moex1,
                     "DPSR": model_dpsr,
                     "ESRGAN": model_esrgan,
+                    "Bicubic": default_resizer,
                 }
 
                 results = process_data(test_data, models, device)
 
 
-                with torch.no_grad():
-                    E_img_moex1 = model_moex1(
-                        test_data["L_p"].to(device), test_data["L"].size()
-                    )
-
-                    E_img_dpsr = model_dpsr(test_data["L"].to(device))
-                    E_img_esrgan = model_esrgan(test_data["L"].to(device))
-                    E_bicubic = default_resizer(
-                        test_data["L"], test_data["H"].size()[2:]
-                    )
-
-                gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
-                E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
-                E_img_dpsr_t = E_img_dpsr.clamp(0, 1).to(torch.float)
-                E_img_esrgan_t = E_img_esrgan.clamp(0, 1).to(torch.float)
-                E_bicubic_t = E_bicubic.clamp(0, 1).to(torch.float).to(device)
-
-                psnr_moex1 = piq.psnr(E_img_moex_t, gt_img, data_range=1).float()
-                psnr_dpsr = piq.psnr(E_img_dpsr_t, gt_img, data_range=1).float()
-                psnr_esrgan = piq.psnr(E_img_esrgan_t, gt_img, data_range=1).float()
-                psnr_bicubic = piq.psnr(E_bicubic_t, gt_img, data_range=1).float()
-
-                ssim_moex1 = piq.ssim(
-                    E_img_moex_t, gt_img, data_range=1, reduction="mean"
-                )
-                ssim_dpsr = piq.ssim(
-                    E_img_dpsr_t, gt_img, data_range=1, reduction="mean"
-                )
-                ssim_esrgan = piq.ssim(
-                    E_img_esrgan_t, gt_img, data_range=1, reduction="mean"
-                )
-                ssim_bicubic = piq.ssim(
-                    E_bicubic_t, gt_img, data_range=1, reduction="mean"
-                )
-
-                lpips_moex1 = piq.LPIPS()(E_img_moex_t, gt_img).item()
-                lpips_dpsr = piq.LPIPS()(E_img_dpsr_t, gt_img).item()
-                lpips_esrgan = piq.LPIPS()(E_img_esrgan_t, gt_img).item()
-                lpips_bicubic = piq.LPIPS()(E_bicubic_t, gt_img).item()
-
-                dists_moex1 = piq.DISTS()(E_img_moex_t, gt_img).item()
-                dists_dpsr = piq.DISTS()(E_img_dpsr_t, gt_img).item()
-                dists_esrgan = piq.DISTS()(E_img_esrgan_t, gt_img).item()
-                dists_bicubic = piq.DISTS()(E_bicubic_t, gt_img).item()
-
-                brisque_moex1 = piq.brisque(
-                    E_img_moex_t, data_range=1.0, reduction="none"
-                )
-                brisque_dpsr = piq.brisque(
-                    E_img_dpsr_t, data_range=1.0, reduction="none"
-                )
-                brisque_esrgan = piq.brisque(
-                    E_img_esrgan_t, data_range=1.0, reduction="none"
-                )
-                brisque_bicubic = piq.brisque(
-                    E_bicubic_t, data_range=1.0, reduction="none"
-                )
-
+                
+            
                 print(
                     f"PSNR N-SMoE: {psnr_moex1}, PSNR DPSR: {psnr_dpsr}, PSNR ESRGAN: {psnr_esrgan}, PSNR Bicubic: {psnr_bicubic}",
                 )
