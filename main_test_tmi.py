@@ -1047,93 +1047,41 @@ def default_resizer(inputs, target_size):
     )
 
 
-def gen_latex_table(psnr, ssim, lpips, dists, methods, scales, datasets, caption):
-    def best_vals(values, best_values):
-        formatted = []
-        for v in values:
-            if v == best_values["best"]:
-                formatted.append("\\textbf{" + f"{v:.4f}" + "}")
-            elif v == best_values["second_best"]:
-                formatted.append("\\underline{" + f"{v:.4f}" + "}")
-            else:
-                formatted.append(f"{v:.4f}")
-        return formatted
+def gen_latex_table(data):
+    methods = data.keys()
+    scales = list(data[next(iter(methods))].keys())
+    datasets = list(data[next(iter(methods))][next(iter(scales))].keys())
+    metrics = ['PSNR', 'SSIM', 'LPIPS', 'DISTS']
 
-    latex_str = r"\begin{table*}[!t]" + "\n"
-    latex_str += r"\caption{" + caption + "}" + "\n"
+    latex_str = r"\section{Results}" + "\n"
+    latex_str += r"\begin{table*}[t] % Use table* to span both columns" + "\n"
     latex_str += r"\centering" + "\n"
+    latex_str += r"\caption{Quantitative comparison of reconstruction quality on different datasets for " + " and ".join(f"{s}×" for s in scales) + " scales. The best and second-best results are highlighted in \textbf{bold} and \underline{underline}.}" + "\n"
     latex_str += r"\resizebox{\textwidth}{!}{" + "\n"
-    latex_str += (
-        r"\begin{tabular}{@{} l c "
-        + " ".join(["c c c c " for _ in datasets])
-        + "@{}}"
-        + "\n"
-    )
+    latex_str += r"\begin{tabular}{" + "\n"
+    latex_str += r"  @{}" + "\n"
+    latex_str += r"  l" + "\n"
+    latex_str += r"  c" + "\n"
+    for _ in datasets:
+        latex_str += r"  c c c c" + "\n"
+    latex_str += r"  c" + "\n"
+    latex_str += r"  @{}" + "\n"
+    latex_str += r"}" + "\n"
     latex_str += r"\toprule" + "\n"
-    latex_str += (
-        r"\textbf{Methods} & \textbf{Scale} & "
-        + " & ".join(
-            [r"\multicolumn{4}{c}{\textbf{" + dataset + "}}" for dataset in datasets]
-        )
-        + r" \\"
-        + "\n"
-    )
-    latex_str += r"\cmidrule(lr){3-" + str(2 + 4 * len(datasets)) + "}" + "\n"
-    latex_str += (
-        " & & "
-        + " & ".join(
-            [
-                r"\textbf{PSNR $\uparrow$} & \textbf{SSIM $\uparrow$} & \textbf{LPIPS $\downarrow$} & \textbf{DISTS $\downarrow$}"
-                for _ in datasets
-            ]
-        )
-        + r" \\"
-        + "\n"
-    )
+    latex_str += r"{\textbf{Methods}} & {\textbf{Scale}} & " + " & ".join([f"\multicolumn{{4}}{{c}}{{\textbf{{Dataset {i+1}}}}}" for i in range(len(datasets))]) + " & \textbf{Params/M} \\\\" + "\n"
+    latex_str += r"\cmidrule(lr){3-" + str(3 + 4 * len(datasets)) + "}" + "\n"
+    latex_str += r"& & " + " & ".join([r"\multicolumn{2}{c}{\textbf{Fidelity}} & \multicolumn{2}{c}{\textbf{Perceptual}}" for _ in datasets]) + " & \\\\" + "\n"
+    latex_str += r"\cmidrule(lr){3-4} \cmidrule(lr){5-6} " * len(datasets) + "\n"
+    latex_str += r"& & " + " & ".join([r"\textbf{PSNR↑} & \textbf{SSIM↑} & \textbf{LPIPS↓} & \textbf{DISTS↓}" for _ in datasets]) + " & \\\\" + "\n"
     latex_str += r"\midrule" + "\n"
 
-    for scale in scales:
-        scale_values = {metric: [] for metric in ["psnr", "ssim", "lpips", "dists"]}
-        for method in methods:
+    for method in methods:
+        for scale in scales:
+            latex_str += method + " & " + f"{scale}×" + " & "
             for dataset in datasets:
-                scale_values["psnr"].append(psnr[method][dataset][scale])
-                scale_values["ssim"].append(ssim[method][dataset][scale])
-                scale_values["lpips"].append(lpips[method][dataset][scale])
-                scale_values["dists"].append(dists[method][dataset][scale])
-
-        best_metrics = {}
-        for metric, values in scale_values.items():
-            sorted_values = sorted(
-                values, reverse=True if metric in ["psnr", "ssim"] else False
-            )
-            best_metrics[metric] = {
-                "best": sorted_values[0],
-                "second_best": (
-                    sorted_values[1] if len(sorted_values) > 1 else sorted_values[0]
-                ),
-            }
-
-        for method in methods:
-            latex_str += method + " & " + scale + " & "
-            for dataset in datasets:
-                values = [
-                    psnr[method][dataset][scale],
-                    ssim[method][dataset][scale],
-                    lpips[method][dataset][scale],
-                    dists[method][dataset][scale],
-                ]
-                metrics = ["psnr", "ssim", "lpips", "dists"]
-                formatted = []
-                for idx, val in enumerate(values):
-                    metric_best = best_metrics[metrics[idx]]
-                    if val == metric_best["best"]:
-                        formatted.append("\\textbf{" + f"{val:.4f}" + "}")
-                    elif val == metric_best["second_best"]:
-                        formatted.append("\\underline{" + f"{val:.4f}" + "}")
-                    else:
-                        formatted.append(f"{val:.4f}")
-                latex_str += " & ".join(formatted) + " & "
-            latex_str = latex_str.strip(" & ") + r" \\" + "\n"
+                values = data[method][scale][dataset]
+                latex_str += " & ".join(f"{v:.4f}" for v in values) + " & "
+            latex_str += f"{data[method][scale]['params']:.4f}" + " \\\\" + "\n"
         latex_str += r"\midrule" + "\n"
 
     latex_str += r"\bottomrule" + "\n"
@@ -1149,7 +1097,7 @@ def process_data(data, models, device):
     results = {}
     for method, model in models.items():
         with torch.no_grad():
-            if method == 'N-SMoE':
+            if method == "N-SMoE":
                 E_img = model(data["L_p"].to(device), data["L"].size())
             else:
                 E_img = model(data["L"].to(device))
@@ -1455,8 +1403,13 @@ def main(**kwargs):
 
         methods: List[str] = ["Bicubic", "DPSR", "ESRGAN", "N-SMoE"]
         metrics = ["psnr", "ssim", "lpips", "dists", "brisque"]
-        metric_data = {metric: {method: {dataset: {} for dataset in opt["datasets"].keys()} for method in methods} for metric in metrics}
-
+        metric_data = {
+            metric: {
+                method: {dataset: {} for dataset in opt["datasets"].keys()}
+                for method in methods
+            }
+            for metric in metrics
+        }
 
         for phase, dataset_opt in opt["datasets"].items():
             test_set = define_Dataset(dataset_opt)
@@ -1545,9 +1498,6 @@ def main(**kwargs):
                     "DPSR": model_dpsr,
                     "ESRGAN": model_esrgan,
                 }
-
-                results = process_data(test_data, models, device)
-
 
                 with torch.no_grad():
                     E_img_moex1 = model_moex1(
@@ -1862,8 +1812,6 @@ def main(**kwargs):
                             ),
                         ]
                     )
-
-
 
                 print(f"Results saved to CSV file: {fmetric_name}_metrics.csv")
 
