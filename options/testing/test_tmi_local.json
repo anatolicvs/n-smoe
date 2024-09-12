@@ -1,5 +1,5 @@
 {
-    "task": "sharpening" //"sharpening" 
+    "task": "sr_x2" //"sharpening" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -19,28 +19,48 @@
       , "pretrained_models":{
          "dpsr_x2" : "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"   // rgb | grayscale
         ,"esrgan_x2": "/mnt/e/Weights/superresolution/rrdb_v1_x2/models/95000_G.pth" // rgb | grayscale
-        ,"moex1_x2" : "/mnt/e/Weights/superresolution/n-smoe/x2/15000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
-        ,"moex3_x2" : null
+        ,"moex1_x2" :  "/mnt/e/Weights/superresolution/n-smoe/x2/15000_G.pth" //"/mnt/e/Weights/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth"   // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_medico_grayscale_act_gelu/models/120000_G.pth" // "/mnt/e/Weights/superresolution/n-smoe/x2/15000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
+        ,"moex3_x2" : "/mnt/e/Weights/superresolution/moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_16/models/45000_G.pth"
+        ,"moex3_x2_32": "/mnt/e/Weights/superresolution/moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_32/models/30000_G.pth"
         ,"sam2":  "/mnt/d/zoo/sam2/finetuned/88000_G.pth" // "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt" // "/home/ozkan/works/n-smoe/.checkpoints/sam2-finetuned.pt" 
       }
       , "datasets": {
-         "test": {
-            "name": "FLARE22" //"FLARE22"            
+         "FLARE22": {
+            "name": "FLARE22"
+          , "scale": 2  
           , "dataset_type": "medical_sr"            
           , "lq_patchsize": 96
-          , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
+          , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
           , "exclude_dirs": []
-          , "length" : 50
+          , "length" : 5
           , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
           , "dataroot_H": ["/mnt/d/dataset/FLARE22/npy"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
-          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_FLARE22_.pkl"
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_FLARE22_5.pkl"
           , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 
           , "use_imgH": true
-        }
+        },
+        "OCT": {
+          "name": "OCT"
+        , "scale": 2  
+        , "dataset_type": "medical_sr"            
+        , "lq_patchsize": 96
+        , "degradation_type" : "dpsr" // "bsrgan" , "dpsr"
+        , "exclude_dirs": []
+        , "length" : 5
+        , "degradation_methods" : ["dpsr"] // "dpsr" | "bsrgan_plus"
+        , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/oct/DME"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+        , "dataroot_L": null              // path of L testing dataset
+        , "use_dataset_cache": true
+        , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_oct_dme_5.pkl"
+        , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_num_workers": 16
+        , "dataloader_batch_size": 1 
+        , "use_imgH": true
+      }
       }
   }
   
