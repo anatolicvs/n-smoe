@@ -328,11 +328,11 @@ def main(**kwargs):
                     
                     wandb.log({
                         "epoch": epoch,
-                        f"{k}" : v,
+                        f"{k}": v,
                         "step": current_step,
                         "learning_rate": model.current_learning_rate(),
                     })
-                
+                    
                 logger.info(message)
 
             if current_step % checkpoint_interval == 0:
