@@ -1046,13 +1046,39 @@ def gen_latex_table(average_metric_data):
     )
     latex_str += r"\midrule" + "\n"
 
+    all_metric_values = {
+    metric: {dataset: {scale: [] for scale in scales} for dataset in datasets} for metric in metrics}
+    
+    for method in methods:
+        for dataset in datasets:
+            for scale in scales:
+                for metric in metrics:
+                    value = average_metric_data[metric][method][dataset][scale]
+                    all_metric_values[metric][dataset][scale].append(value)
+
+    best_values_dict = {
+        metric: {dataset: {scale: {} for scale in scales} for dataset in datasets}
+        for metric in metrics
+    }
+    for metric in metrics:
+        for dataset in datasets:
+            for scale in scales:
+                values = all_metric_values[metric][dataset][scale]
+                sorted_values = sorted(
+                    values, reverse=(metric not in ["lpips", "dists"])
+                )
+                best_values_dict[metric][dataset][scale]["best"] = sorted_values[0]
+                best_values_dict[metric][dataset][scale]["second_best"] = (
+                    sorted_values[1] if len(sorted_values) > 1 else sorted_values[0]
+                )
+
     for method in methods:
         for scale in scales:
             latex_str += method + " & " + f"{scale}" + " & "
             for dataset in datasets:
                 for metric in metrics:
                     value = average_metric_data[metric][method][dataset][scale]
-                    best_values = best_vals([average_metric_data[m][method][dataset][scale] for m in metrics], {"best": max([average_metric_data[m][method][dataset][scale] for m in metrics]), "second_best": sorted([average_metric_data[m][method][dataset][scale] for m in metrics])[-2]})
+                    best_values = best_values_dict[metric][dataset][scale]
                     is_best = value == best_values["best"]
                     is_second_best = value == best_values["second_best"]
                     if is_best:
@@ -1064,7 +1090,7 @@ def gen_latex_table(average_metric_data):
                     latex_str += formatted_value + " & "
             latex_str = latex_str.rstrip(" & ")
             latex_str += r" \\" + "\n"
-            latex_str += r"\midrule" + "\n"
+        latex_str += r"\midrule" + "\n"
 
     latex_str += r"\bottomrule" + "\n"
     latex_str += r"\end{tabular}" + "\n"
