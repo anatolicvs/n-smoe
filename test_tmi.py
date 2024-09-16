@@ -1,11 +1,9 @@
 # type: ignore
-import argparse
 import csv
 import datetime
 import json
-from json import encoder
 import logging
-import math
+
 import os.path
 import random
 from typing import Any, Dict, List
@@ -21,10 +19,8 @@ from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 from sam2.build_sam import build_sam2
 from torch.utils.data import DataLoader
 
-import models.basicblock as B
 from data.select_dataset import define_Dataset
 from dnnlib import EasyDict
-from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
@@ -982,6 +978,7 @@ def default_resizer(inputs, target_size):
 
 #     return latex_str
 
+
 def gen_latex_table(average_metric_data):
     def best_vals(values, best_values):
         formatted = []
@@ -1020,7 +1017,8 @@ def gen_latex_table(average_metric_data):
                 for dataset in datasets
             ]
         )
-        + r" \\" + "\n"
+        + r" \\"
+        + "\n"
     )
     latex_str += r"\cmidrule(lr){3-" + str(3 + 4 * len(datasets) - 1) + "}" + "\n"
     latex_str += (
@@ -1031,7 +1029,8 @@ def gen_latex_table(average_metric_data):
                 for _ in datasets
             ]
         )
-        + r" \\" + "\n"
+        + r" \\"
+        + "\n"
     )
     latex_str += r"\cmidrule(lr){3-4} \cmidrule(lr){5-6} " * len(datasets) + "\n"
     latex_str += (
@@ -1042,13 +1041,16 @@ def gen_latex_table(average_metric_data):
                 for _ in datasets
             ]
         )
-        + r" \\" + "\n"
+        + r" \\"
+        + "\n"
     )
     latex_str += r"\midrule" + "\n"
 
     all_metric_values = {
-    metric: {dataset: {scale: [] for scale in scales} for dataset in datasets} for metric in metrics}
-    
+        metric: {dataset: {scale: [] for scale in scales} for dataset in datasets}
+        for metric in metrics
+    }
+
     for method in methods:
         for dataset in datasets:
             for scale in scales:
