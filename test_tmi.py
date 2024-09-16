@@ -704,14 +704,6 @@ def visualize_data(
         freq = fftshift(fft2(img))
         freq_magnitude = np.log(np.abs(freq) + 1)
 
-        # signal_x = np.sum(freq_magnitude, axis=0)
-        # signal_y = np.sum(freq_magnitude, axis=1)
-
-        # freq_table[title]["energy_x"] = np.sum(signal_x**2)
-        # freq_table[title]["energy_y"] = np.sum(signal_y**2)
-        # freq_table[title]["entropy_x"] = entropy(signal_x, base=2)
-        # freq_table[title]["entropy_y"] = entropy(signal_y, base=2)
-
         ax_x_spectrum = fig.add_subplot(gs[1, i])
         ax_x_spectrum.plot(np.sum(freq_magnitude, axis=0), color="blue")
         ax_x_spectrum.set_title(
@@ -744,7 +736,6 @@ def visualize_data(
         ax_2d_spectrum.axis("on")
 
     plt.tight_layout(pad=0, h_pad=0, w_pad=0)
-    # plt.subplots_adjust(wspace=0.5, hspace=0.5)
 
     if save_path:
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0)
@@ -980,17 +971,6 @@ def default_resizer(inputs, target_size):
 
 
 def gen_latex_table(average_metric_data):
-    def best_vals(values, best_values):
-        formatted = []
-        for v in values:
-            if v == best_values["best"]:
-                formatted.append("\\textbf{" + f"{v:.4f}" + "}")
-            elif v == best_values["second_best"]:
-                formatted.append("\\underline{" + f"{v:.4f}" + "}")
-            else:
-                formatted.append(f"{v:.4f}")
-        return formatted
-
     metrics = ["psnr", "ssim", "lpips", "dists"]
     methods = list(average_metric_data["psnr"].keys())
     datasets = list(average_metric_data["psnr"][methods[0]].keys())
@@ -1020,7 +1000,12 @@ def gen_latex_table(average_metric_data):
         + r" \\"
         + "\n"
     )
-    latex_str += r"\cmidrule(lr){3-" + str(3 + 4 * len(datasets) - 1) + "}" + "\n"
+    latex_str += (
+        " ".join(
+            [f"\\cmidrule(lr){{{3 + 4 * i}-{6 + 4 * i}}}" for i in range(len(datasets))]
+        )
+        + "\n"
+    )
     latex_str += (
         "& & "
         + " & ".join(
@@ -1032,7 +1017,15 @@ def gen_latex_table(average_metric_data):
         + r" \\"
         + "\n"
     )
-    latex_str += r"\cmidrule(lr){3-4} \cmidrule(lr){5-6} " * len(datasets) + "\n"
+    latex_str += (
+        " ".join(
+            [
+                f"\\cmidrule(lr){{{3 + 4 * i}-{4 + 4 * i}}} \\cmidrule(lr){{{5 + 4 * i}-{6 + 4 * i}}}"
+                for i in range(len(datasets))
+            ]
+        )
+        + "\n"
+    )
     latex_str += (
         "& & "
         + " & ".join(
@@ -2059,14 +2052,6 @@ def main(**kwargs):
             v.requires_grad = False
         model_esrgan = model_esrgan.to(device)
 
-        # titles = [
-        #     "High Resolution",
-        #     "Low Resolution Crop",
-        #     "High Resolution Crop",
-        #     "N-SMoE",
-        #     "DPSR",
-        # ]
-
         model_cfg = "sam2_hiera_l.yaml"
 
         sam2 = build_sam2(
@@ -2075,25 +2060,6 @@ def main(**kwargs):
             device="cuda",
             apply_postprocessing=True,
         )
-
-        # mask_generator = SAM2AutomaticMaskGenerator(
-        #     model=sam2,
-        #     points_per_side=256,  # Very high density for the finest details
-        #     points_per_batch=128,  # More points per batch for thorough segmentation
-        #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
-        #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
-        #     stability_score_offset=1.0,
-        #     mask_threshold=0.0,
-        #     box_nms_thresh=0.7,
-        #     crop_n_layers=4,  # More layers for multi-level cropping
-        #     crop_nms_thresh=0.7,
-        #     crop_overlap_ratio=512 / 1500,
-        #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
-        #     min_mask_region_area=20,  # Small region processing to remove artifacts
-        #     output_mode="binary_mask",
-        #     use_m2m=True,  # Enable M2M refinement
-        #     multimask_output=True,
-        # )
 
         mask_generator = SAM2AutomaticMaskGenerator(
             model=sam2,
@@ -2175,10 +2141,6 @@ def main(**kwargs):
                 E_img_dpsr = model_dpsr(test_data["L"].to(device))
                 E_img_esrgan = model_esrgan(test_data["L"].to(device))
                 E_bicubic = default_resizer(test_data["L"], test_data["H"].size()[2:])
-            # gt_img = (test_data["H"].mul(255.0).clamp(0, 255).to(torch.uint8)).to(device)
-            # E_img_moex_t = E_img_moex1.mul(255.0).clamp(0, 255).to(torch.uint8)
-            # E_img_dpsr_t = E_img_dpsr.mul(255.0).clamp(0, 255).to(torch.uint8)
-            # E_img_esrgan_t = E_img_esrgan.mul(255.0).clamp(0, 255).to(torch.uint8)
 
             gt_img = (test_data["H"].clamp(0, 1).to(torch.float)).to(device)
             E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
@@ -2264,7 +2226,6 @@ def main(**kwargs):
             H_crop_img = util.tensor2uint(test_data["H"])
 
             img_H = util.tensor2uint(test_data["O"])
-            # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
             img_H = util.modcrop(img_H, border)
 
             images: dict[str, Any] = {
@@ -2281,8 +2242,6 @@ def main(**kwargs):
             }
 
             scipy.io.savemat(f"{fname}.mat", images)
-
-            # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
 
             titles: list[str] = [
                 "HR",
