@@ -6,7 +6,8 @@ import torch.distributed as dist
 import torch
 from torch.nn.modules.module import Module
 from torch.nn.parallel import DataParallel, DistributedDataParallel
-
+from torch.optim import Adam, lr_scheduler, RAdam, AdamW, SGD
+from torch_optimizer import Lookahead
 from utils_n.utils_bnorm import merge_bn, tidy_sequential
 
 
@@ -218,3 +219,57 @@ class ModelBase(ABC):
 
     def log(self, *args, **kwargs) -> None:
         pass
+
+    @staticmethod
+    def create_optimizer(
+        optim_type, params, lr=0.001, betas=(0.9, 0.999), wd=0.01, momentum=None
+    ):
+        if optim_type == "adam":
+            return Lookahead(Adam(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "radam":
+            return Lookahead(RAdam(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "sgd":
+            return Lookahead(SGD(params, lr=lr, momentum=momentum, weight_decay=wd))
+        elif optim_type == "adamw":
+            return Lookahead(AdamW(params, lr=lr, betas=betas, weight_decay=wd))
+        else:
+            raise NotImplementedError
+
+    @staticmethod
+    def create_scheduler(scheduler_type, optimizer, opt_train):
+        if scheduler_type == "MultiStepLR":
+            return lr_scheduler.MultiStepLR(
+                optimizer,
+                opt_train["scheduler_milestones"],
+                opt_train["scheduler_gamma"],
+            )
+        elif scheduler_type == "CyclicLR":
+            return lr_scheduler.CyclicLR(
+                optimizer,
+                opt_train["optimizer_lr"],
+                opt_train["scheduler_max_lr"],
+                step_size_up=opt_train["scheduler_step_size_up"],
+                step_size_down=opt_train["scheduler_step_size_down"],
+                mode=opt_train["scheduler_mode"],
+                gamma=1.0,
+                cycle_momentum=opt_train["scheduler_cycle_momentum"],
+                base_momentum=0.8,
+                max_momentum=0.9,
+                last_epoch=-1,
+            )
+        elif scheduler_type == "CosineAnnealingLR":
+            return lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=opt_train["scheduler_T_max"],
+                eta_min=opt_train["scheduler_eta_min"],
+            )
+        elif scheduler_type == "ReduceLROnPlateau":
+            return lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                patience=opt_train["scheduler_lr_patience"],
+                factor=opt_train["scheduler_lr_factor"],
+                min_lr=opt_train["scheduler_lr_min"],
+            )
+        else:
+            raise NotImplementedError

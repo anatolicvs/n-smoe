@@ -2,9 +2,8 @@ from collections import OrderedDict
 
 import piq
 import torch
-# import wandb
+
 import torch.nn as nn
-from torch.optim import Adam, lr_scheduler
 
 from models.loss import GANLoss, PerceptualLoss
 from models.loss_ssim import SSIMLoss
@@ -39,9 +38,6 @@ class ModelGAN(ModelBase):
         self.define_scheduler()  # define scheduler
         self.log_dict = OrderedDict()  # log
 
-    # ----------------------------------------
-    # load pre-trained G and D model
-    # ----------------------------------------
     def load(self):
         load_path_G = self.opt["path"]["pretrained_netG"]
         if load_path_G is not None:
@@ -68,9 +64,6 @@ class ModelGAN(ModelBase):
                 load_path_D, self.netD, strict=self.opt_train["D_param_strict"]
             )
 
-    # ----------------------------------------
-    # load optimizerG and optimizerD
-    # ----------------------------------------
     def load_optimizers(self):
         load_path_optimizerG = self.opt["path"]["pretrained_optimizerG"]
         if load_path_optimizerG is not None and self.opt_train["G_optimizer_reuse"]:
@@ -81,9 +74,6 @@ class ModelGAN(ModelBase):
             print("Loading optimizerD [{:s}] ...".format(load_path_optimizerD))
             self.load_optimizer(load_path_optimizerD, self.D_optimizer)
 
-    # ----------------------------------------
-    # save model / optimizer(optional)
-    # ----------------------------------------
     def save(self, iter_label):
         self.save_network(self.save_dir, self.netG, "G", iter_label)
         self.save_network(self.save_dir, self.netD, "D", iter_label)
@@ -98,9 +88,6 @@ class ModelGAN(ModelBase):
                 self.save_dir, self.D_optimizer, "optimizerD", iter_label
             )
 
-    # ----------------------------------------
-    # define loss
-    # ----------------------------------------
     def define_loss(self):
         # ------------------------------------
         # 1) G_loss
@@ -171,127 +158,38 @@ class ModelGAN(ModelBase):
             self.opt_train["D_init_iters"] if self.opt_train["D_init_iters"] else 0
         )
 
-    # ----------------------------------------
-    # define optimizer, G and D
-    # ----------------------------------------
     def define_optimizer(self):
-        G_optim_params = []
-        for k, v in self.netG.named_parameters():
-            if v.requires_grad:
-                G_optim_params.append(v)
-            else:
-                print("Params [{:s}] will not optimize.".format(k))
-
-        self.G_optimizer = Adam(
-            G_optim_params, lr=self.opt_train["G_optimizer_lr"], weight_decay=0
+        G_optim_params = [v for k, v in self.netG.named_parameters() if v.requires_grad]
+        self.G_optimizer = self.create_optimizer(
+            self.opt_train["G_optimizer_type"],
+            G_optim_params,
+            self.opt_train.get("G_optimizer_lr", 0.001),
+            self.opt_train.get("G_optimizer_betas", (0.9, 0.999)),
+            self.opt_train.get("G_optimizer_wd", 0.01),
+            self.opt_train.get("G_optimizer_momentum", None),
         )
-        self.D_optimizer = Adam(
-            self.netD.parameters(), lr=self.opt_train["D_optimizer_lr"], weight_decay=0
+
+        self.D_optimizer = self.create_optimizer(
+            self.opt_train["D_optimizer_type"],
+            self.netD.parameters(),
+            self.opt_train.get("D_optimizer_lr", 0.001),
+            self.opt_train.get("D_optimizer_betas", (0.9, 0.999)),
+            self.opt_train.get("D_optimizer_wd", 0.01),
+            self.opt_train.get("D_optimizer_momentum", None),
         )
 
     def define_scheduler(self):
-        g_scheduler_type = self.opt_train["G_scheduler_type"]
-        d_scheduler_type = self.opt_train["D_scheduler_type"]
+        self.schedulers.append(
+            self.create_scheduler(
+                self.opt_train["G_scheduler_type"], self.G_optimizer, self.opt_train
+            )
+        )
+        self.schedulers.append(
+            self.create_scheduler(
+                self.opt_train["D_scheduler_type"], self.D_optimizer, self.opt_train
+            )
+        )
 
-        if g_scheduler_type == "MultiStepLR":
-            self.schedulers.append(
-                lr_scheduler.MultiStepLR(
-                    self.G_optimizer,
-                    self.opt_train["G_scheduler_milestones"],
-                    self.opt_train["G_scheduler_gamma"],
-                )
-            )
-        elif g_scheduler_type == "CyclicLR":
-            self.schedulers.append(
-                lr_scheduler.CyclicLR(
-                    self.G_optimizer,
-                    self.opt_train["G_optimizer_lr"],
-                    self.opt_train["G_scheduler_max_lr"],
-                    step_size_up=self.opt_train["G_scheduler_step_size_up"],
-                    step_size_down=self.opt_train["G_scheduler_step_size_down"],
-                    mode=self.opt_train["G_scheduler_mode"],
-                    gamma=1.0,
-                    cycle_momentum=self.opt_train["G_scheduler_cycle_momentum"],
-                    base_momentum=0.8,
-                    max_momentum=0.9,
-                    last_epoch=-1,
-                )
-            )
-
-        elif g_scheduler_type == "CosineAnnealingLR":
-            self.schedulers.append(
-                lr_scheduler.CosineAnnealingLR(
-                    self.G_optimizer,
-                    T_max=self.opt_train["G_scheduler_T_max"],
-                    eta_min=self.opt_train["G_scheduler_eta_min"],
-                )
-            )
-        elif g_scheduler_type == "ReduceLROnPlateau":
-            self.schedulers.append(
-                lr_scheduler.ReduceLROnPlateau(
-                    self.G_optimizer,
-                    mode="min",
-                    patience=self.opt_train["G_scheduler_lr_patience"],
-                    factor=self.opt_train["G_scheduler_lr_factor"],
-                    min_lr=self.opt_train["G_scheduler_lr_min"],
-                )
-            )
-
-        if d_scheduler_type == "MultiStepLR":
-            self.schedulers.append(
-                lr_scheduler.MultiStepLR(
-                    self.D_optimizer,
-                    self.opt_train["D_scheduler_milestones"],
-                    self.opt_train["D_scheduler_gamma"],
-                )
-            )
-
-        elif d_scheduler_type == "CyclicLR":
-            self.schedulers.append(
-                lr_scheduler.CyclicLR(
-                    self.D_optimizer,
-                    self.opt_train["D_optimizer_lr"],
-                    self.opt_train["D_scheduler_max_lr"],
-                    step_size_up=self.opt_train["D_scheduler_step_size_up"],
-                    step_size_down=self.opt_train["D_scheduler_step_size_down"],
-                    mode=self.opt_train["D_scheduler_mode"],
-                    gamma=1.0,
-                    cycle_momentum=self.opt_train["D_scheduler_cycle_momentum"],
-                    base_momentum=0.8,
-                    max_momentum=0.9,
-                    last_epoch=-1,
-                )
-            )
-
-        elif d_scheduler_type == "CosineAnnealingLR":
-            self.schedulers.append(
-                lr_scheduler.CosineAnnealingLR(
-                    self.D_optimizer,
-                    T_max=self.opt_train["D_scheduler_T_max"],
-                    eta_min=self.opt_train["D_scheduler_eta_min"],
-                )
-            )
-        elif d_scheduler_type == "ReduceLROnPlateau":
-            self.schedulers.append(
-                lr_scheduler.ReduceLROnPlateau(
-                    self.D_optimizer,
-                    mode="min",
-                    patience=self.opt_train["D_scheduler_lr_patience"],
-                    factor=0.1,
-                    min_lr=self.opt_train["D_scheduler_lr_min"],
-                )
-            )
-
-    """
-    # ----------------------------------------
-    # Optimization during training with data
-    # Testing/evaluation
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # feed L/H data
-    # ----------------------------------------
     def feed_data(self, data, need_H=True):
         self.L = data["L"].to(self.device)
 
@@ -301,18 +199,12 @@ class ModelGAN(ModelBase):
         if need_H:
             self.H = data["H"].to(self.device)
 
-    # ----------------------------------------
-    # feed L to netG and get E
-    # ----------------------------------------
     def netG_forward(self):
         if self.opt["train"]["is_moe"]:
             self.E = self.netG(self.L_p, self.L.size())
         else:
             self.E = self.netG(self.L)
 
-    # ----------------------------------------
-    # update parameters and get loss
-    # ----------------------------------------
     def optimize_parameters(self, current_step):
         # ------------------------------------
         # optimize G
@@ -433,24 +325,15 @@ class ModelGAN(ModelBase):
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
-    # ----------------------------------------
-    # test and inference
-    # ----------------------------------------
     def test(self):
         self.netG.eval()
         with torch.no_grad():
             self.netG_forward()
         self.netG.train()
 
-    # ----------------------------------------
-    # get log_dict
-    # ----------------------------------------
     def current_log(self):
         return self.log_dict
 
-    # ----------------------------------------
-    # get L, E, H images
-    # ----------------------------------------
     def current_visuals(self, need_H=True):
         out_dict = OrderedDict()
         out_dict["L"] = self.L.detach()[0].float().cpu()
@@ -497,6 +380,3 @@ class ModelGAN(ModelBase):
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
-
-    # def log(self, key, value) -> None:
-    #     wandb.log({key: value})
