@@ -87,9 +87,11 @@
       "rope_theta": 960000.0,
       "resizer_num_layers": 4,
       "resizer_avg_pool": false
-      , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-      , "init_bn_type": "uniform"      // "uniform" | "constant"
-      , "init_gain": 1.0
+
+      , "init_type": "default"
+      // , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      // , "init_bn_type": "uniform"      // "uniform" | "constant"
+      // , "init_gain": 1.0
     }
 
     , "netD": {
