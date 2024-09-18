@@ -101,13 +101,6 @@ class ModelBase(ABC):
     def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
         if self.opt["dist"]:
-
-            # local_rank = int(os.environ.get("LOCAL_RANK", self.opt["rank"]))
-            # network = DistributedDataParallel(
-            #     network, device_ids=[local_rank], output_device=local_rank,
-            #     find_unused_parameters=True,
-            # )
-
             network = DistributedDataParallel(
                 network,
                 device_ids=[dist.get_rank() % torch.cuda.device_count()],
@@ -173,7 +166,7 @@ class ModelBase(ABC):
         param_key: str = "params",
     ) -> None:
         network = self.get_bare_model(network)
-        state_dict = torch.load(load_path, map_location=self.device, weights_only=True)
+        state_dict = torch.load(load_path, map_location=self.device)
         if param_key in state_dict:
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
@@ -190,13 +183,26 @@ class ModelBase(ABC):
         torch.save(optimizer.state_dict(), save_path)
 
     def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
-        optimizer.load_state_dict(
-            torch.load(
-                load_path,
-                map_location=self.device,
-                weights_only=True,
-            )
+        state_dict = torch.load(
+            load_path,
+            map_location=self.device,
         )
+        try:
+            optimizer.load_state_dict(state_dict)
+        except KeyError as e:
+            if 'slow_state' in str(e):
+                if isinstance(optimizer, Lookahead):
+                    base_optimizer_state = state_dict.get('state', state_dict)
+                    optimizer.optimizer.load_state_dict(base_optimizer_state)
+                    for group in optimizer.param_groups:
+                        for p in group['params']:
+                            param_state = optimizer.state[p]
+                            if 'slow_buffer' not in param_state:
+                                param_state['slow_buffer'] = p.data.clone()
+                else:
+                    raise e
+            else:
+                raise e
 
     def update_E(self, decay: float = 0.999) -> None:
         netG: Module = self.get_bare_model(self.netG)
@@ -260,8 +266,8 @@ class ModelBase(ABC):
         elif scheduler_type == "CyclicLR":
             return lr_scheduler.CyclicLR(
                 optimizer,
-                opt_train.get("optimizer_lr", 0.001),
-                opt_train.get("scheduler_max_lr", 0.1),
+                base_lr=opt_train.get("optimizer_lr", 0.001),
+                max_lr=opt_train.get("scheduler_max_lr", 0.1),
                 step_size_up=opt_train.get("scheduler_step_size_up", 2000),
                 step_size_down=opt_train.get("scheduler_step_size_down", 2000),
                 mode=opt_train.get("scheduler_mode", "triangular"),
