@@ -171,34 +171,44 @@ class ModelBase(ABC):
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
 
-    def save_optimizer(
-        self,
-        save_dir: str,
-        optimizer: torch.optim.Optimizer,
-        optimizer_label: str,
-        iter_label: str,
-    ) -> None:
+
+    def save_optimizer(self, save_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
         save_filename = f"{iter_label}_{optimizer_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
-        torch.save(optimizer.state_dict(), save_path)
 
-    def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
-        state_dict = torch.load(
-            load_path,
-            map_location=self.device,
-            weights_only=True,
-        )
         if isinstance(optimizer, Lookahead):
-            if "slow_state" in state_dict:
-                optimizer.load_state_dict(state_dict)
-            else:
-                optimizer.optimizer.load_state_dict(state_dict)
-                for group in optimizer.param_groups:
-                    for p in group["params"]:
-                        param_state = optimizer.state[p]
-                        param_state["slow_buffer"] = p.data.clone()
+            state = {
+                'base_optimizer_state_dict': optimizer.optimizer.state_dict(),
+                'lookahead_state_dict': optimizer.state_dict(),
+            }
         else:
-            optimizer.load_state_dict(state_dict)
+            state = optimizer.state_dict()
+
+        torch.save(state, save_path)
+
+    def load_optimizer(self, load_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
+        load_filename = f"{iter_label}_{optimizer_label}.pth"
+        load_path = os.path.join(load_dir, load_filename)
+
+        if not os.path.exists(load_path):
+            raise FileNotFoundError(f"Optimizer state file not found: {load_path}")
+
+        state = torch.load(load_path, map_location=self.device)
+
+        if isinstance(optimizer, Lookahead):
+            if 'base_optimizer_state_dict' in state and 'lookahead_state_dict' in state:
+                optimizer.optimizer.load_state_dict(state['base_optimizer_state_dict'])
+                optimizer.load_state_dict(state['lookahead_state_dict'])
+            else:
+                # Loading for a model pretrained without Lookahead but now using it
+                optimizer.optimizer.load_state_dict(state)
+                for group in optimizer.param_groups:
+                    for p in group['params']:
+                        param_state = optimizer.state[p]
+                        if 'slow_buffer' not in param_state:  # Ensure slow_buffer is initialized only if missing
+                            param_state['slow_buffer'] = p.data.clone()
+        else:
+            optimizer.load_state_dict(state)
 
     def update_E(self, decay: float = 0.999) -> None:
         netG: Module = self.get_bare_model(self.netG)
@@ -228,28 +238,28 @@ class ModelBase(ABC):
         optim_type, params, lr=0.001, betas=(0.9, 0.999), wd=0.01, momentum=0.0
     ):
         if optim_type == "adam":
-            return Lookahead(Adam(params, lr=lr, betas=betas, weight_decay=wd))
+            base_optimizer = Adam(params, lr=lr, betas=betas, weight_decay=wd)
         elif optim_type == "radam":
-            return Lookahead(RAdam(params, lr=lr, betas=betas, weight_decay=wd))
+            base_optimizer = RAdam(params, lr=lr, betas=betas, weight_decay=wd)
         elif optim_type == "sgd":
-            return Lookahead(SGD(params, lr=lr, momentum=momentum, weight_decay=wd))
+            base_optimizer = SGD(params, lr=lr, momentum=momentum, weight_decay=wd)
         elif optim_type == "adamw":
-            return Lookahead(AdamW(params, lr=lr, betas=betas, weight_decay=wd))
+            base_optimizer = AdamW(params, lr=lr, betas=betas, weight_decay=wd)
         elif optim_type == "adamax":
-            return Lookahead(Adamax(params, lr=lr, betas=betas, weight_decay=wd))
+            base_optimizer = Adamax(params, lr=lr, betas=betas, weight_decay=wd)
         elif optim_type == "rmsprop":
-            return Lookahead(
-                RMSprop(
-                    params,
-                    lr=lr,
-                    alpha=0.99,
-                    eps=1e-8,
-                    weight_decay=wd,
-                    momentum=momentum,
-                )
+            base_optimizer = RMSprop(
+                params,
+                lr=lr,
+                alpha=0.99,
+                eps=1e-8,
+                weight_decay=wd,
+                momentum=momentum,
             )
         else:
             raise NotImplementedError
+
+        return Lookahead(base_optimizer)
 
     @staticmethod
     def create_scheduler(scheduler_type, optimizer, opt_train):
