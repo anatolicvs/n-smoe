@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_gan_v10_x4_medico_act_gelu" 
+    "task": "moex3_sr_gan_v12_x4_medico_act_gelu_krnl_32" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -59,18 +59,18 @@
 
     ,"netG": {
       "net_type": "unet_moex3",
-      "kernel": 16,
+      "kernel": 32,
       "sharpening_factor": 1,
-      "model_channels": 72,
-      "num_res_blocks": 6,
+      "model_channels": 64,
+      "num_res_blocks": 8,
       "attention_resolutions": [
         16,
         8,
         4
       ],
       "dropout": 0.1,
-      "num_groups": 36,
-      "num_heads": 36,
+      "num_groups": 64,
+      "num_heads": 8,
       "use_new_attention_order": true,
       "use_checkpoint": true,
       "use_fp16": false,
@@ -87,15 +87,16 @@
       "rope_theta": 960000.0,
       "resizer_num_layers": 4,
       "resizer_avg_pool": false,
-      "init_type": "default"
+      
+      "init_type": "kaiming_normal"
     }
 
     , "netD": {
       "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
       , "in_nc": 1
       , "base_nc": 64
-      , "n_layers": 16                  // only for "net_type":"discriminator_patchgan"
-      , "norm_type": "batch"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
+      , "n_layers": 8                  // only for "net_type":"discriminator_patchgan"
+      , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
   
       , "init_type": "normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
       , "init_bn_type": "uniform"      // "uniform" | "constant"
@@ -104,38 +105,38 @@
 
     , "train": {
         "is_moe": true
-      , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
-      , "G_lossfn_weight": 1e-2
+      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_weight": 1
   
-      , "F_lossfn_type": "l2"  // "l1" | "l2"
+      , "F_lossfn_type": "l1"  // "l1" | "l2"
       , "F_lossfn_weight": 1
-      , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
-      , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+      , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
+      , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
       , "F_use_input_norm": true
       , "F_use_range_norm": false
   
-      , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
-      , "D_lossfn_weight": 5e-3
+      , "gan_type": "wgan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+      , "D_lossfn_weight": 0.1
   
-      , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+      , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
   
       , "D_init_iters": 0
   
       , "G_optimizer_type": "adam"
-      , "G_optimizer_lr": 1e-5
+      , "G_optimizer_lr": 1e-4  // learning rate
       , "G_optimizer_wd": 0
   
       , "D_optimizer_type": "adam"
-      , "D_optimizer_lr": 1e-5
+      , "D_optimizer_lr": 1e-5  // learning rate
       , "D_optimizer_wd": 0
   
       , "G_scheduler_type": "MultiStepLR"
-      , "G_scheduler_milestones": [20000, 80000, 120000, 200000]
+      , "G_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
       , "G_scheduler_gamma": 0.5
-      , "G_optimizer_reuse": false
+      , "G_optimizer_reuse": true
   
       , "D_scheduler_type": "MultiStepLR"
-      , "D_scheduler_milestones": [20000, 80000, 120000, 200000]
+      , "D_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
       , "D_scheduler_gamma": 0.5
       , "D_optimizer_reuse": false
   
@@ -143,8 +144,8 @@
       , "D_param_strict": true
       , "E_param_strict": true
   
-      , "checkpoint_test": 10000
-      , "checkpoint_save": 10000
+      , "checkpoint_test": 5000  // skip testing
+      , "checkpoint_save": 5000
       , "checkpoint_print": 200
     }
   }
