@@ -362,24 +362,39 @@
 
 
 if __name__ == "__main__":
+    # import torch
+    # from models.network_discriminator import Discriminator_VGG_96
+    # from models.network_discriminator import Discriminator_VGG_128
+
+    # x = torch.rand(1, 1, 96, 96)
+    # net = Discriminator_VGG_96(in_nc=1)
+    # net.eval()
+
+    # with torch.no_grad():
+    #     y = net(x)
+
+    # print(y.size())
+
+    # x = torch.rand(1, 1, 128, 128)
+    # net = Discriminator_VGG_128(in_nc=1)
+    # net.eval()
+
+    # with torch.no_grad():
+    #     y = net(x)
+
+    # print(y.size())
+    import sys
+    import numpy as np
     import torch
-    from models.network_discriminator import Discriminator_VGG_96
-    from models.network_discriminator import Discriminator_VGG_128
 
-    x = torch.rand(1, 1, 96, 96)
-    net = Discriminator_VGG_96(in_nc=1)
-    net.eval()
+    sys.path.append("/home/ozkan/works/n-smoe/cvpr/GPEMSR/inference_code")
 
-    with torch.no_grad():
-        y = net(x)
+    from cvpr.GPEMSR.inference_code.model.model_superhuman import UNet_PNI
 
-    print(y.size())
+    input = np.random.random((1, 1, 1, 160, 160)).astype(np.float32)
+    x = torch.tensor(input)
+    model = UNet_PNI()
+    print(model)
 
-    x = torch.rand(1, 1, 128, 128)
-    net = Discriminator_VGG_128(in_nc=1)
-    net.eval()
-
-    with torch.no_grad():
-        y = net(x)
-
-    print(y.size())
+    output = model(x)
+    print(output.shape)

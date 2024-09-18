@@ -3,6 +3,7 @@ from collections import OrderedDict
 import torch
 import torch.distributed as dist
 import torch.nn as nn
+
 # import wandb
 from torch.optim import Adam, lr_scheduler
 
@@ -100,67 +101,22 @@ class ModelPlain(ModelBase):
                 G_optim_params.append(v)
             else:
                 print("Params [{:s}] will not optimize.".format(k))
-        if self.opt_train["G_optimizer_type"] == "adam":
-            self.G_optimizer = Adam(
-                G_optim_params,
-                lr=self.opt_train["G_optimizer_lr"],
-                betas=self.opt_train["G_optimizer_betas"],
-                weight_decay=self.opt_train["G_optimizer_wd"],
-            )
-        else:
-            raise NotImplementedError
+
+        self.G_optimizer = self.create_optimizer(
+            self.opt_train["G_optimizer_type"],
+            G_optim_params,
+            self.opt_train.get("G_optimizer_lr", 0.001),
+            self.opt_train.get("G_optimizer_betas", (0.9, 0.999)),
+            self.opt_train.get("G_optimizer_wd", 0.01),
+            self.opt_train.get("G_optimizer_momentum", None),
+        )
 
     def define_scheduler(self):
-        g_scheduler_type = self.opt_train["G_scheduler_type"]
-        if g_scheduler_type == "MultiStepLR":
-            self.schedulers.append(
-                lr_scheduler.MultiStepLR(
-                    self.G_optimizer,
-                    self.opt_train["G_scheduler_milestones"],
-                    self.opt_train["G_scheduler_gamma"],
-                )
+        self.schedulers.append(
+            self.create_scheduler(
+                self.opt_train["G_scheduler_type"], self.G_optimizer, self.opt_train
             )
-
-        elif g_scheduler_type == "CyclicLR":
-            self.schedulers.append(
-                lr_scheduler.CyclicLR(
-                    self.G_optimizer,
-                    self.opt_train["G_optimizer_lr"],
-                    self.opt_train["G_scheduler_max_lr"],
-                    step_size_up=self.opt_train["G_scheduler_step_size_up"],
-                    step_size_down=self.opt_train["G_scheduler_step_size_down"],
-                    mode=self.opt_train["G_scheduler_mode"],
-                    gamma=1.0,
-                    cycle_momentum=self.opt_train["G_scheduler_cycle_momentum"],
-                    base_momentum=0.8,
-                    max_momentum=0.9,
-                    last_epoch=-1,
-                    verbose=False,
-                )
-            )
-
-        elif g_scheduler_type == "CosineAnnealingLR":
-            self.schedulers.append(
-                lr_scheduler.CosineAnnealingLR(
-                    self.G_optimizer,
-                    T_max=self.opt_train.get("G_scheduler_T_max", 1000),
-                    eta_min=self.opt_train.get("G_scheduler_eta_min", 0),
-                )
-            )
-
-        elif g_scheduler_type == "ReduceLROnPlateau":
-            self.schedulers.append(
-                lr_scheduler.ReduceLROnPlateau(
-                    self.G_optimizer,
-                    mode="min",
-                    patience=self.opt_train.get("G_scheduler_patience", 1000),
-                    factor=0.1,
-                    verbose=True,
-                    min_lr=self.opt_train.get("G_scheduler_lr_min", 0),
-                )
-            )
-        else:
-            raise NotImplementedError
+        )
 
     def feed_data(self, data, need_H=True):
         self.L = data["L"].to(self.device)

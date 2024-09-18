@@ -1,11 +1,13 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 
-import torch.distributed as dist
 import torch
+import torch.distributed as dist
 from torch.nn.modules.module import Module
 from torch.nn.parallel import DataParallel, DistributedDataParallel
+from torch.optim import SGD, Adam, Adamax, AdamW, RAdam, RMSprop, lr_scheduler
+from torch_optimizer import Lookahead
 
 from utils_n.utils_bnorm import merge_bn, tidy_sequential
 
@@ -218,3 +220,82 @@ class ModelBase(ABC):
 
     def log(self, *args, **kwargs) -> None:
         pass
+
+    @staticmethod
+    def create_optimizer(
+        optim_type, params, lr=0.001, betas=(0.9, 0.999), wd=0.01, momentum=0.0
+    ):
+        if optim_type == "adam":
+            return Lookahead(Adam(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "radam":
+            return Lookahead(RAdam(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "sgd":
+            return Lookahead(SGD(params, lr=lr, momentum=momentum, weight_decay=wd))
+        elif optim_type == "adamw":
+            return Lookahead(AdamW(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "adamax":
+            return Lookahead(Adamax(params, lr=lr, betas=betas, weight_decay=wd))
+        elif optim_type == "rmsprop":
+            return Lookahead(
+                RMSprop(
+                    params,
+                    lr=lr,
+                    alpha=0.99,
+                    eps=1e-8,
+                    weight_decay=wd,
+                    momentum=momentum,
+                )
+            )
+        else:
+            raise NotImplementedError
+
+    @staticmethod
+    def create_scheduler(scheduler_type, optimizer, opt_train):
+        if scheduler_type == "MultiStepLR":
+            return lr_scheduler.MultiStepLR(
+                optimizer,
+                opt_train.get("scheduler_milestones", [30, 80]),
+                opt_train.get("scheduler_gamma", 0.1),
+            )
+        elif scheduler_type == "CyclicLR":
+            return lr_scheduler.CyclicLR(
+                optimizer,
+                opt_train.get("optimizer_lr", 0.001),
+                opt_train.get("scheduler_max_lr", 0.1),
+                step_size_up=opt_train.get("scheduler_step_size_up", 2000),
+                step_size_down=opt_train.get("scheduler_step_size_down", 2000),
+                mode=opt_train.get("scheduler_mode", "triangular"),
+                gamma=1.0,
+                cycle_momentum=opt_train.get("scheduler_cycle_momentum", True),
+                base_momentum=0.8,
+                max_momentum=0.9,
+                last_epoch=-1,
+            )
+        elif scheduler_type == "CosineAnnealingLR":
+            return lr_scheduler.CosineAnnealingLR(
+                optimizer,
+                T_max=opt_train.get("scheduler_T_max", 50),
+                eta_min=opt_train.get("scheduler_eta_min", 0),
+            )
+        elif scheduler_type == "ReduceLROnPlateau":
+            return lr_scheduler.ReduceLROnPlateau(
+                optimizer,
+                mode="min",
+                patience=opt_train.get("scheduler_lr_patience", 10),
+                factor=opt_train.get("scheduler_lr_factor", 0.1),
+                min_lr=opt_train.get("scheduler_lr_min", 0),
+            )
+        elif scheduler_type == "OneCycleLR":
+            return lr_scheduler.OneCycleLR(
+                optimizer,
+                max_lr=opt_train.get("scheduler_max_lr", 0.1),
+                total_steps=opt_train.get("scheduler_total_steps", 10000),
+                pct_start=opt_train.get("scheduler_pct_start", 0.3),
+                anneal_strategy=opt_train.get("scheduler_anneal_strategy", "cos"),
+                cycle_momentum=opt_train.get("scheduler_cycle_momentum", True),
+                base_momentum=0.8,
+                max_momentum=0.9,
+                last_epoch=-1,
+            )
+        else:
+            raise NotImplementedError

@@ -202,7 +202,7 @@ def visualize_with_error_map(
     plt.rcParams["font.size"] = 11
     plt.rcParams["text.usetex"] = True
 
-    fig = plt.figure(figsize=(15, 3.5))
+    fig = plt.figure(figsize=(15, 3.41))
     gs = GridSpec(
         3,
         len(images),
