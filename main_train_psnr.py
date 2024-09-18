@@ -1,17 +1,14 @@
-# type: ignore
-import argparse
 import logging
 import math
 import os
 import random
 import sys
-from typing import Any, Dict, Optional, Tuple
-import wandb
+
 import click
 import numpy as np
 import torch
 import torch.distributed as dist
-
+import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -196,7 +193,9 @@ def build_loaders(opt, logger=None):
 
 
 @click.command()
-@click.option("--opt", type=str, default="options/train_unet_moex1_psnr_local.json")
+@click.option(
+    "--opt", type=str, default="options/smoe/train_unet_moex3_psnr_local.json"
+)
 @click.option("--launcher", type=str, default="pytorch")
 @click.option("--dist", is_flag=True, default=False)
 def main(**kwargs):
@@ -325,14 +324,16 @@ def main(**kwargs):
                 message = f"<epoch:{epoch:3d}, iter:{current_step:8,d}, lr:{model.current_learning_rate():.3e}>"
                 for k, v in logs.items():
                     message += f" {k}: {v:.3e}"
-                    
-                    wandb.log({
-                        "epoch": epoch,
-                        f"{k}": v,
-                        "step": current_step,
-                        "learning_rate": model.current_learning_rate(),
-                    })
-                    
+
+                    wandb.log(
+                        {
+                            "epoch": epoch,
+                            f"{k}": v,
+                            "step": current_step,
+                            "learning_rate": model.current_learning_rate(),
+                        }
+                    )
+
                 logger.info(message)
 
             if current_step % checkpoint_interval == 0:

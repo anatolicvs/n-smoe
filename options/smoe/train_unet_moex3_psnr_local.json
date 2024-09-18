@@ -61,12 +61,12 @@
         "kernel": 32,
         "sharpening_factor": 1,
 
-        "model_channels": 72,
+        "model_channels": 96,
         "num_res_blocks": 8,
         "attention_resolutions": [16,8, 4],
         "dropout": 0.1,
-        "num_groups": 36,
-        "num_heads": 36,
+        "num_groups": 32,
+        "num_heads": 8,
         "use_new_attention_order": true,
         "use_checkpoint": true,
         "use_fp16": false,
@@ -77,18 +77,21 @@
         "attention_type": "cross_attention",
         "activation": "GELU",
         "rope_theta": 960000.0,
-        "resizer_num_layers": 8,
-        "resizer_avg_pool": false,
-        "init_type": "default"
+        "resizer_num_layers": 4,
+        "resizer_avg_pool": false
+        
+        , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+        , "init_bn_type": "uniform"      // "uniform" | "constant"
+        , "init_gain": 1.0
       }
 
     , "train": {
         "is_moe": true
-        , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-5            // learning rate
+        , "G_optimizer_lr": 1e-4            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
