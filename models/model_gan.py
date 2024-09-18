@@ -253,7 +253,7 @@ class ModelGAN(ModelBase):
             loss_G_total += D_loss  # 3) GAN loss
 
             loss_G_total.backward()
-            # torch.nn.utils.clip_grad_norm_(self.netG.parameters(), self.opt_train['G_clip_value'])
+            torch.nn.utils.clip_grad_norm_(self.netG.parameters(), self.opt_train['G_clip_value'])
             self.G_optimizer.step()
 
         # ------------------------------------
@@ -298,7 +298,7 @@ class ModelGAN(ModelBase):
             )
             l_d_fake.backward()
 
-        # torch.nn.utils.clip_grad_norm_(self.netD.parameters(), self.opt_train['D_clip_value'])
+        torch.nn.utils.clip_grad_norm_(self.netD.parameters(), self.opt_train['D_clip_value'])
         self.D_optimizer.step()
 
         # ------------------------------------
