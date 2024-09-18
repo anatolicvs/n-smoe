@@ -166,7 +166,7 @@ class ModelBase(ABC):
         param_key: str = "params",
     ) -> None:
         network = self.get_bare_model(network)
-        state_dict = torch.load(load_path, map_location=self.device)
+        state_dict = torch.load(load_path, map_location=self.device, weights_only=True)
         if param_key in state_dict:
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
@@ -186,23 +186,19 @@ class ModelBase(ABC):
         state_dict = torch.load(
             load_path,
             map_location=self.device,
+            weights_only=True,
         )
-        try:
-            optimizer.load_state_dict(state_dict)
-        except KeyError as e:
-            if 'slow_state' in str(e):
-                if isinstance(optimizer, Lookahead):
-                    base_optimizer_state = state_dict.get('state', state_dict)
-                    optimizer.optimizer.load_state_dict(base_optimizer_state)
-                    for group in optimizer.param_groups:
-                        for p in group['params']:
-                            param_state = optimizer.state[p]
-                            if 'slow_buffer' not in param_state:
-                                param_state['slow_buffer'] = p.data.clone()
-                else:
-                    raise e
+        if isinstance(optimizer, Lookahead):
+            if "slow_state" in state_dict:
+                optimizer.load_state_dict(state_dict)
             else:
-                raise e
+                optimizer.optimizer.load_state_dict(state_dict)
+                for group in optimizer.param_groups:
+                    for p in group["params"]:
+                        param_state = optimizer.state[p]
+                        param_state["slow_buffer"] = p.data.clone()
+        else:
+            optimizer.load_state_dict(state_dict)
 
     def update_E(self, decay: float = 0.999) -> None:
         netG: Module = self.get_bare_model(self.netG)
