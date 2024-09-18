@@ -1681,98 +1681,6 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         return (x + h).reshape(b, c, *spatial)
 
 
-# class MullerResizer(nn.Module):
-#     def __init__(
-#         self,
-#         d_in=3,
-#         base_resize_method="bilinear",
-#         kernel_size=5,
-#         stddev=1.0,
-#         num_layers=2,
-#         avg_pool=False,
-#         init_weights=None,
-#         dtype=torch.float32,
-#     ):
-#         super(MullerResizer, self).__init__()
-#         self.d_in: int = d_in
-#         self.kernel_size: int = kernel_size
-#         self.stddev: float = stddev
-#         self.num_layers: int = num_layers
-#         self.avg_pool: bool = avg_pool
-#         self.dtype: torch.dtype = dtype
-
-#         interpolation_methods: dict[str, str] = {
-#             "bilinear": "bilinear",
-#             "nearest": "nearest",
-#             "bicubic": "bicubic",
-#         }
-#         self.interpolation_method: str = interpolation_methods.get(
-#             base_resize_method, "bilinear"
-#         )
-
-#         self.weights = nn.ParameterList()
-#         self.biases = nn.ParameterList()
-#         if init_weights is not None:
-#             for i in range(num_layers):
-#                 self.weights.append(
-#                     nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
-#                 )
-#                 self.biases.append(
-#                     nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
-#                 )
-#         else:
-#             for _ in range(num_layers):
-#                 weight = nn.Parameter(torch.empty((), dtype=dtype))
-#                 bias = nn.Parameter(torch.empty((), dtype=dtype))
-#                 nn.init.uniform_(weight, a=-0.1, b=0.1)
-#                 nn.init.zeros_(bias)
-#                 self.weights.append(weight)
-#                 self.biases.append(bias)
-
-#         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
-
-#     def create_gaussian_kernel(self, kernel_size, stddev) -> torch.Tensor:
-#         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
-#         gaussian_kernel: torch.Tensor = torch.exp(-t.pow(2) / (2 * stddev**2))
-#         gaussian_kernel /= gaussian_kernel.sum()
-#         gaussian_kernel = gaussian_kernel.view(
-#             1, 1, kernel_size, 1
-#         ) * gaussian_kernel.view(1, 1, 1, kernel_size)
-#         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
-#         return gaussian_kernel
-
-#     def _apply_gaussian_blur(self, input) -> torch.Tensor:
-#         padding: int = self.kernel_size // 2
-#         x: torch.Tensor = F.pad(
-#             input, (padding, padding, padding, padding), mode="reflect"
-#         )
-
-#         gaussian_kernel: torch.Tensor = self.gaussian_kernel.to(x.device)
-#         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
-
-#     def forward(self, input_tensor, target_size):
-#         x = input_tensor.to(dtype=self.dtype)
-#         if self.avg_pool:
-#             x = F.avg_pool2d(x, kernel_size=2, stride=2)
-#         net = F.interpolate(
-#             x, size=target_size, mode=self.interpolation_method, align_corners=False
-#         )
-
-#         for weight, bias in zip(self.weights, self.biases):
-#             blurred: torch.Tensor = self._apply_gaussian_blur(x)
-#             residual = blurred - x
-#             resized_residual = F.interpolate(
-#                 residual,
-#                 size=target_size,
-#                 mode=self.interpolation_method,
-#                 align_corners=False,
-#             )
-#             net = net + torch.tanh(weight * resized_residual + bias)
-#             x: torch.Tensor = blurred
-
-#         return net
-
-
 class MullerResizer(nn.Module):
     def __init__(
         self,
@@ -1806,14 +1714,16 @@ class MullerResizer(nn.Module):
         self.biases = nn.ParameterList()
         if init_weights is not None:
             for i in range(num_layers):
-                weight = nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
-                bias = nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
-                self.weights.append(weight)
-                self.biases.append(bias)
+                self.weights.append(
+                    nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
+                )
+                self.biases.append(
+                    nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
+                )
         else:
             for _ in range(num_layers):
-                weight = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
-                bias = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
+                weight = nn.Parameter(torch.empty((), dtype=dtype))
+                bias = nn.Parameter(torch.empty((), dtype=dtype))
                 nn.init.uniform_(weight, a=-0.1, b=0.1)
                 nn.init.zeros_(bias)
                 self.weights.append(weight)
@@ -1861,6 +1771,96 @@ class MullerResizer(nn.Module):
             x: torch.Tensor = blurred
 
         return net
+
+
+# class MullerResizer(nn.Module):
+#     def __init__(
+#         self,
+#         d_in=3,
+#         base_resize_method="bilinear",
+#         kernel_size=5,
+#         stddev=1.0,
+#         num_layers=2,
+#         avg_pool=False,
+#         init_weights=None,
+#         dtype=torch.float32,
+#     ):
+#         super(MullerResizer, self).__init__()
+#         self.d_in: int = d_in
+#         self.kernel_size: int = kernel_size
+#         self.stddev: float = stddev
+#         self.num_layers: int = num_layers
+#         self.avg_pool: bool = avg_pool
+#         self.dtype: torch.dtype = dtype
+
+#         interpolation_methods: dict[str, str] = {
+#             "bilinear": "bilinear",
+#             "nearest": "nearest",
+#             "bicubic": "bicubic",
+#         }
+#         self.interpolation_method: str = interpolation_methods.get(
+#             base_resize_method, "bilinear"
+#         )
+
+#         self.weights = nn.ParameterList()
+#         self.biases = nn.ParameterList()
+#         if init_weights is not None:
+#             for i in range(num_layers):
+#                 weight = nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
+#                 bias = nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
+#                 self.weights.append(weight)
+#                 self.biases.append(bias)
+#         else:
+#             for _ in range(num_layers):
+#                 weight = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
+#                 bias = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
+#                 nn.init.uniform_(weight, a=-0.1, b=0.1)
+#                 nn.init.zeros_(bias)
+#                 self.weights.append(weight)
+#                 self.biases.append(bias)
+
+#         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
+
+#     def create_gaussian_kernel(self, kernel_size, stddev) -> torch.Tensor:
+#         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
+#         gaussian_kernel: torch.Tensor = torch.exp(-t.pow(2) / (2 * stddev**2))
+#         gaussian_kernel /= gaussian_kernel.sum()
+#         gaussian_kernel = gaussian_kernel.view(
+#             1, 1, kernel_size, 1
+#         ) * gaussian_kernel.view(1, 1, 1, kernel_size)
+#         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
+#         return gaussian_kernel
+
+#     def _apply_gaussian_blur(self, input) -> torch.Tensor:
+#         padding: int = self.kernel_size // 2
+#         x: torch.Tensor = F.pad(
+#             input, (padding, padding, padding, padding), mode="reflect"
+#         )
+
+#         gaussian_kernel: torch.Tensor = self.gaussian_kernel.to(x.device)
+#         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
+
+#     def forward(self, input_tensor, target_size):
+#         x = input_tensor.to(dtype=self.dtype)
+#         if self.avg_pool:
+#             x = F.avg_pool2d(x, kernel_size=2, stride=2)
+#         net = F.interpolate(
+#             x, size=target_size, mode=self.interpolation_method, align_corners=False
+#         )
+
+#         for weight, bias in zip(self.weights, self.biases):
+#             blurred: torch.Tensor = self._apply_gaussian_blur(x)
+#             residual = blurred - x
+#             resized_residual = F.interpolate(
+#                 residual,
+#                 size=target_size,
+#                 mode=self.interpolation_method,
+#                 align_corners=False,
+#             )
+#             net = net + torch.tanh(weight * resized_residual + bias)
+#             x: torch.Tensor = blurred
+
+#         return net
 
 
 @dataclass
