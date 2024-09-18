@@ -51,7 +51,7 @@ class MedicalDatasetSR(Dataset):
         self.k = loadmat(opt.get("kernel_path")) if "kernel_path" in opt else None
         self.raw_samples = self.load_samples()
         self.use_imgH = opt.get("use_imgH", False)
-        self.crop_locations = []
+        # self.crop_locations = []
 
     def load_samples(self) -> List[FastMRIRawDataSample]:
         if self.use_dataset_cache and os.path.exists(self.dataset_cache_file):
@@ -254,7 +254,7 @@ class MedicalDatasetSR(Dataset):
         start_y = max(center_y - crop_half, 0)
         end_x = min(start_x + crop_size, img.shape[1])
         end_y = min(start_y + crop_size, img.shape[0])
-        self.crop_locations.append((start_x, start_y, end_x, end_y))
+        # self.crop_locations.append((start_x, start_y, end_x, end_y))
         return img[start_y:end_y, start_x:end_x]
 
     def crop_high_texture(self, img, crop_size):
@@ -381,7 +381,7 @@ class MedicalDatasetSR(Dataset):
             "O": img_oH if self.use_imgH else None,
             "L_path": str(fname),
             "H_path": str(fname),
-            "crop_locations": self.crop_locations,
+            # "crop_locations": self.crop_locations,
         }
 
     def select_kernel(self):
