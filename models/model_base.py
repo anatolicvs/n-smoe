@@ -171,7 +171,6 @@ class ModelBase(ABC):
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
 
-
     def save_optimizer(self, save_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
         save_filename = f"{iter_label}_{optimizer_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
@@ -186,10 +185,7 @@ class ModelBase(ABC):
 
         torch.save(state, save_path)
 
-    def load_optimizer(self, load_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
-        load_filename = f"{iter_label}_{optimizer_label}.pth"
-        load_path = os.path.join(load_dir, load_filename)
-
+    def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
         if not os.path.exists(load_path):
             raise FileNotFoundError(f"Optimizer state file not found: {load_path}")
 
@@ -200,12 +196,11 @@ class ModelBase(ABC):
                 optimizer.optimizer.load_state_dict(state['base_optimizer_state_dict'])
                 optimizer.load_state_dict(state['lookahead_state_dict'])
             else:
-                # Loading for a model pretrained without Lookahead but now using it
                 optimizer.optimizer.load_state_dict(state)
                 for group in optimizer.param_groups:
                     for p in group['params']:
                         param_state = optimizer.state[p]
-                        if 'slow_buffer' not in param_state:  # Ensure slow_buffer is initialized only if missing
+                        if 'slow_buffer' not in param_state:
                             param_state['slow_buffer'] = p.data.clone()
         else:
             optimizer.load_state_dict(state)
