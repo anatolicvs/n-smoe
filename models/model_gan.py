@@ -166,7 +166,7 @@ class ModelGAN(ModelBase):
             self.opt_train.get("G_optimizer_lr", 0.001),
             self.opt_train.get("G_optimizer_betas", (0.9, 0.999)),
             self.opt_train.get("G_optimizer_wd", 0.01),
-            self.opt_train.get("G_optimizer_momentum", None),
+            self.opt_train.get("G_optimizer_momentum", 0.0),
         )
 
         self.D_optimizer = self.create_optimizer(
@@ -175,7 +175,7 @@ class ModelGAN(ModelBase):
             self.opt_train.get("D_optimizer_lr", 0.001),
             self.opt_train.get("D_optimizer_betas", (0.9, 0.999)),
             self.opt_train.get("D_optimizer_wd", 0.01),
-            self.opt_train.get("D_optimizer_momentum", None),
+            self.opt_train.get("D_optimizer_momentum", 0.0),
         )
 
     def define_scheduler(self):
@@ -342,15 +342,6 @@ class ModelGAN(ModelBase):
             out_dict["H"] = self.H.detach()[0].float().cpu()
         return out_dict
 
-    """
-    # ----------------------------------------
-    # Information of netG, netD and netF
-    # ----------------------------------------
-    """
-
-    # ----------------------------------------
-    # print network
-    # ----------------------------------------
     def print_network(self):
         msg = self.describe_network(self.netG)
         print(msg)
@@ -358,25 +349,16 @@ class ModelGAN(ModelBase):
             msg = self.describe_network(self.netD)
             print(msg)
 
-    # ----------------------------------------
-    # print params
-    # ----------------------------------------
     def print_params(self):
         msg = self.describe_params(self.netG)
         print(msg)
 
-    # ----------------------------------------
-    # network information
-    # ----------------------------------------
     def info_network(self):
         msg = self.describe_network(self.netG)
         if self.is_train:
             msg += self.describe_network(self.netD)
         return msg
 
-    # ----------------------------------------
-    # params information
-    # ----------------------------------------
     def info_params(self):
         msg = self.describe_params(self.netG)
         return msg
