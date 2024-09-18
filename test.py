@@ -258,110 +258,108 @@
 #     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 # unittest.main()
 
-# if __name__ == "__main__":
-#     import torch
-#     from models.network_unetmoex3 import (
-#         EncoderConfig,
-#         MoEConfig,
-#         AutoencoderConfig,
-#         Autoencoder,
-#     )
-
-#     torch.backends.cudnn.benchmark = True
-
-#     kernel = 9
-#     sf = 1.0
-#     z = 2 * kernel + 4 * kernel + kernel
-
-#     ch = 3
-#     w = 128
-#     h = 128
-
-#     phw = 16
-#     overlap = 14
-
-#     def extract_blocks(img_tensor, block_size, overlap):
-#         blocks = []
-#         step = block_size - overlap
-#         for i in range(0, img_tensor.shape[1] - block_size + 1, step):
-#             for j in range(0, img_tensor.shape[2] - block_size + 1, step):
-#                 block = img_tensor[:, i : i + block_size, j : j + block_size]
-#                 blocks.append(block)
-#         return torch.stack(blocks)
-
-#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-#     encoder_cfg = EncoderConfig(
-#         model_channels=64,
-#         num_res_blocks=8,
-#         attention_resolutions=[16, 8, 4],
-#         dropout=0.2,
-#         channel_mult=(2, 4, 8),
-#         conv_resample=False,
-#         dims=2,
-#         use_checkpoint=True,
-#         use_fp16=False,
-#         num_heads=64,
-#         resblock_updown=False,
-#         num_groups=64,
-#         resample_2d=False,
-#         scale_factor=2,
-#         resizer_num_layers=4,
-#         resizer_avg_pool=False,
-#         activation="GELU",
-#         rope_theta=10000.0,
-#         attention_type="cross_attention",  # "attention" or "cross_attention"
-#     )
-
-#     decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
-
-#     autoenocer_cfg = AutoencoderConfig(
-#         EncoderConfig=encoder_cfg,
-#         DecoderConfig=decoder_cfg,
-#         d_in=ch,
-#         d_out=z,
-#         phw=phw,
-#         overlap=overlap,
-#     )
-
-#     model = Autoencoder(cfg=autoenocer_cfg).to(device=device)
-
-#     # print(model)
-
-#     params = sum(p.numel() for p in model.parameters())
-#     print(f"Total number of parameters: {params}")
-
-#     image_tensor: torch.Tensor = torch.randn(ch, w, h).to(device=device)
-#     blocks = extract_blocks(image_tensor, phw, overlap)
-#     image_tensor = image_tensor.unsqueeze(0)
-
-#     with torch.no_grad():
-#         output = model(blocks, image_tensor.shape)
-#         print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
-
-
-# if __name__ == "__main__":
-#     import torch
-#     from models.network_edsr import EDSR
-
-#     model = EDSR(
-#         num_in_ch=1,
-#         num_out_ch=1,
-#         num_feat=256,
-#         num_block=32,
-#         upscale=2,
-#         img_range=1.0,
-#     )
-
-#     with torch.no_grad():
-#         img = torch.rand(1, 1, 32, 32, dtype=torch.float32)
-#         print(img.shape)
-#         print(img.max(), img.min())
-#         output = model(img)
-#         print(output.shape)
-
-
 if __name__ == "__main__":
+    import torch
+    from models.network_unetmoex3 import (
+        EncoderConfig,
+        MoEConfig,
+        AutoencoderConfig,
+        Autoencoder,
+    )
+
+    torch.backends.cudnn.benchmark = True
+
+    kernel = 9
+    sf = 1.0
+    z = 2 * kernel + 4 * kernel + kernel
+
+    ch = 3
+    w = 128
+    h = 128
+
+    phw = 16
+    overlap = 14
+
+    def extract_blocks(img_tensor, block_size, overlap):
+        blocks = []
+        step = block_size - overlap
+        for i in range(0, img_tensor.shape[1] - block_size + 1, step):
+            for j in range(0, img_tensor.shape[2] - block_size + 1, step):
+                block = img_tensor[:, i : i + block_size, j : j + block_size]
+                blocks.append(block)
+        return torch.stack(blocks)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    encoder_cfg = EncoderConfig(
+        model_channels=64,
+        num_res_blocks=8,
+        attention_resolutions=[16, 8, 4],
+        dropout=0.2,
+        channel_mult=(2, 4, 8),
+        conv_resample=False,
+        dims=2,
+        use_checkpoint=True,
+        use_fp16=False,
+        num_heads=8,
+        resblock_updown=False,
+        num_groups=32,
+        resample_2d=False,
+        scale_factor=2,
+        resizer_num_layers=4,
+        resizer_avg_pool=False,
+        activation="GELU",
+        rope_theta=10000.0,
+        attention_type="cross_attention",  # "attention" or "cross_attention"
+    )
+
+    decoder_cfg = MoEConfig(kernel=kernel, sharpening_factor=sf)
+
+    autoenocer_cfg = AutoencoderConfig(
+        EncoderConfig=encoder_cfg,
+        DecoderConfig=decoder_cfg,
+        d_in=ch,
+        d_out=z,
+        phw=phw,
+        overlap=overlap,
+    )
+
+    model = Autoencoder(cfg=autoenocer_cfg).to(device=device)
+
+    print(model)
+
+    params = sum(p.numel() for p in model.parameters())
+    print(f"Total number of parameters: {params}")
+
+    image_tensor: torch.Tensor = torch.randn(ch, w, h).to(device=device)
+    blocks = extract_blocks(image_tensor, phw, overlap)
+    image_tensor = image_tensor.unsqueeze(0)
+
+    with torch.no_grad():
+        output = model(blocks, image_tensor.shape)
+        print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
+
+    # if __name__ == "__main__":
+    #     import torch
+    #     from models.network_edsr import EDSR
+
+    #     model = EDSR(
+    #         num_in_ch=1,
+    #         num_out_ch=1,
+    #         num_feat=256,
+    #         num_block=32,
+    #         upscale=2,
+    #         img_range=1.0,
+    #     )
+
+    #     with torch.no_grad():
+    #         img = torch.rand(1, 1, 32, 32, dtype=torch.float32)
+    #         print(img.shape)
+    #         print(img.max(), img.min())
+    #         output = model(img)
+    #         print(output.shape)
+
+    # if __name__ == "__main__":
     # import torch
     # from models.network_discriminator import Discriminator_VGG_96
     # from models.network_discriminator import Discriminator_VGG_128
@@ -383,18 +381,18 @@ if __name__ == "__main__":
     #     y = net(x)
 
     # print(y.size())
-    import sys
-    import numpy as np
-    import torch
+    # import sys
+    # import numpy as np
+    # import torch
 
-    sys.path.append("/home/ozkan/works/n-smoe/cvpr/GPEMSR/inference_code")
+    # sys.path.append("/home/ozkan/works/n-smoe/cvpr/GPEMSR/inference_code")
 
-    from cvpr.GPEMSR.inference_code.model.model_superhuman import UNet_PNI
+    # from cvpr.GPEMSR.inference_code.model.model_superhuman import UNet_PNI
 
-    input = np.random.random((1, 1, 1, 160, 160)).astype(np.float32)
-    x = torch.tensor(input)
-    model = UNet_PNI()
-    print(model)
+    # input = np.random.random((1, 1, 1, 160, 160)).astype(np.float32)
+    # x = torch.tensor(input)
+    # model = UNet_PNI()
+    # print(model)
 
-    output = model(x)
-    print(output.shape)
+    # output = model(x)
+    # print(output.shape)
