@@ -293,7 +293,7 @@ class MedicalDatasetSR(Dataset):
         end_y = start_y + crop_size
         end_x = start_x + crop_size
 
-        self.crop_locations.append((start_x, start_y, end_x, end_y))
+        # self.crop_locations.append((start_x, start_y, end_x, end_y))
         return img[start_y:end_y, start_x:end_x]
 
     def preprocess(self, img):
