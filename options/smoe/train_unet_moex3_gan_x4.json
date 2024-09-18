@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_gan_v6_x4_medico_act_gelu" 
+    "task": "moex3_sr_gan_v10_x4_medico_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -15,7 +15,7 @@
         
     , "path": {
         "root": "/hpcwork/p0021791/superresolution"  
-      , "pretrained_netG": "/hpcwork/p0021791/superresolution/moex3_sr_plain_medium_v5_x4_medical_mix_act_gelu_krnl_32/models/15000_G.pth"
+      , "pretrained_netG": null
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
@@ -59,10 +59,10 @@
 
     ,"netG": {
       "net_type": "unet_moex3",
-      "kernel": 32,
+      "kernel": 16,
       "sharpening_factor": 1,
       "model_channels": 72,
-      "num_res_blocks": 8,
+      "num_res_blocks": 6,
       "attention_resolutions": [
         16,
         8,
@@ -85,37 +85,36 @@
       "attention_type": "cross_attention",
       "activation": "GELU",
       "rope_theta": 960000.0,
-      "resizer_num_layers": 8,
+      "resizer_num_layers": 4,
       "resizer_avg_pool": false,
       "init_type": "default"
     }
 
     , "netD": {
-      "net_type": "discriminator_patchgan" // "discriminator_patchgan" | "discriminator_unet" | "discriminator_vgg_192" | "discriminator_vgg_128" | "discriminator_vgg_96"
+      "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
       , "in_nc": 1
       , "base_nc": 64
-      , "act_mode": "BL"                 // "BL" means BN+LeakyReLU
-      , "n_layers": 3   // only for "net_type":"discriminator_patchgan"
-      , "norm_type": "batchspectral" // 3  // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', instancespectral'
+      , "n_layers": 16                  // only for "net_type":"discriminator_patchgan"
+      , "norm_type": "batch"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
   
-      , "init_type": "orthogonal" // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-      , "init_bn_type": "uniform" // "uniform" | "constant"
+      , "init_type": "normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_bn_type": "uniform"      // "uniform" | "constant"
       , "init_gain": 0.2
     }
 
     , "train": {
         "is_moe": true
-      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
       , "G_lossfn_weight": 1e-2
   
-      , "F_lossfn_type": "l1"  // "l1" | "l2"
+      , "F_lossfn_type": "l2"  // "l1" | "l2"
       , "F_lossfn_weight": 1
       , "F_feature_layer": 34  // 25 | [2,7,16,25,34]
       , "F_weights": 1.0       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
       , "F_use_input_norm": true
       , "F_use_range_norm": false
   
-      , "gan_type": "ragan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+      , "gan_type": "gan"    // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
       , "D_lossfn_weight": 5e-3
   
       , "E_decay": 0.999  // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
@@ -144,8 +143,8 @@
       , "D_param_strict": true
       , "E_param_strict": true
   
-      , "checkpoint_test": 5000
-      , "checkpoint_save": 5000
+      , "checkpoint_test": 10000
+      , "checkpoint_save": 10000
       , "checkpoint_print": 200
     }
   }

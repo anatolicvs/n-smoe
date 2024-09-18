@@ -1,8 +1,8 @@
 {
   "task": "swinir_sr_classical_patch48_x2"     //  classical image sr for x2/x3/x4/x8. root/task/images-models-options
   , "model": "plain" // "plain" | "plain2" if two inputs
-  , "gpu_ids": [0]
-  , "dist": false
+  , "gpu_ids": [0,1,2,3]
+  , "dist": true
 
   , "scale": 2       // 2 | 3 | 4 | 8
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
@@ -17,51 +17,40 @@
 
   ,"datasets": {
     "train": {
-      "name": "train_dataset",
-      "dataset_type": "medical_sr",
-      "lq_patchsize": 32,
-      "length": -1,
-      "degradation_methods": [
-        "bsrgan_plus"
-      ],
-      "degradation_type": "bsrgan_plus",
-      "exclude_dirs": [],
-      "dataroot_H": [
-        "/hpcwork/p0021791/dataset/medical/data_for_train",
-        "/hpcwork/pb035507/dataset/mri/data_for_train"
-      ],
-      "use_dataset_cache": true,
-      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_training_medico_v1.pkl",
-      "dataroot_L": null,
-      "H_size": 220,
-      "dataloader_shuffle": true,
-      "dataloader_num_workers": 32,
-      "dataloader_batch_size": 16,
-      "phase": "train" 
-    },
-    "test": {
-      "name": "test_dataset",
-      "dataset_type": "medical_sr",
-      "lq_patchsize": 32,
-      "length": -1,
-      "degradation_methods": [
-        "bsrgan_plus"
-      ],
-      "degradation_type": "bsrgan",
-      "exclude_dirs": [],
-      "dataroot_H": [
-        "/hpcwork/p0021791/dataset/medical/data_for_test",
-        "/hpcwork/pb035507/dataset/mri/data_for_test"
-      ],
-      "dataroot_L": null,
-      "use_dataset_cache": true,
-      "dataset_cache_file": "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_v1.pkl",
-      "H_size": 220,
-      "dataloader_num_workers": 32,
-      "dataloader_batch_size": 1,
-      "phase": "test"
+        "name": "train_dataset"           
+        , "dataset_type": "medical_sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch" | "mri_sr"
+        , "lq_patchsize": 32
+        , "length" : -1 
+        , "degradation_methods" : ["bsrgan_plus","dpsr"] // "dpsr" | "bsrgan_plus"
+        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+        , "exclude_dirs": ["/hpcwork/p0021791/dataset/rgb/train_1"]
+        , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_train", "/hpcwork/pb035507/dataset/mri/data_for_train"] // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/train_0, /hpcwork/pb035507/dataset/mri/data_for_train
+        //, "dataroot_H": "/mnt/d/RGB/open-images/train_0"
+        , "use_dataset_cache": true
+        , "dataset_cache_file" :  "/hpcwork/p0021791/dataset/dataset_cache_training_medico_v1.pkl" // "/hpcwork/p0021791/dataset/dataset_cache_training_medico_rgb_v1_len_50.pkl"
+        , "dataroot_L": null              // path of L training dataset
+        , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_shuffle": true
+        , "dataloader_num_workers": 32
+        , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
     }
-  }
+    , "test": {
+        "name": "test_dataset"            
+        , "dataset_type": "medical_sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+        , "lq_patchsize": 32
+        , "length" : -1
+        , "degradation_methods" : ["bsrgan_plus","dpsr"] // "dpsr" | "bsrgan_plus"
+        , "degradation_type" : "bsrgan" // "bsrgan" , "dpsr"
+        , "exclude_dirs": []
+        , "dataroot_H": ["/hpcwork/p0021791/dataset/medical/data_for_test", "/hpcwork/pb035507/dataset/mri/data_for_test"]   // local: /home/ozkan/works/diff-smoe/dataset/STARE | server: /work/pb035507/dataset/Medical/STARE/test
+        , "dataroot_L": null              // path of L testing dataset
+        , "use_dataset_cache": true
+        , "dataset_cache_file" : "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_v1.pkl" // "/hpcwork/p0021791/dataset/dataset_cache_testing_medico_rgb_v1_50.pkl"
+        , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+        , "dataloader_num_workers": 32
+        , "dataloader_batch_size": 1 
+        }
+    }
 
   , "netG": {
     "net_type": "swinir" 
