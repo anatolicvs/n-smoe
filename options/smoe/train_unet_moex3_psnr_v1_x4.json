@@ -1,5 +1,5 @@
 {
-  "task": "moex3_sr_plain_v6_x4_medical_mix_act_gelu_krnl_32_opt_adamw" 
+  "task": "moex3_sr_plain_v6_x4_medical_mix_act_gelu_krnl_16_opt_adamw" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -58,7 +58,7 @@
       }
       ,"netG": {
         "net_type": "unet_moex3",
-        "kernel": 32,
+        "kernel": 16,
         "sharpening_factor": 1,
         "model_channels": 64,
         "num_res_blocks": 6,

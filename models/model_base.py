@@ -199,18 +199,21 @@ class ModelBase(ABC):
         state = torch.load(load_path, map_location=self.device)
 
         if isinstance(optimizer, Lookahead):
-            if "base_optimizer_state_dict" in state and "lookahead_state_dict" in state:
-                optimizer.base_optimizer.load_state_dict(
-                    state["base_optimizer_state_dict"]
+            if "fast_state" in state and "slow_state" in state:
+                optimizer.load_state_dict(
+                    {
+                        "fast_state": state["fast_state"],
+                        "slow_state": state["slow_state"],
+                        "param_groups": state["param_groups"],
+                    }
                 )
-                optimizer.load_state_dict(state["lookahead_state_dict"])
             else:
-                optimizer.base_optimizer.load_state_dict(state)
+                optimizer.optimizer.load_state_dict(state)
                 for group in optimizer.param_groups:
                     for p in group["params"]:
                         param_state = optimizer.state[p]
-                        if "slow_buffer" not in param_state:
-                            param_state["slow_buffer"] = p.data.clone()
+                        if "slow_param" not in param_state:
+                            param_state["slow_param"] = p.data.clone().detach()
         else:
             optimizer.load_state_dict(state)
 
