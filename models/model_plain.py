@@ -4,9 +4,6 @@ import torch
 import torch.distributed as dist
 import torch.nn as nn
 
-# import wandb
-from torch.optim import Adam, lr_scheduler
-
 from models.loss import CharbonnierLoss
 from models.loss_ssim import SSIMLoss
 from models.model_base import ModelBase
@@ -108,7 +105,7 @@ class ModelPlain(ModelBase):
             self.opt_train.get("G_optimizer_lr", 0.001),
             self.opt_train.get("G_optimizer_betas", (0.9, 0.999)),
             self.opt_train.get("G_optimizer_wd", 0.01),
-            self.opt_train.get("G_optimizer_momentum",0,0),
+            self.opt_train.get("G_optimizer_momentum", 0, 0),
         )
 
     def define_scheduler(self):

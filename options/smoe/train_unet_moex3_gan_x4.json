@@ -81,7 +81,7 @@
         8
       ],
       "conv_resample": true,
-      "resample_2d": true,
+      "resample_2d": false,
       "attention_type": "cross_attention",
       "activation": "GELU",
       "rope_theta": 960000.0,
@@ -126,7 +126,7 @@
       , "D_init_iters": 0
   
       , "G_optimizer_type": "adam"
-      , "G_optimizer_lr": 1e-5  // learning rate
+      , "G_optimizer_lr": 1e-4  // learning rate
       , "G_optimizer_wd": 0
   
       , "D_optimizer_type": "adam"
