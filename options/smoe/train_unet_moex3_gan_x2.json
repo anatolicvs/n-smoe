@@ -1,7 +1,7 @@
 {
     "task": "moex3_sr_gan_v4_x2_medico_act_gelu_x" 
     , "model": "gan" // "gan"
-    , "gpu_ids": [0, 1]
+    , "gpu_ids": [0, 1, 2, 3]
     
     , "scale": 2       
     , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
