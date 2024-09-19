@@ -7,6 +7,7 @@ import torch.distributed as dist
 import torch.multiprocessing as mp
 import pickle
 import datetime
+import torch.distributed as dist
 
 
 def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
@@ -19,6 +20,7 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
     else:
         raise ValueError(f"Invalid launcher type: {launcher}")
 
+    dist.barrier()
     torch.cuda.synchronize()
 
 
@@ -27,10 +29,17 @@ def _init_dist_pytorch(backend, **kwargs):
     num_gpus = torch.cuda.device_count()
 
     if num_gpus == 0:
-        raise RuntimeError("No GPUs available. Please check your environment configuration.")
+        raise RuntimeError(
+            "No GPUs available. Please check your environment configuration."
+        )
 
     torch.cuda.set_device(rank % num_gpus)
-    dist.init_process_group(backend=backend, timeout=datetime.timedelta(seconds=1799), init_method="env://", **kwargs)
+    dist.init_process_group(
+        backend=backend,
+        timeout=datetime.timedelta(seconds=1799),
+        init_method="env://",
+        **kwargs,
+    )
     dist.barrier()
 
 
