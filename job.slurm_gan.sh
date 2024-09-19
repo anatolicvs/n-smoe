@@ -1,14 +1,13 @@
 #!/usr/bin/zsh
 
-# PARTITION
+# PARTITION DETAILS
 # c23ms: 632 total, 96 cores/node, 256 GB/node, Claix-2023 (small memory partition)
 # c23mm: 160 total, 96 cores/node, 512 GB/node, Claix-2023 (medium memory partition)
 # c23ml: 2 total, 96 cores/node, 1024 GB/node, Claix-2023 (large memory partition)
 # c23g: 52 total, 96 cores/node, 256 GB/node, Claix-2023 GPU partition with four H100 GPUs per node
 # c18m: 1240 total, 48 cores/node, 192 GB/node, default partition for the "default" project
-# c18g: 54 total, 48 cores/node, 192 GB/node, 2 V100 gpus, request of volta gpu needed to submit to this partition
-# devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Maximum runtime: 1 Hour
-# Has to be used without an project!
+# c18g: 54 total, 48 cores/node, 192 GB/node, 2 V100 GPUs, requires Volta GPU request
+# devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Max runtime: 1 Hour
 
 USE_APPTAINER=true
 BUILT_VERSION="1.1"
@@ -71,9 +70,11 @@ TODAYS_DATE=$(date +%d%m%Y%H%M)
 JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}"
 
 NODES=1
-NTASKS=1
+NTASKS_PER_NODE=$GPUS
 CPUS_PER_TASK=32
-MEMORY="32G"
+MEM_PER_GPU=90G
+TOTAL_MEM=$((GPUS * 90))G
+
 TIME="100:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
@@ -82,13 +83,10 @@ OUTPUT_DIR="/home/p0021791/slurm/output"
 ERROR_DIR="/home/p0021791/slurm/error"
 WORKDIR="/hpcwork/p0021791"
 
-if [ ! -w "$OUTPUT_DIR" ] || [ ! -w "$ERROR_DIR" ]; then
-  echo "Error: Output or error directory is not writable." >&2
+mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
+  echo "Failed to create output, error, or tmp directories" >&2
   exit 1
-fi
-
-mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
-mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp directory"; exit 1; }
+}
 
 PARTITION="c23g"
 
@@ -106,9 +104,9 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
-#SBATCH --mem-per-gpu=90G
+#SBATCH --mem=$TOTAL_MEM
 #SBATCH --nodes=$NODES
-#SBATCH --ntasks=$NTASKS
+#SBATCH --ntasks-per-node=$NTASKS_PER_NODE
 #SBATCH --mail-type=$MAIL_TYPE
 #SBATCH --mail-user=$MAIL_USER
 #SBATCH --output=${OUTPUT_DIR}/o-%x.%j.%N.out
