@@ -171,13 +171,22 @@ class ModelBase(ABC):
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
 
-    def save_optimizer(self, save_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
+    def save_optimizer(
+        self,
+        save_dir: str,
+        optimizer: torch.optim.Optimizer,
+        optimizer_label: str,
+        iter_label: str,
+    ) -> None:
         save_filename = f"{iter_label}_{optimizer_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
         if isinstance(optimizer, Lookahead):
             state = {
-                'base_optimizer_state_dict': optimizer.base_optimizer.state_dict(),
-                'lookahead_state_dict': optimizer.state_dict(),
+                "base_optimizer_state_dict": optimizer.optimizer.state_dict(),
+                "lookahead_state_dict": {
+                    "state": optimizer.state,
+                    "param_groups": optimizer.param_groups,
+                },
             }
         else:
             state = optimizer.state_dict()
@@ -190,16 +199,18 @@ class ModelBase(ABC):
         state = torch.load(load_path, map_location=self.device)
 
         if isinstance(optimizer, Lookahead):
-            if 'base_optimizer_state_dict' in state and 'lookahead_state_dict' in state:
-                optimizer.base_optimizer.load_state_dict(state['base_optimizer_state_dict'])
-                optimizer.load_state_dict(state['lookahead_state_dict'])
+            if "base_optimizer_state_dict" in state and "lookahead_state_dict" in state:
+                optimizer.base_optimizer.load_state_dict(
+                    state["base_optimizer_state_dict"]
+                )
+                optimizer.load_state_dict(state["lookahead_state_dict"])
             else:
                 optimizer.base_optimizer.load_state_dict(state)
                 for group in optimizer.param_groups:
-                    for p in group['params']:
+                    for p in group["params"]:
                         param_state = optimizer.state[p]
-                        if 'slow_buffer' not in param_state:
-                            param_state['slow_buffer'] = p.data.clone()
+                        if "slow_buffer" not in param_state:
+                            param_state["slow_buffer"] = p.data.clone()
         else:
             optimizer.load_state_dict(state)
 

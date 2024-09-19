@@ -63,7 +63,7 @@
         , "sharpening_factor": 1
     
         , "model_channels": 64
-        , "num_res_blocks": 16
+        , "num_res_blocks": 6
         , "attention_resolutions": [16, 8, 4]
         , "dropout": 0.2
         , "num_groups": 8
@@ -148,8 +148,8 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 50           // for testing
-        , "checkpoint_save": 50           // for saving model
-        , "checkpoint_print": 10           // for print          
+        , "checkpoint_test": 5           // for testing
+        , "checkpoint_save": 5           // for saving model
+        , "checkpoint_print": 5           // for print          
       }
     }
