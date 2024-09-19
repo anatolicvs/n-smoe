@@ -411,6 +411,7 @@ def main(**kwargs):
 def cleanup():
     if dist.is_initialized():
         dist.destroy_process_group()
+        wandb.finish()
 
 
 if __name__ == "__main__":

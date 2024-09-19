@@ -294,9 +294,14 @@ if __name__ == "__main__":
     encoder_cfg = EncoderConfig(
         model_channels=64,
         num_res_blocks=8,
-        attention_resolutions=[16, 8, 4],
+        attention_resolutions=[
+            32,
+            16,
+            8,
+            4,
+        ],
         dropout=0.2,
-        channel_mult=(2, 4, 8),
+        channel_mult=(1, 2, 4, 8),
         conv_resample=False,
         dims=2,
         use_checkpoint=True,

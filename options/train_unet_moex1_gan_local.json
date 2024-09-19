@@ -1,5 +1,5 @@
 {
-    "task": "local_moex1_base_sr_gan_v2_x4_mri_rgb_act_gelu" 
+    "task": "local_moex1_medium_sr_gan_v2_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -57,7 +57,7 @@
         }
       }
       
-      , "netG": {
+      , "netG_base": {
         "net_type": "unet_moex1"
         , "kernel": 16
         , "sharpening_factor": 1
@@ -83,7 +83,7 @@
         , "init_type": "default"         
       }
 
-      , "netG_medium": {
+      , "netG": {
         "net_type": "unet_moex1"
         , "kernel": 24
         , "sharpening_factor": 1.1
@@ -113,7 +113,7 @@
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
         , "base_nc": 64
-        , "n_layers": 3                  // only for "net_type":"discriminator_patchgan"
+        , "n_layers": 6                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
     
         , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
@@ -140,12 +140,12 @@
     
         , "D_init_iters": 0
     
-        , "G_optimizer_type": "rmsprop"
-        , "G_optimizer_lr": 1e-3  // learning rate
+        , "G_optimizer_type": "adam"
+        , "G_optimizer_lr": 1e-4  // learning rate
         , "G_optimizer_wd": 0
 
-        , "D_optimizer_type": "rmsprop"
-        , "D_optimizer_lr": 1e-3  // learning rate
+        , "D_optimizer_type": "adam"
+        , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "OneCycleLR"
