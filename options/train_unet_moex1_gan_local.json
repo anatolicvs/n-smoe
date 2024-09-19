@@ -1,5 +1,5 @@
 {
-    "task": "local_moex1_medium_sr_gan_v2_x4_mri_rgb_act_gelu" 
+    "task": "local_moex1_base_sr_gan_v2_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -56,24 +56,50 @@
           , "dataloader_batch_size": 1 
         }
       }
-  
+      
       , "netG": {
+        "net_type": "unet_moex1"
+        , "kernel": 16
+        , "sharpening_factor": 1
+  
+        , "model_channels": 64
+        , "num_res_blocks": 8
+        , "attention_resolutions": [16, 8, 4]
+        , "dropout": 0.2
+        , "num_groups": 8
+        , "num_heads" : 32
+        , "num_head_channels": 32
+        , "use_new_attention_order": true
+        , "use_checkpoint": true
+        , "resblock_updown": true
+        , "channel_mult": [1, 2, 4, 8]
+        , "resample_2d" : true
+  
+        , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
+        , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
+        ,"resizer_num_layers": 2
+        ,"resizer_avg_pool": true
+     
+        , "init_type": "default"         
+      }
+
+      , "netG_medium": {
         "net_type": "unet_moex1"
         , "kernel": 24
         , "sharpening_factor": 1.1
   
         , "model_channels": 96
         , "num_res_blocks": 10
-        , "attention_resolutions": [16, 8, 4, 2]
+        , "attention_resolutions": [16, 8, 4]
         , "dropout": 0.25
         , "num_groups": 12
         , "num_heads" : 48
         , "num_head_channels": 32
         , "use_new_attention_order": true
         , "use_checkpoint": true
-        , "resblock_updown": false
-        , "channel_mult": [1, 2, 4, 8, 16]
-        , "resample_2d" : false
+        , "resblock_updown": true
+        , "channel_mult": [1, 2, 4, 8]
+        , "resample_2d" : true
   
         , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
         , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"

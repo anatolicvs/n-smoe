@@ -74,12 +74,12 @@
       , "use_checkpoint": true
       , "resblock_updown": true
       , "channel_mult": [1, 2, 4, 8]
-      , "resample_2d" : false
+      , "resample_2d" : true
 
       , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
       , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
       ,"resizer_num_layers": 2
-      ,"resizer_avg_pool": false
+      ,"resizer_avg_pool": true
    
       , "init_type": "default"         
     }
