@@ -68,16 +68,17 @@ TIME="100:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
-OUTPUT_DIR="/home/p0021791/slurm/output"
-ERROR_DIR="/home/p0021791/slurm/error"
+OUTPUT_DIR="/hpcwork/p0021791/slurm/output"
+ERROR_DIR="/hpcwork/p0021791/slurm/error"
 WORKDIR="/hpcwork/p0021791"
+
+mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
 
 if [ ! -w "$OUTPUT_DIR" ] || [ ! -w "$ERROR_DIR" ]; then
   echo "Error: Output or error directory is not writable." >&2
   exit 1
 fi
 
-mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" || { echo "Failed to create output or error directories"; exit 1; }
 mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp directory"; exit 1; }
 
 PARTITION="c23g"
