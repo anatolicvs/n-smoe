@@ -174,15 +174,13 @@ class ModelBase(ABC):
     def save_optimizer(self, save_dir: str, optimizer: torch.optim.Optimizer, optimizer_label: str, iter_label: str) -> None:
         save_filename = f"{iter_label}_{optimizer_label}.pth"
         save_path = os.path.join(save_dir, save_filename)
-
         if isinstance(optimizer, Lookahead):
             state = {
-                'base_optimizer_state_dict': optimizer.optimizer.state_dict(),
+                'base_optimizer_state_dict': optimizer.base_optimizer.state_dict(),
                 'lookahead_state_dict': optimizer.state_dict(),
             }
         else:
             state = optimizer.state_dict()
-
         torch.save(state, save_path)
 
     def load_optimizer(self, load_path: str, optimizer: torch.optim.Optimizer) -> None:
@@ -193,10 +191,10 @@ class ModelBase(ABC):
 
         if isinstance(optimizer, Lookahead):
             if 'base_optimizer_state_dict' in state and 'lookahead_state_dict' in state:
-                optimizer.optimizer.load_state_dict(state['base_optimizer_state_dict'])
+                optimizer.base_optimizer.load_state_dict(state['base_optimizer_state_dict'])
                 optimizer.load_state_dict(state['lookahead_state_dict'])
             else:
-                optimizer.optimizer.load_state_dict(state)
+                optimizer.base_optimizer.load_state_dict(state)
                 for group in optimizer.param_groups:
                     for p in group['params']:
                         param_state = optimizer.state[p]
