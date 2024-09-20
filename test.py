@@ -258,7 +258,9 @@
 #     print(f"Input shape: {blocks.shape} -> Output shape: {output.shape}")
 # unittest.main()
 
+
 if __name__ == "__main__":
+    import json
     import torch
     from models.network_unetmoex3 import (
         EncoderConfig,
@@ -267,11 +269,13 @@ if __name__ == "__main__":
         Autoencoder,
     )
 
-    torch.backends.cudnn.benchmark = True
+    from models.network_unetmoex1 import Autoencoder as ae1
+    from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
+    from models.network_unetmoex1 import EncoderConfig as enc1_cfg
+    from models.network_unetmoex1 import MoEConfig as moe1_cfg
 
-    kernel = 9
-    sf = 1.0
-    z = 2 * kernel + 4 * kernel + kernel
+    torch.backends.cudnn.benchmark = True
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     ch = 3
     w = 128
@@ -289,32 +293,120 @@ if __name__ == "__main__":
                 blocks.append(block)
         return torch.stack(blocks)
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    base_moex3 = """
+           {
+            "netG": {
+                "net_type": "unet_moex3",
+                "kernel": 16,
+                "sharpening_factor": 1,
+                "model_channels": 64,
+                "num_res_blocks": 6,
+                "attention_resolutions": [32, 16, 8],
+                "dropout": 0.05,
+                "num_groups": 16,
+                "num_heads": 8,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [2, 4, 8],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "ReLU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 3,
+                "resizer_avg_pool": false,
+                "init_type": "kaiming_normal"
+            }
+            }
+
+    """
+
+    medium_moex3 = """
+            {
+            "netG": {
+                "net_type": "unet_moex3",
+                "kernel": 32,
+                "sharpening_factor": 1,
+                "model_channels": 96,
+                "num_res_blocks": 8,
+                "attention_resolutions": [32, 16, 8],
+                "dropout": 0.05,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [2, 4, 8, 16],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 4,
+                "resizer_avg_pool": false,
+                "init_type": "xavier_normal"
+            }
+            }
+
+        """
+
+    large_moex_3 = """
+        {
+        "netG": {
+            "net_type": "unet_moex3",
+            "kernel": 64,
+            "sharpening_factor": 1,
+            "model_channels": 64,
+            "num_res_blocks": 10,
+            "attention_resolutions": [64, 32, 16, 8],
+            "dropout": 0.05,
+            "num_groups": 16,
+            "num_heads": 8,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "use_fp16": false,
+            "resblock_updown": true,
+            "channel_mult": [2, 4, 8, 16, 32],
+            "conv_resample": true,
+            "resample_2d": false,
+            "attention_type": "cross_attention",
+            "activation": "GELU",
+            "rope_theta": 960000.0,
+            "resizer_num_layers": 5,
+            "resizer_avg_pool": false,
+            "init_type": "orthogonal"
+            }
+        }
+    """
+
+    netG_moex3 = json.loads(medium_moex3)["netG"]
+
+    kernel = netG_moex3["kernel"]
+    sf = 1.0
+    z = 2 * kernel + 4 * kernel + kernel
 
     encoder_cfg = EncoderConfig(
-        model_channels=64,
-        num_res_blocks=8,
-        attention_resolutions=[
-            32,
-            16,
-            8,
-            4,
-        ],
-        dropout=0.2,
-        channel_mult=(1, 2, 4, 8),
-        conv_resample=False,
+        model_channels=netG_moex3["model_channels"],
+        num_res_blocks=netG_moex3["num_res_blocks"],
+        attention_resolutions=netG_moex3["attention_resolutions"],
+        dropout=netG_moex3["dropout"],
+        channel_mult=netG_moex3["channel_mult"],
+        conv_resample=netG_moex3["conv_resample"],
         dims=2,
-        use_checkpoint=True,
-        use_fp16=False,
-        num_heads=8,
-        resblock_updown=False,
-        num_groups=32,
+        use_checkpoint=netG_moex3["use_checkpoint"],
+        use_fp16=netG_moex3["use_fp16"],
+        num_heads=netG_moex3["num_heads"],
+        resblock_updown=netG_moex3["resblock_updown"],
+        num_groups=netG_moex3["num_groups"],
         resample_2d=False,
         scale_factor=2,
-        resizer_num_layers=4,
-        resizer_avg_pool=False,
+        resizer_num_layers=netG_moex3["resizer_num_layers"],
+        resizer_avg_pool=netG_moex3["resizer_avg_pool"],
         activation="GELU",
-        rope_theta=10000.0,
+        rope_theta=netG_moex3["rope_theta"],
         attention_type="cross_attention",  # "attention" or "cross_attention"
     )
 
@@ -330,6 +422,135 @@ if __name__ == "__main__":
     )
 
     model = Autoencoder(cfg=autoenocer_cfg).to(device=device)
+
+    base_moex1 = """
+    {
+        "netG": {
+            "net_type": "unet_moex1",
+            "kernel": 16,  
+            "sharpening_factor": 1,
+
+            "model_channels": 64, 
+            "num_res_blocks": 8,   
+            "attention_resolutions": [16, 8, 4, 2], 
+            "dropout": 0.25,        
+            "num_groups": 16,        
+            "num_heads": 48,        
+            "num_head_channels": 32, 
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "resblock_updown": true, 
+            "channel_mult": [1, 2, 4, 8, 16], 
+            "resample_2d": true,    
+
+            "pool": "attention",
+            "activation": "GELU",
+            "resizer_num_layers": 3, 
+            "resizer_avg_pool": true,
+
+            "init_type": "default"
+        }
+    }
+    """
+
+    medium_moex1 = """
+            {
+            "netG": {
+                "net_type": "unet_moex3",
+                "kernel": 32,
+                "sharpening_factor": 1,
+                "model_channels": 96,
+                "num_res_blocks": 8,
+                "attention_resolutions": [32, 16, 8],
+                "dropout": 0.05,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [2, 4, 8, 16],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 4,
+                "resizer_avg_pool": false,
+                "init_type": "xavier_normal"
+            }
+            }
+
+        """
+
+    large_moex_1 = """
+        {
+        "netG": {
+            "net_type": "unet_moex3",
+            "kernel": 64,
+            "sharpening_factor": 1,
+            "model_channels": 64,
+            "num_res_blocks": 10,
+            "attention_resolutions": [64, 32, 16, 8],
+            "dropout": 0.05,
+            "num_groups": 16,
+            "num_heads": 8,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "use_fp16": false,
+            "resblock_updown": true,
+            "channel_mult": [2, 4, 8, 16, 32],
+            "conv_resample": true,
+            "resample_2d": false,
+            "attention_type": "cross_attention",
+            "activation": "GELU",
+            "rope_theta": 960000.0,
+            "resizer_num_layers": 5,
+            "resizer_avg_pool": false,
+            "init_type": "orthogonal"
+            }
+        }
+    """
+
+    netG_moex1 = json.loads(base_moex1)["netG"]
+
+    kernel = netG_moex1["kernel"]
+    sf = 1.0
+    z = 2 * kernel + 4 * kernel + kernel
+
+    encoder_cfg1 = enc1_cfg(
+        model_channels=netG_moex1["model_channels"],
+        num_res_blocks=netG_moex1["num_res_blocks"],
+        attention_resolutions=netG_moex1["attention_resolutions"],
+        dropout=netG_moex1["dropout"],
+        num_groups=netG_moex1["num_groups"],
+        scale_factor=2,
+        num_heads=netG_moex1["num_heads"],
+        num_head_channels=netG_moex1["num_head_channels"],
+        use_new_attention_order=netG_moex1["use_new_attention_order"],
+        use_checkpoint=netG_moex1["use_checkpoint"],
+        resblock_updown=netG_moex1["resblock_updown"],
+        channel_mult=netG_moex1["channel_mult"],
+        resample_2d=netG_moex1["resample_2d"],
+        pool=netG_moex1["pool"],
+        activation=netG_moex1["activation"],
+    )
+
+    decoder_cfg1 = moe1_cfg(
+        kernel=netG_moex1["kernel"],
+        sharpening_factor=netG_moex1["sharpening_factor"],
+    )
+
+    autoenocer_cfg1 = ae1_cfg(
+        EncoderConfig=encoder_cfg1,
+        DecoderConfig=decoder_cfg1,
+        d_in=ch,
+        d_out=z,
+        phw=phw,
+        overlap=overlap,
+    )
+
+    model = ae1(cfg=autoenocer_cfg1).to(device=device)
 
     print(model)
 

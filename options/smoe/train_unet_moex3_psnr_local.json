@@ -1,5 +1,5 @@
 {
-    "task": "local_moex3_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "local_moex3_medium_sr_plain_v1_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      "root": "/mnt/d/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
       , "pretrained_netG": null   
       , "pretrained_netD": null 
       , "pretrained_netE": null 
@@ -33,7 +33,7 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_training_medical_echocardiography_v1_.pkl"
-          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 1
           , "dataloader_batch_size": 2 
         } 
@@ -50,41 +50,62 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_echocardiography_v1_.pkl"
-          , "H_size": 220                   // patch size 40 | 64 | 96 | 128 | 192
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_num_workers": 1
           , "dataloader_batch_size": 1 
         }
       }
-  
+      // medium
       ,"netG": {
         "net_type": "unet_moex3",
         "kernel": 32,
         "sharpening_factor": 1,
-
         "model_channels": 96,
         "num_res_blocks": 8,
-        "attention_resolutions": [16,8, 4],
-        "dropout": 0.1,
-        "num_groups": 32,
-        "num_heads": 8,
+        "attention_resolutions": [32, 16, 8],
+        "dropout": 0.05,
+        "num_groups": 16,
+        "num_heads": 16,
         "use_new_attention_order": true,
         "use_checkpoint": true,
         "use_fp16": false,
         "resblock_updown": true,
-        "channel_mult": [2,4,8],
+        "channel_mult": [2, 4, 8, 16],
         "conv_resample": true,
         "resample_2d": false,
         "attention_type": "cross_attention",
         "activation": "GELU",
         "rope_theta": 960000.0,
         "resizer_num_layers": 4,
-        "resizer_avg_pool": false
-        
-        , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-        , "init_bn_type": "uniform"      // "uniform" | "constant"
-        , "init_gain": 1.0
-      }
+        "resizer_avg_pool": false,
+        "init_type": "default"
+    }
 
+      ,"netG_base": {
+        "net_type": "unet_moex3",
+        "kernel": 16,
+        "sharpening_factor": 1,
+        "model_channels": 64,
+        "num_res_blocks": 6,
+        "attention_resolutions": [32, 16, 8],
+        "dropout": 0.05,
+        "num_groups": 16,
+        "num_heads": 8,
+        "use_new_attention_order": true,
+        "use_checkpoint": true,
+        "use_fp16": false,
+        "resblock_updown": true,
+        "channel_mult": [2, 4, 8],
+        "conv_resample": true,
+        "resample_2d": false,
+        "attention_type": "cross_attention",
+        "activation": "ReLU",
+        "rope_theta": 960000.0,
+        "resizer_num_layers": 3,
+        "resizer_avg_pool": false,
+        "init_type": "default"
+  }
+  
     , "train": {
         "is_moe": true
         , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
@@ -101,9 +122,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 50           // for testing
-        , "checkpoint_save": 50           // for saving model
-        , "checkpoint_print": 10           // for print
+        , "checkpoint_test": 10           // for testing
+        , "checkpoint_save": 10           // for saving model
+        , "checkpoint_print": 2           // for print
       }
   }
   

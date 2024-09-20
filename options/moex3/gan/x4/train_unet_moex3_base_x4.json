@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_gan_v12_x4_medico_act_gelu_krnl_32" 
+    "task": "moex3_sr_base_gan_v1_x4_medico_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -57,16 +57,13 @@
             }
         }
       
-      , "netG": {
+        ,"netG": {
           "net_type": "unet_moex3",
-          "kernel": 32,
+          "kernel": 16,
           "sharpening_factor": 1,
           "model_channels": 64,
           "num_res_blocks": 6,
-          "attention_resolutions": [
-            16,
-            8
-          ],
+          "attention_resolutions": [32, 16, 8],
           "dropout": 0.05,
           "num_groups": 16,
           "num_heads": 8,
@@ -74,20 +71,16 @@
           "use_checkpoint": true,
           "use_fp16": false,
           "resblock_updown": true,
-          "channel_mult": [
-            2,
-            4,
-            8
-          ],
+          "channel_mult": [2, 4, 8],
           "conv_resample": true,
           "resample_2d": false,
           "attention_type": "cross_attention",
-          "activation": "GELU",
+          "activation": "ReLU",
           "rope_theta": 960000.0,
           "resizer_num_layers": 3,
           "resizer_avg_pool": false,
           "init_type": "default"
-          
+
         // , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
         // , "init_bn_type": "uniform"      // "uniform" | "constant"
         // , "init_gain": 1.0
