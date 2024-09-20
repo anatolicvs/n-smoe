@@ -1,5 +1,5 @@
 {
-  "task": "moex3_sr_plain_v6_x4_medical_mix_act_gelu_krnl_16_opt_adamw" 
+  "task": "moex3_sr_medium_plain_v6_x4_medical_mix_act_gelu" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -57,37 +57,29 @@
           }
       }
       ,"netG": {
-        "net_type": "unet_moex3",
-        "kernel": 16,
-        "sharpening_factor": 1,
-        "model_channels": 64,
-        "num_res_blocks": 6,
-        "attention_resolutions": [
-          16,
-          8,
-          4
-        ],
-        "dropout": 0.1,
-        "num_groups": 32,
-        "num_heads": 8,
-        "use_new_attention_order": true,
-        "use_checkpoint": true,
-        "use_fp16": false,
-        "resblock_updown": true,
-        "channel_mult": [
-          2,
-          4,
-          8
-        ],
-        "conv_resample": true,
-        "resample_2d": false,
-        "attention_type": "cross_attention",
-        "activation": "GELU",
-        "rope_theta": 960000.0,
-        "resizer_num_layers": 4,
-        "resizer_avg_pool": false
+          "net_type": "unet_moex3",
+          "kernel": 32,
+          "sharpening_factor": 1,
+          "model_channels": 96,
+          "num_res_blocks": 8,
+          "attention_resolutions": [32, 16, 8],
+          "dropout": 0.05,
+          "num_groups": 16,
+          "num_heads": 16,
+          "use_new_attention_order": true,
+          "use_checkpoint": true,
+          "use_fp16": false,
+          "resblock_updown": true,
+          "channel_mult": [2, 4, 8, 16],
+          "conv_resample": true,
+          "resample_2d": false,
+          "attention_type": "cross_attention",
+          "activation": "GELU",
+          "rope_theta": 960000.0,
+          "resizer_num_layers": 4,
+          "resizer_avg_pool": false,
   
-        , "init_type": "default"
+          "init_type": "default"
         // , "init_type": "kaiming_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
         // , "init_bn_type": "uniform"      // "uniform" | "constant"
         // , "init_gain": 1.0

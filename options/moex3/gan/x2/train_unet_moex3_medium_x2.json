@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_gan_medium_v4_x2_medico_act_gelu" 
+    "task": "moex3_sr_medium_gan_medium_v1_x2_medico_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -57,34 +57,30 @@
             }
         }
   
-    , "netG": {
-          "net_type": "unet_moex3",
-          "kernel": 32,
-          "sharpening_factor": 1,
-          "model_channels": 128,
-          "num_res_blocks": 8,
-          "attention_resolutions": [
-            32, 16, 8
-          ],
-          "dropout": 0.05,
-          "num_groups": 16,
-          "num_heads": 16,
-          "use_new_attention_order": true,
-          "use_checkpoint": true,
-          "use_fp16": false,
-          "resblock_updown": true,
-          "channel_mult": [
-            2, 4, 8, 16
-          ],
-          "conv_resample": true,
-          "resample_2d": false,
-          "attention_type": "cross_attention",
-          "activation": "GELU",
-          "rope_theta": 960000.0,
-          "resizer_num_layers": 4,
-          "resizer_avg_pool": false,
-          "init_type": "default"
-      }
+      ,"netG": {
+                "net_type": "unet_moex3",
+                "kernel": 32,
+                "sharpening_factor": 1,
+                "model_channels": 96,
+                "num_res_blocks": 8,
+                "attention_resolutions": [32, 16, 8],
+                "dropout": 0.05,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [2, 4, 8, 16],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 4,
+                "resizer_avg_pool": false,
+                "init_type": "xavier_normal"
+    }
 
     , "netD": {
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"

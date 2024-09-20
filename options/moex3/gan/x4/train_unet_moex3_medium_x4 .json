@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_gan_v12_x4_medico_act_gelu_krnl_32" 
+    "task": "moex3_sr_medium_gan_v1_x4_medico_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -57,15 +57,13 @@
             }
         }
 
-        , "netG": {
+      ,"netG": {
           "net_type": "unet_moex3",
           "kernel": 32,
           "sharpening_factor": 1,
-          "model_channels": 128,
+          "model_channels": 96,
           "num_res_blocks": 8,
-          "attention_resolutions": [
-            32, 16, 8
-          ],
+          "attention_resolutions": [32, 16, 8],
           "dropout": 0.05,
           "num_groups": 16,
           "num_heads": 16,
@@ -73,9 +71,7 @@
           "use_checkpoint": true,
           "use_fp16": false,
           "resblock_updown": true,
-          "channel_mult": [
-            2, 4, 8, 16
-          ],
+          "channel_mult": [2, 4, 8, 16],
           "conv_resample": true,
           "resample_2d": false,
           "attention_type": "cross_attention",

@@ -1,5 +1,5 @@
 {
-    "task": "local_moex1_sr_plain_v1_x2_mri_rgb_act_gelu" 
+    "task": "local_moex1_base_v3_sr_plain_v1_x2_mri_rgb_act_gelu" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -55,8 +55,169 @@
           , "dataloader_batch_size": 1 
         }
       }
+      
+      , "netG_medium_v1": {
+            "net_type": "unet_moex1",
+            "kernel": 32,
+            "sharpening_factor": 1,
+
+            "model_channels": 64,
+            "num_res_blocks": 9,
+            "attention_resolutions": [32, 16, 8],
+            "dropout": 0.25,
+            "num_groups": 16,
+            "num_heads": 40,
+            "num_head_channels": 32,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "resblock_updown": true,
+            "channel_mult": [1, 2, 4, 8, 16],
+            "resample_2d": true,
+
+            "pool": "attention",
+            "activation": "Mish",
+            "resizer_num_layers": 4,
+            "resizer_avg_pool": false
+
+            ,"init_type": "default"
+
+          // , "init_type": "kaiming_uniform"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          // , "init_bn_type": "uniform"      // "uniform" | "constant"
+          // , "init_gain": 1.0               // default
+        }
+
+      , "netG_medium_v2_revised": {
+          "net_type": "unet_moex1",
+          "kernel": 32,
+          "sharpening_factor": 1,
   
+          "model_channels": 96,
+          "num_res_blocks": 16,
+          "attention_resolutions": [32, 16, 8],
+          "dropout": 0.25,
+          "num_groups": 16,
+          "num_heads": 16,
+          "num_head_channels": 16,
+          "use_new_attention_order": true,
+          "use_checkpoint": true,
+          "resblock_updown": true,
+          "channel_mult": [1, 2, 4, 8, 16],
+          "resample_2d": false,
+  
+          "pool": "attention",
+          "activation": "Mish",
+          "resizer_num_layers": 4,
+          "resizer_avg_pool": false,
+  
+          "init_type": "default"
+        }
+
+      , "netG_medium_v3": {
+        "net_type": "unet_moex1",
+        "kernel": 32,
+        "sharpening_factor": 1,
+
+        "model_channels": 96,  // Increased from 64 to 96
+        "num_res_blocks": 12,  // Increased from 9 to 12
+        "attention_resolutions": [16, 8],  // Focused on manageable resolutions
+        "dropout": 0.25,
+        "num_groups": 16,
+        "num_heads": 16,  // For c=256 at 8 resolution (256 / 16 = 16)
+        "num_head_channels": 16,
+        "use_new_attention_order": true,
+        "use_checkpoint": true,
+        "resblock_updown": true,
+        "channel_mult": [1, 2, 4, 8, 16],
+        "resample_2d": true,
+
+        "pool": "attention",
+        "activation": "Mish",
+        "resizer_num_layers": 4,
+        "resizer_avg_pool": false,
+
+        "init_type": "default"
+      }
+
+      , "netG_base_v1": {
+            "net_type": "unet_moex1",
+            "kernel": 16,
+            "sharpening_factor": 1,
+
+            "model_channels": 48,
+            "num_res_blocks": 6,
+            "attention_resolutions": [16, 8],
+            "dropout": 0.2,
+            "num_groups": 8,
+            "num_heads": 32,
+            "num_head_channels": 16,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "resblock_updown": true,
+            "channel_mult": [1, 2, 4, 8],
+            "resample_2d": true,
+
+            "pool": "attention",
+            "activation": "GELU",
+            "resizer_num_layers": 2,
+            "resizer_avg_pool": false
+
+          , "init_type": "kaiming_uniform"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          , "init_bn_type": "uniform"      // "uniform" | "constant"
+          , "init_gain": 1.0               // default
+        }
+
+      ,"netG_base_v2": {
+        "net_type": "unet_moex1",
+        "kernel": 16,
+        "sharpening_factor": 1,
+
+        "model_channels": 48,
+        "num_res_blocks": 6,
+        "attention_resolutions": [32, 16, 8],
+        "dropout": 0.2,
+        "num_groups": 8,
+        "num_heads": 12,
+        "num_head_channels": 16,
+        "use_new_attention_order": false,
+        "use_checkpoint": true,
+        "resblock_updown": true,
+        "channel_mult": [1, 2, 4, 8],
+        "resample_2d": true,
+
+        "pool": "attention",
+        "activation": "GELU",
+        "resizer_num_layers": 1,
+        "resizer_avg_pool": false,
+
+        "init_type": "default"
+    }
+
       ,"netG": {
+          "net_type": "unet_moex1",
+          "kernel": 16,
+          "sharpening_factor": 1,
+  
+          "model_channels": 64,            // Increased for greater capacity
+          "num_res_blocks": 8,             // Increased for deeper feature extraction
+          "attention_resolutions": [32, 16, 8], // Retained higher resolution for fine details
+          "dropout": 0.2,
+          "num_groups": 8,                 // Ensures 64 / 8 = 8 (divisible)
+          "num_heads": 24,                 // Calculated based on higher resolution
+          "num_head_channels": 8,          // Adjusted to align with channel counts
+          "use_new_attention_order": true,
+          "resblock_updown": true,
+          "channel_mult": [1, 2, 4, 8],
+          "resample_2d": true,
+  
+          "pool": "attention",
+          "activation": "GELU",
+          "resizer_num_layers": 2,
+          "resizer_avg_pool": false,
+  
+          "init_type": "default"
+      }
+
+      ,"netG_old": {
         "net_type": "unet_moex1",
         "kernel": 16,
         "sharpening_factor": 1,
