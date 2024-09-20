@@ -423,65 +423,124 @@ if __name__ == "__main__":
 
     model = Autoencoder(cfg=autoenocer_cfg).to(device=device)
 
+    # base_moex1 = """
+    # {
+    #     "netG": {
+    #         "net_type": "unet_moex1",
+    #         "kernel": 16,
+    #         "sharpening_factor": 1,
+
+    #         "model_channels": 64,
+    #         "num_res_blocks": 8,
+    #         "attention_resolutions": [16, 8, 4, 2],
+    #         "dropout": 0.25,
+    #         "num_groups": 16,
+    #         "num_heads": 48,
+    #         "num_head_channels": 32,
+    #         "use_new_attention_order": true,
+    #         "use_checkpoint": true,
+    #         "resblock_updown": true,
+    #         "channel_mult": [1, 2, 4, 8, 16],
+    #         "resample_2d": true,
+
+    #         "pool": "attention",
+    #         "activation": "GELU",
+    #         "resizer_num_layers": 3,
+    #         "resizer_avg_pool": true,
+
+    #         "init_type": "default"
+    #     }
+    # }
+    # """
+
     base_moex1 = """
-    {
+       {
         "netG": {
             "net_type": "unet_moex1",
-            "kernel": 16,  
+            "kernel": 16,
             "sharpening_factor": 1,
 
-            "model_channels": 64, 
-            "num_res_blocks": 8,   
-            "attention_resolutions": [16, 8, 4, 2], 
-            "dropout": 0.25,        
-            "num_groups": 16,        
-            "num_heads": 48,        
-            "num_head_channels": 32, 
+            "model_channels": 48,
+            "num_res_blocks": 6,
+            "attention_resolutions": [16, 8],
+            "dropout": 0.2,
+            "num_groups": 8,
+            "num_heads": 32,
+            "num_head_channels": 16,
             "use_new_attention_order": true,
             "use_checkpoint": true,
-            "resblock_updown": true, 
-            "channel_mult": [1, 2, 4, 8, 16], 
-            "resample_2d": true,    
+            "resblock_updown": true,
+            "channel_mult": [1, 2, 4, 8],
+            "resample_2d": true,
 
             "pool": "attention",
             "activation": "GELU",
-            "resizer_num_layers": 3, 
-            "resizer_avg_pool": true,
+            "resizer_num_layers": 2,
+            "resizer_avg_pool": false,
 
-            "init_type": "default"
+            "init_type": "kaiming_uniform"
         }
     }
     """
 
-    medium_moex1 = """
-            {
-            "netG": {
-                "net_type": "unet_moex3",
-                "kernel": 32,
-                "sharpening_factor": 1,
-                "model_channels": 96,
-                "num_res_blocks": 8,
-                "attention_resolutions": [32, 16, 8],
-                "dropout": 0.05,
-                "num_groups": 16,
-                "num_heads": 16,
-                "use_new_attention_order": true,
-                "use_checkpoint": true,
-                "use_fp16": false,
-                "resblock_updown": true,
-                "channel_mult": [2, 4, 8, 16],
-                "conv_resample": true,
-                "resample_2d": false,
-                "attention_type": "cross_attention",
-                "activation": "GELU",
-                "rope_theta": 960000.0,
-                "resizer_num_layers": 4,
-                "resizer_avg_pool": false,
-                "init_type": "xavier_normal"
-            }
-            }
+    # medium_moex1 = """
+    #     {
+    #         "netG": {
+    #             "net_type": "unet_moex1",
+    #             "kernel": 32,
+    #             "sharpening_factor": 1,
 
-        """
+    #             "model_channels": 64,
+    #             "num_res_blocks": 12,
+    #             "attention_resolutions": [32, 16, 8, 4],
+    #             "dropout": 0.3,
+    #             "num_groups": 16,
+    #             "num_heads": 64,
+    #             "num_head_channels": 32,
+    #             "use_new_attention_order": true,
+    #             "use_checkpoint": true,
+    #             "resblock_updown": true,
+    #             "channel_mult": [1, 2, 4, 8, 16],
+    #             "resample_2d": true,
+
+    #             "pool": "attention",
+    #             "activation": "Mish",
+    #             "resizer_num_layers": 4,
+    #             "resizer_avg_pool": true
+    #         }
+    #     }
+    #     """
+
+    medium_moex1 = """
+        {
+        "netG": {
+            "net_type": "unet_moex1",
+            "kernel": 32,
+            "sharpening_factor": 1,
+
+            "model_channels": 64,
+            "num_res_blocks": 9,
+            "attention_resolutions": [32, 16, 8],
+            "dropout": 0.25,
+            "num_groups": 16,
+            "num_heads": 40,
+            "num_head_channels": 32,
+            "use_new_attention_order": true,
+            "use_checkpoint": true,
+            "resblock_updown": true,
+            "channel_mult": [1, 2, 4, 8, 16],
+            "resample_2d": true,
+
+            "pool": "attention",
+            "activation": "Mish",
+            "resizer_num_layers": 4,
+            "resizer_avg_pool": false,
+
+            "init_type": "kaiming_uniform"
+        }
+    }
+
+    """
 
     large_moex_1 = """
         {
@@ -512,7 +571,7 @@ if __name__ == "__main__":
         }
     """
 
-    netG_moex1 = json.loads(base_moex1)["netG"]
+    netG_moex1 = json.loads(medium_moex1)["netG"]
 
     kernel = netG_moex1["kernel"]
     sf = 1.0

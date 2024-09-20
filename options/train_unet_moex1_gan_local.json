@@ -1,5 +1,5 @@
 {
-    "task": "local_moex1_medium_sr_gan_v2_x4_mri_rgb_act_gelu" 
+    "task": "local_moex1_medium_sr_gan_v1_x4_mri_rgb_act_gelu" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0]
     
@@ -56,34 +56,61 @@
           , "dataloader_batch_size": 1 
         }
       }
-      
-      , "netG_base": {
-        "net_type": "unet_moex1"
+    
+      , "netG": {
+        "net_type": "unet_moex1" //base
         , "kernel": 16
         , "sharpening_factor": 1
   
-        , "model_channels": 64
-        , "num_res_blocks": 8
-        , "attention_resolutions": [16, 8, 4]
+        , "model_channels": 96
+        , "num_res_blocks": 12
+        , "attention_resolutions": [32, 16, 8, 4]
         , "dropout": 0.2
         , "num_groups": 8
-        , "num_heads" : 32
+        , "num_heads" : 64
         , "num_head_channels": 32
         , "use_new_attention_order": true
         , "use_checkpoint": true
         , "resblock_updown": true
         , "channel_mult": [1, 2, 4, 8]
-        , "resample_2d" : true
+        , "resample_2d" : false
   
         , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
-        , "activation" : "GELU" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
+        , "activation" : "Mish" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
         ,"resizer_num_layers": 2
         ,"resizer_avg_pool": true
      
         , "init_type": "default"         
       }
 
-      , "netG": {
+    
+    , "netG_optimum": {
+        "net_type": "unet_moex1" //base
+        , "kernel": 16
+        , "sharpening_factor": 1
+  
+        , "model_channels": 64
+        , "num_res_blocks": 8
+        , "attention_resolutions": [32, 16, 8, 4]
+        , "dropout": 0.2
+        , "num_groups": 8
+        , "num_heads" : 64
+        , "num_head_channels": 32
+        , "use_new_attention_order": true
+        , "use_checkpoint": true
+        , "resblock_updown": true
+        , "channel_mult": [1, 2, 4, 8]
+        , "resample_2d" : false
+  
+        , "pool" : "attention" // "spatial" | "adaptive" | "attention" |"spatial_v2"
+        , "activation" : "Mish" // "GELU" | "ReLU" | "LeakyReLU" | "SiLU" | "Mish"
+        ,"resizer_num_layers": 2
+        ,"resizer_avg_pool": true
+     
+        , "init_type": "default"         
+      }
+
+      , "netG_medium": {
         "net_type": "unet_moex1"
         , "kernel": 24
         , "sharpening_factor": 1.1
@@ -113,7 +140,7 @@
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
         , "base_nc": 64
-        , "n_layers": 6                  // only for "net_type":"discriminator_patchgan"
+        , "n_layers": 12                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
     
         , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
@@ -177,5 +204,51 @@
         , "checkpoint_test": 5           // for testing
         , "checkpoint_save": 5           // for saving model
         , "checkpoint_print": 5           // for print          
+      }
+
+      , "train_lsgan": {
+        "is_moe": true
+        , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+        , "G_lossfn_weight": 1
+    
+        , "F_lossfn_type": "l1"  // "l1" | "l2"
+        , "F_lossfn_weight": 1
+        , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
+        , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+        , "F_use_input_norm": true
+        , "F_use_range_norm": false
+    
+        , "gan_type": "lsgan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+        , "D_lossfn_weight": 0.1
+    
+        , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+    
+        , "D_init_iters": 0
+    
+        , "G_optimizer_type": "adam"
+        , "G_optimizer_lr": 5e-5  // learning rate
+        , "G_optimizer_wd": 0
+    
+        , "D_optimizer_type": "adam"
+        , "D_optimizer_lr": 5e-5  // learning rate
+        , "D_optimizer_wd": 0
+    
+        , "G_scheduler_type": "MultiStepLR"
+        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "G_scheduler_gamma": 0.5
+        , "G_optimizer_reuse": true
+    
+        , "D_scheduler_type": "MultiStepLR"
+        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "D_scheduler_gamma": 0.5
+        , "D_optimizer_reuse": false
+    
+        , "G_param_strict": true
+        , "D_param_strict": true
+        , "E_param_strict": true
+    
+        , "checkpoint_test": 10000  // skip testing
+        , "checkpoint_save": 10000
+        , "checkpoint_print": 200
       }
     }
