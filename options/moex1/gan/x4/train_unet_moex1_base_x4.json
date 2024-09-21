@@ -124,9 +124,9 @@
           , "init_bn_type": "uniform"      // "uniform" | "constant"
           , "init_gain": 0.2
       }
-  
+
     , "train": {
-          "is_moe": true
+        "is_moe": true
         , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
         , "G_lossfn_weight": 1
     
@@ -147,30 +147,18 @@
         , "G_optimizer_type": "adam"
         , "G_optimizer_lr": 1e-4  // learning rate
         , "G_optimizer_wd": 0
-
+    
         , "D_optimizer_type": "adam"
         , "D_optimizer_lr": 1e-4  // learning rate
         , "D_optimizer_wd": 0
     
-        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" | "CosineAnnealingLR" | "OneCycleLR"
-        , "G_scheduler_T_max": 200000
-        , "G_scheduler_eta_min": 1e-6
-        , "G_scheduler_max_lr": 1e-3
-        , "G_scheduler_step_size_up": 30000
-        , "G_scheduler_step_size_down": 30000
-        , "G_scheduler_mode": "triangular"
-        , "G_scheduler_cycle_momentum": false
-        , "G_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "G_scheduler_type": "MultiStepLR"
+        , "G_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
         , "G_scheduler_gamma": 0.5
         , "G_optimizer_reuse": true
     
         , "D_scheduler_type": "MultiStepLR"
-        , "D_scheduler_max_lr": 1e-3
-        , "D_scheduler_step_size_up": 30000
-        , "D_scheduler_step_size_down": 30000
-        , "D_scheduler_mode": "triangular"
-        , "D_scheduler_cycle_momentum": false
-        , "D_scheduler_milestones": [40000, 50000, 55000, 57500, 60000]
+        , "D_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
         , "D_scheduler_gamma": 0.5
         , "D_optimizer_reuse": false
     
@@ -178,10 +166,10 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 10000           // for testing
-        , "checkpoint_save": 10000           // for saving model
-        , "checkpoint_print": 250           // for print          
-      }
+        , "checkpoint_test": 5000  // skip testing
+        , "checkpoint_save": 5000
+        , "checkpoint_print": 200
+    }
       , "train_lsgan": {
         "is_moe": true
         , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"

@@ -196,7 +196,7 @@ class ModelBase(ABC):
         if not os.path.exists(load_path):
             raise FileNotFoundError(f"Optimizer state file not found: {load_path}")
 
-        state = torch.load(load_path, map_location=self.device)
+        state = torch.load(load_path, map_location=self.device, weights_only=False)
 
         if isinstance(optimizer, Lookahead):
             if "base_optimizer_state_dict" in state and "lookahead_state_dict" in state:
