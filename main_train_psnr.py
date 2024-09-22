@@ -72,12 +72,10 @@ def setup_logging(opt):
 
 def initialize_distributed(opt):
     try:
-        if opt["dist"]:
+        if opt.get("dist", False):
             init_dist("pytorch")
             opt["world_size"] = dist.get_world_size()
             opt["rank"] = dist.get_rank()
-            local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
-            torch.cuda.set_device(local_rank)
             synchronize()
         else:
             opt["rank"], opt["world_size"] = 0, 1

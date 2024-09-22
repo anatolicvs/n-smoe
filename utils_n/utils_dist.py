@@ -13,6 +13,7 @@ import torch.distributed as dist
 def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
     if mp.get_start_method(allow_none=True) != "spawn":
         mp.set_start_method("spawn", force=True)
+
     if launcher == "pytorch":
         _init_dist_pytorch(backend, **kwargs)
     elif launcher == "slurm":
@@ -25,7 +26,9 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
 
 
 def _init_dist_pytorch(backend, **kwargs):
-    rank = int(os.environ.get("LOCAL_RANK", 0))
+    rank = int(os.environ.get("RANK", 0))
+    world_size = int(os.environ.get("WORLD_SIZE", 1))
+    local_rank = int(os.environ.get("LOCAL_RANK", 0))
     num_gpus = torch.cuda.device_count()
 
     if num_gpus == 0:
@@ -33,14 +36,57 @@ def _init_dist_pytorch(backend, **kwargs):
             "No GPUs available. Please check your environment configuration."
         )
 
-    torch.cuda.set_device(rank % num_gpus)
+    if local_rank >= num_gpus:
+        raise ValueError(f"Local rank {local_rank} exceeds available GPUs {num_gpus}.")
+
+    torch.cuda.set_device(local_rank)
+    device = torch.device("cuda", local_rank)
+
     dist.init_process_group(
         backend=backend,
-        timeout=datetime.timedelta(seconds=1799),
         init_method="env://",
+        rank=rank,
+        world_size=world_size,
+        timeout=datetime.timedelta(seconds=1800),
         **kwargs,
     )
-    dist.barrier()
+
+    print(
+        f"Initialized distributed training: rank {rank}, local_rank {local_rank}, device {device}"
+    )
+
+
+# def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
+#     if mp.get_start_method(allow_none=True) != "spawn":
+#         mp.set_start_method("spawn", force=True)
+#     if launcher == "pytorch":
+#         _init_dist_pytorch(backend, **kwargs)
+#     elif launcher == "slurm":
+#         _init_dist_slurm(backend, **kwargs)
+#     else:
+#         raise ValueError(f"Invalid launcher type: {launcher}")
+
+#     dist.barrier()
+#     torch.cuda.synchronize()
+
+
+# def _init_dist_pytorch(backend, **kwargs):
+#     rank = int(os.environ.get("LOCAL_RANK", 0))
+#     num_gpus = torch.cuda.device_count()
+
+#     if num_gpus == 0:
+#         raise RuntimeError(
+#             "No GPUs available. Please check your environment configuration."
+#         )
+
+#     torch.cuda.set_device(rank % num_gpus)
+#     dist.init_process_group(
+#         backend=backend,
+#         timeout=datetime.timedelta(seconds=1799),
+#         init_method="env://",
+#         **kwargs,
+#     )
+#     dist.barrier()
 
 
 def _init_dist_slurm(backend, port=None):
