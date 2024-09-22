@@ -203,8 +203,8 @@
         , "D_param_strict": true
         , "E_param_strict": true
     
-        , "checkpoint_test": 10000  // skip testing
-        , "checkpoint_save": 10000
+        , "checkpoint_test": 5000  // skip testing
+        , "checkpoint_save": 5000
         , "checkpoint_print": 200
       }  
     , "train_v1": {
