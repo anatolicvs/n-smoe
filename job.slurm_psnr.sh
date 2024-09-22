@@ -93,6 +93,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
 #SBATCH -A p0021791
+#SBATCH --nodelist=n23g0022 
 #SBATCH --time=$TIME
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS

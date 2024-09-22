@@ -96,10 +96,13 @@ if [ ! -f "$JOB_SCRIPT" ]; then
     exit 1
 fi
 
+# idle nodes n23g[0022-0029],r23g[0001-0005],w23g[0001-0003]
+
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
 #SBATCH -A p0021791
+#SBATCH --nodelist=n23g0022 
 #SBATCH --time=$TIME
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
