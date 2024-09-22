@@ -90,6 +90,17 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 
 PARTITION="c23g"
 
+
+get_idle_node() {
+    sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+}
+
+IDLE_NODE=$(get_idle_node)
+if [ -z "$IDLE_NODE" ]; then
+    echo "Error: No idle nodes found in partition $PARTITION" >&2
+    exit 1
+fi
+
 JOB_SCRIPT=$(mktemp /home/p0021791/tmp/job_script.XXXXXX)
 if [ ! -f "$JOB_SCRIPT" ]; then
     echo "Failed to create a temporary job script file." >&2
@@ -102,7 +113,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
 
 #SBATCH -A p0021791
-#SBATCH --nodelist=n23g0022 
+#SBATCH --nodelist=$IDLE_NODE
 #SBATCH --time=$TIME
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
