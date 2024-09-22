@@ -259,23 +259,24 @@ class ModelBase(ABC):
         return Lookahead(base_optimizer)
 
     @staticmethod
-    def create_scheduler(scheduler_type, optimizer, opt_train):
+    def create_scheduler(scheduler_type, optimizer, opt_train, prefix):
+        key = f"{prefix}_scheduler_"
         if scheduler_type == "MultiStepLR":
             return lr_scheduler.MultiStepLR(
                 optimizer,
-                opt_train.get("scheduler_milestones", [30, 80]),
-                opt_train.get("scheduler_gamma", 0.1),
+                opt_train.get(f"{key}milestones", [30, 80]),
+                opt_train.get(f"{key}gamma", 0.1),
             )
         elif scheduler_type == "CyclicLR":
             return lr_scheduler.CyclicLR(
                 optimizer,
-                base_lr=opt_train.get("optimizer_lr", 0.001),
-                max_lr=opt_train.get("scheduler_max_lr", 0.1),
-                step_size_up=opt_train.get("scheduler_step_size_up", 2000),
-                step_size_down=opt_train.get("scheduler_step_size_down", 2000),
-                mode=opt_train.get("scheduler_mode", "triangular"),
+                base_lr=opt_train.get(f"{key}lr", 0.001),
+                max_lr=opt_train.get(f"{key}max_lr", 0.1),
+                step_size_up=opt_train.get(f"{key}step_size_up", 2000),
+                step_size_down=opt_train.get(f"{key}step_size_down", 2000),
+                mode=opt_train.get(f"{key}mode", "triangular"),
                 gamma=1.0,
-                cycle_momentum=opt_train.get("scheduler_cycle_momentum", True),
+                cycle_momentum=opt_train.get(f"{key}cycle_momentum", True),
                 base_momentum=0.8,
                 max_momentum=0.9,
                 last_epoch=-1,
@@ -283,25 +284,25 @@ class ModelBase(ABC):
         elif scheduler_type == "CosineAnnealingLR":
             return lr_scheduler.CosineAnnealingLR(
                 optimizer,
-                T_max=opt_train.get("scheduler_T_max", 50),
-                eta_min=opt_train.get("scheduler_eta_min", 0),
+                T_max=opt_train.get(f"{key}T_max", 50),
+                eta_min=opt_train.get(f"{key}eta_min", 0),
             )
         elif scheduler_type == "ReduceLROnPlateau":
             return lr_scheduler.ReduceLROnPlateau(
                 optimizer,
                 mode="min",
-                patience=opt_train.get("scheduler_lr_patience", 10),
-                factor=opt_train.get("scheduler_lr_factor", 0.1),
-                min_lr=opt_train.get("scheduler_lr_min", 0),
+                patience=opt_train.get(f"{key}lr_patience", 10),
+                factor=opt_train.get(f"{key}lr_factor", 0.1),
+                min_lr=opt_train.get(f"{key}lr_min", 0),
             )
         elif scheduler_type == "OneCycleLR":
             return lr_scheduler.OneCycleLR(
                 optimizer,
-                max_lr=opt_train.get("scheduler_max_lr", 0.1),
-                total_steps=opt_train.get("scheduler_total_steps", 10000),
-                pct_start=opt_train.get("scheduler_pct_start", 0.3),
-                anneal_strategy=opt_train.get("scheduler_anneal_strategy", "cos"),
-                cycle_momentum=opt_train.get("scheduler_cycle_momentum", True),
+                max_lr=opt_train.get(f"{key}max_lr", 0.1),
+                total_steps=opt_train.get(f"{key}total_steps", 10000),
+                pct_start=opt_train.get(f"{key}pct_start", 0.3),
+                anneal_strategy=opt_train.get(f"{key}anneal_strategy", "cos"),
+                cycle_momentum=opt_train.get(f"{key}cycle_momentum", True),
                 base_momentum=0.8,
                 max_momentum=0.9,
                 last_epoch=-1,
