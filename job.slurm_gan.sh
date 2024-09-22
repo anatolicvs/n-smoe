@@ -104,7 +104,8 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --partition=$PARTITION
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
-#SBATCH --mem=$TOTAL_MEM
+# #SBATCH --mem=$TOTAL_MEM
+#SBATCH --mem-per-gpu=90G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks-per-node=$NTASKS_PER_NODE
 #SBATCH --mail-type=$MAIL_TYPE
@@ -113,19 +114,21 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
+module load CUDA/12.6.1
+
 echo "Starting job at: \$(date)"
 nvidia-smi
 echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
-export TORCH_DISTRIBUTED_DEBUG=INFO
-export TORCH_NCCL_BLOCKING_WAIT=1
-export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
-export NCCL_DEBUG=INFO
-export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=1200
-export TORCH_DISTRIBUTED_DEBUG=DETAIL
-export NCCL_P2P_LEVEL=PXB
-export NCCL_P2P_DISABLE=1
+# export TORCH_DISTRIBUTED_DEBUG=INFO
+# export TORCH_NCCL_BLOCKING_WAIT=1
+# export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+# export NCCL_DEBUG=INFO
+# export NCCL_DEBUG_SUBSYS=ALL
+# export NCCL_TIMEOUT=1200
+# export TORCH_DISTRIBUTED_DEBUG=DETAIL
+# export NCCL_P2P_LEVEL=PXB
+# export NCCL_P2P_DISABLE=1
 
 WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
 if [ -f "\$WANDB_KEY_FILE" ]; then
