@@ -92,13 +92,7 @@ class ModelPlain(ModelBase):
         self.G_lossfn_weight = self.opt_train["G_lossfn_weight"]
 
     def define_optimizer(self):
-        G_optim_params = []
-        for k, v in self.netG.named_parameters():
-            if v.requires_grad:
-                G_optim_params.append(v)
-            else:
-                print("Params [{:s}] will not optimize.".format(k))
-
+        G_optim_params = [v for k, v in self.netG.named_parameters() if v.requires_grad]
         self.G_optimizer = self.create_optimizer(
             self.opt_train["G_optimizer_type"],
             G_optim_params,
@@ -111,7 +105,10 @@ class ModelPlain(ModelBase):
     def define_scheduler(self):
         self.schedulers.append(
             self.create_scheduler(
-                self.opt_train["G_scheduler_type"], self.G_optimizer, self.opt_train
+                self.opt_train["G_scheduler_type"],
+                self.G_optimizer,
+                self.opt_train,
+                "G",
             )
         )
 
