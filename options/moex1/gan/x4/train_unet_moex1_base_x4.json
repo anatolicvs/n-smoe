@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_base_gan_v1_x4_medical_tmi" 
+    "task": "moex1_sr_base_gan_v2_x4_medical_tmi" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
