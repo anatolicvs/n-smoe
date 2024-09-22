@@ -1,5 +1,5 @@
 {
-    "task": "moex1_sr_gan_v8_x4_mri_rgb_act_gelu" 
+    "task": "moex1_sr_base_gan_v1_x4_medical_tmi" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-        "root": "/hpcwork/p0021791/superresolution"  
+        "root": "/hpcwork/p0021791/superresolution_v2"  
       , "pretrained_netG": null // "/hpcwork/p0021791/superresolution/moex1_sr_plain_v8_x4_mri_rgb_act_gelu/models/15000_G.pth" // "/hpcwork/p0021791/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
