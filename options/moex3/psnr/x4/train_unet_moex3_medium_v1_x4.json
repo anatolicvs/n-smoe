@@ -1,5 +1,5 @@
 {
-  "task": "moex3_sr_medium_plain_v6_x4_medical_mix_act_gelu" 
+  "task": "moex3_sr_medium_plain_v1_x4_medical_krnl_64_batch_32" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -15,7 +15,7 @@
   , "merge_bn_startpoint": 400000  // merge BN after N iterations
       
   , "path": {
-      "root": "/hpcwork/p0021791/superresolution"  
+      "root": "/hpcwork/p0021791/superresolution_v2"  
     , "pretrained_netG": null // "/hpcwork/p0021791/superresolution/unet_unet_unet_moex3_sr_plain_v1_x4_medical_mix_act_gelu/models/15000_G.pth"
     , "pretrained_netD": null 
     , "pretrained_netE": null 
@@ -56,7 +56,6 @@
           , "dataloader_batch_size": 1 
           }
       },
-    // medium
       "netG": {
         "net_type": "unet_moex3",
         "kernel": 64,
