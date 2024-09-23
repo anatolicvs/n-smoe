@@ -3,10 +3,10 @@
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 2       // broadcast to "netG" if SISR
+    , "scale": 4       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 15
+    , "overlap": 14
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -56,7 +56,7 @@
         }
       }
       // medium
-      ,"netG": {
+      ,"netG_medium": {
         "net_type": "unet_moex3",
         "kernel": 32,
         "sharpening_factor": 1,
@@ -79,9 +79,39 @@
         "resizer_num_layers": 4,
         "resizer_avg_pool": false,
         "init_type": "default"
-    }
+    },
+      
+      "netG": {
+          "net_type": "unet_moex3",
+          "kernel": 64,
+          "sharpening_factor": 1.0,
+          "model_channels": 64,
+          "num_res_blocks": 12,
+          "attention_resolutions": [64, 32, 16],
+          "dropout": 0.09,
+          "num_groups": 8,
+          "num_heads": 16,
+          "use_new_attention_order": true,
+          "use_checkpoint": true,
+          "use_fp16": false,
+          "resblock_updown": true,
+          "channel_mult": [1, 2, 4, 8, 16],
+          "conv_resample": true,
+          "resample_2d": false,
+          "attention_type": "cross_attention",
+          "activation": "GELU",
+          "rope_theta": 960000.0,
+          "resizer_num_layers": 3,
+          "resizer_avg_pool": true
+          // "init_type": "default"
 
-      ,"netG_base": {
+
+          , "init_type": "xavier_normal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          , "init_bn_type": "uniform"      // "uniform" | "constant"
+         , "init_gain": 1.0
+      },
+  
+      "netG_base": {
         "net_type": "unet_moex3",
         "kernel": 16,
         "sharpening_factor": 1,
@@ -112,7 +142,7 @@
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-4            // learning rate
+        , "G_optimizer_lr": 1e-5            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough

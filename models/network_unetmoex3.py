@@ -1155,12 +1155,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
-
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from torch.nn.functional import scaled_dot_product_attention
-
 from utils_n.nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
-from utils_n.ops import bias_act
+
 
 backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
 
