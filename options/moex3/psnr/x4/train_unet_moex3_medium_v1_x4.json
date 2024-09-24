@@ -1,5 +1,5 @@
 {
-  "task": "moex3_sr_medium_plain_v1_x4_medical_krnl_64_batch_32" 
+  "task": "moex3_sr_medium_plain_v1_x4_medical_krnl_32_batch_16" 
   , "model": "plain" // "gan"
   , "gpu_ids": [0,1,2,3]
   , "dist": true
@@ -37,7 +37,7 @@
           , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 32     // batch size 1 | 16 | 32 | 48 | 64 | 128
+          , "dataloader_batch_size": 16     // batch size 1 | 16 | 32 | 48 | 64 | 128
       }
       , "test": {
           "name": "test_dataset"            
@@ -58,7 +58,7 @@
       },
       "netG": {
         "net_type": "unet_moex3",
-        "kernel": 64,
+        "kernel": 32,
         "sharpening_factor": 1.0,
         "model_channels": 64,
         "num_res_blocks": 12,

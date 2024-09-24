@@ -7,7 +7,7 @@
   , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
   , "kernel_path" : "/home/pb035507/n-smoe/kernels/kernels_bicubicx234.mat"
   , "path": {
-        "root": "/hpcwork/p0021791/superresolution"
+        "root": "/hpcwork/p0021791/superresolution_v2"
       , "pretrained_netG": null
       , "pretrained_netD": null 
       , "pretrained_netE": null 
