@@ -23,13 +23,13 @@ class ModelPlain(ModelBase):
             self.netE = define_G(opt).to(self.device).eval()
 
     def init_train(self):
-        self.load()  # load model
-        self.netG.train()  # set training mode,for BN
-        self.define_loss()  # define loss
-        self.define_optimizer()  # define optimizer
-        self.load_optimizers()  # load optimizer
-        self.define_scheduler()  # define scheduler
-        self.log_dict = OrderedDict()  # log
+        self.load() 
+        self.netG.train()  
+        self.define_loss()  
+        self.define_optimizer()  
+        self.load_optimizers()  
+        self.define_scheduler()  
+        self.log_dict = OrderedDict()
 
     def load(self):
         load_path_G = self.opt["path"]["pretrained_netG"]
@@ -125,9 +125,7 @@ class ModelPlain(ModelBase):
         else:
             self.E = self.netG(self.L)
 
-    # ----------------------------------------
-    # update parameters and get loss
-    # ----------------------------------------
+    
     def optimize_parameters(self, current_step):
         self.G_optimizer.zero_grad()
         self.netG_forward()

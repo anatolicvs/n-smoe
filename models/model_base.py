@@ -100,11 +100,24 @@ class ModelBase(ABC):
 
     def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
-        if self.opt["dist"]:
+        
+        if self.opt.get("dist", False):
+            num_gpus = torch.cuda.device_count()
+            if num_gpus == 0:
+                raise RuntimeError("Distributed training requires at least one GPU, but none were found.")
+            
+            rank = dist.get_rank()
+            device_id = rank % num_gpus
+            
+            if rank >= num_gpus:
+                print(f"Warning: Rank {rank} exceeds available GPUs {num_gpus}. Using GPU {device_id}.")
+            
+            print(f"Assigning Rank {rank} to GPU {device_id}")
+            
             network = DistributedDataParallel(
                 network,
-                device_ids=[dist.get_rank() % torch.cuda.device_count()],
-                output_device=(dist.get_rank() % torch.cuda.device_count()),
+                device_ids=[device_id],
+                output_device=device_id,
                 find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
