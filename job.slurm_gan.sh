@@ -135,14 +135,14 @@ nvidia-smi
 echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
 # export TORCH_DISTRIBUTED_DEBUG=INFO
-# export TORCH_NCCL_BLOCKING_WAIT=1
-# export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
-# export NCCL_DEBUG=INFO
-# export NCCL_DEBUG_SUBSYS=ALL
-# export NCCL_TIMEOUT=1200
-# export TORCH_DISTRIBUTED_DEBUG=DETAIL
-# export NCCL_P2P_LEVEL=PXB
-# export NCCL_P2P_DISABLE=1
+export TORCH_NCCL_BLOCKING_WAIT=1
+export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
+export NCCL_DEBUG=INFO
+export NCCL_DEBUG_SUBSYS=ALL
+export NCCL_TIMEOUT=1200
+export TORCH_DISTRIBUTED_DEBUG=DETAIL
+export NCCL_P2P_LEVEL=PXB
+export NCCL_P2P_DISABLE=1
 
 WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
 if [ -f "\$WANDB_KEY_FILE" ]; then
