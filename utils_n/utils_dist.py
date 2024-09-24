@@ -49,7 +49,7 @@ def _init_dist_pytorch(backend, **kwargs):
         init_method="env://",
         rank=rank,
         world_size=world_size,
-        timeout=datetime.timedelta(seconds=1800),
+        # timeout=datetime.timedelta(seconds=1800),
         **kwargs,
     )
 
