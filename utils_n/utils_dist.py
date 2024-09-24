@@ -42,6 +42,8 @@ def _init_dist_pytorch(backend, **kwargs):
     torch.cuda.set_device(local_rank)
     device = torch.device("cuda", local_rank)
 
+    print(f"Rank: {rank}, Local Rank: {local_rank}, World Size: {world_size}")
+
     dist.init_process_group(
         backend=backend,
         init_method="env://",
@@ -54,6 +56,11 @@ def _init_dist_pytorch(backend, **kwargs):
     print(
         f"Initialized distributed training: rank {rank}, local_rank {local_rank}, device {device}"
     )
+
+    dist.barrier()
+    torch.cuda.synchronize()
+
+    print(f"Distributed setup completed on device {device} (rank {rank}/{world_size}).")
 
 
 # def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
