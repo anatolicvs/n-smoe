@@ -19,7 +19,7 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
-
+import atexit
 
 def synchronize():
     if dist.is_initialized():
@@ -411,6 +411,7 @@ def cleanup():
         dist.destroy_process_group()
         wandb.finish()
 
+atexit.register(cleanup)
 
 if __name__ == "__main__":
     try:
