@@ -8,6 +8,7 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
+
 # import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
@@ -18,6 +19,7 @@ from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 import atexit
+
 
 def synchronize():
     if dist.is_initialized():
@@ -290,7 +292,6 @@ def main(**kwargs):
     test_interval = opt["train"].get("checkpoint_test", 1000)
     log_interval = opt["train"].get("checkpoint_print", 500)
 
-    current_step = 0
     for epoch in range(num_epochs):
         if opt["dist"] and isinstance(train_loader.sampler, DistributedSampler):
             train_loader.sampler.set_epoch(epoch)
@@ -410,6 +411,7 @@ def cleanup():
     if dist.is_initialized():
         dist.destroy_process_group()
         # wandb.finish()
+
 
 atexit.register(cleanup)
 if __name__ == "__main__":
