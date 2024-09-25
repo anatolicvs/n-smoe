@@ -1,5 +1,5 @@
 {
-    "task": "local_moex4_medium_sr_plain_v3_adam" 
+    "task": "local_moex4_medium_sr_plain_v2_adam" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     

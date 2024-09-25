@@ -21,12 +21,15 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
     else:
         raise ValueError(f"Invalid launcher type: {launcher}")
 
-    dist.barrier()
-    torch.cuda.synchronize()
-
 
 def _init_dist_pytorch(backend="nccl", **kwargs):
     local_rank = int(os.environ["LOCAL_RANK"])
+    rank = int(os.environ["RANK"])
+    world_size = int(os.environ["WORLD_SIZE"])
+    print(
+        f"Initializing distributed training with LOCAL_RANK={local_rank}, RANK={rank}, WORLD_SIZE={world_size}"
+    )
+
     torch.cuda.set_device(local_rank)
     device = torch.device(f"cuda:{local_rank}")
     print(f"Local Rank: {local_rank}, Assigned Device: {device}")
@@ -34,6 +37,8 @@ def _init_dist_pytorch(backend="nccl", **kwargs):
     dist.init_process_group(
         backend=backend,
         init_method="env://",
+        world_size=world_size,
+        rank=rank,
         **kwargs,
     )
 

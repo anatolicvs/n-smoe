@@ -18,7 +18,8 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
-import atexit
+
+# import atexit
 
 
 def synchronize():
@@ -413,7 +414,7 @@ def cleanup():
         # wandb.finish()
 
 
-atexit.register(cleanup)
+# atexit.register(cleanup)
 if __name__ == "__main__":
     try:
         main()
