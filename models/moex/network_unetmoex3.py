@@ -845,11 +845,11 @@ class MoEConfig:
 
 @dataclass
 class Gaussians:
-    mu: torch.Tensor
-    sigma: torch.Tensor
-    w: torch.Tensor
-    # theta: torch.Tensor
-    # scale: torch.Tensor
+    mu: Optional[torch.Tensor] = None
+    sigma: Optional[torch.Tensor] = None
+    w: Optional[torch.Tensor] = None
+    theta: Optional[torch.Tensor] = None
+    scale: Optional[torch.Tensor] = None
 
 
 class MoE_v0(Backbone[MoEConfig]):
@@ -1181,25 +1181,6 @@ class MoE_v0(Backbone[MoEConfig]):
         return y_hat
 
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-from dataclasses import dataclass
-
-
-@dataclass
-class MoEConfig:
-    kernel: int = 4
-    sharpening_factor: float = 1.0
-
-
-@dataclass
-class Gaussians:
-    mu: torch.Tensor
-    sigma: torch.Tensor
-    w: torch.Tensor
-
-
 class MoE(nn.Module):
     def __init__(self, cfg: MoEConfig) -> None:
         super(MoE, self).__init__()
@@ -1214,7 +1195,6 @@ class MoE(nn.Module):
 
     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-6):
         R = self.ang_to_rot_mat(theta)
-        # Ensure scales are positive and add epsilon
         S = torch.diag_embed(scale + epsilon)
         Sigma = R @ S @ S.transpose(-2, -1) @ R.transpose(-2, -1)
         return Sigma
@@ -1229,7 +1209,7 @@ class MoE(nn.Module):
 
         scale_idx = 3 * k
         scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(B, ch, k, 2)
-        scale = F.softplus(scale) + 1e-6
+        # scale = F.softplus(scale) + 1e-6
         scale = scale / self.alpha**0.5  # Apply sharpening factor to scales
 
         rot_idx = scale_idx + 2 * k
@@ -1237,8 +1217,6 @@ class MoE(nn.Module):
         theta = theta % (2 * torch.pi)
 
         sigma = self.cov_mat_2d(scale, theta)
-        # No need to multiply sigma by alpha here since we've adjusted scales
-
         return Gaussians(mu=mu, sigma=sigma, w=w)
 
     def grid(self, height: int, width: int) -> torch.Tensor:
@@ -1247,71 +1225,6 @@ class MoE(nn.Module):
         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
         grid = torch.stack((grid_x, grid_y), -1).float()  # [H, W, 2]
         return grid
-
-    def forward_v0(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        B, C, _ = params.shape
-        K = self.kernel
-
-        gauss = self.extract_parameters(params, K, C)
-
-        grid = self.grid(height, width).to(params.device)  # [H, W, 2]
-
-        # Expand grid to match the dimensions: [B, C, K, H, W, 2]
-        grid_expanded = (
-            grid.unsqueeze(0)
-            .unsqueeze(0)
-            .unsqueeze(2)
-            .expand(B, C, K, height, width, 2)
-        )
-
-        # Expand mu to match dimensions: [B, C, K, H, W, 2]
-        mu_expanded = (
-            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
-        )
-
-        # Compute (x - mu)
-        x_sub_mu = grid_expanded - mu_expanded  # [B, C, K, H, W, 2]
-        x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, C, K, H, W, 2, 1]
-
-        # Expand sigma to match dimensions: [B, C, K, H, W, 2, 2]
-        sigma_expanded = (
-            gauss.sigma.unsqueeze(3)
-            .unsqueeze(4)
-            .expand(-1, -1, -1, height, width, -1, -1)
-        )
-
-        x_sub_mu_t_flat = x_sub_mu_t.reshape(-1, 2, 1)  # [B*C*K*H*W, 2, 1]
-        sigma_expanded_flat = sigma_expanded.reshape(-1, 2, 2)  # [B*C*K*H*W, 2, 2]
-
-        try:
-            L_flat = torch.linalg.cholesky(sigma_expanded_flat)  # [B*C*K*H*W, 2, 2]
-        except RuntimeError:
-            epsilon = 1e-6
-            sigma_expanded_flat += epsilon * torch.eye(
-                2, device=sigma_expanded_flat.device
-            ).unsqueeze(0)
-            L_flat = torch.linalg.cholesky(sigma_expanded_flat)
-
-        y = torch.linalg.solve_triangular(
-            L_flat, x_sub_mu_t_flat, upper=False
-        )  # [B*C*K*H*W, 2, 1]
-
-        exp_terms_flat = -0.5 * torch.sum(y.squeeze(-1) ** 2, dim=1)  # [B*C*K*H*W]
-        exp_terms = exp_terms_flat.view(B, C, K, height, width)  # [B, C, K, H, W]
-
-        e = torch.exp(exp_terms)  # [B, C, K, H, W]
-
-        w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, C, K, 1, 1]
-        weighted_e = e * w  # [B, C, K, H, W]
-
-        y_hat = weighted_e.sum(dim=2)  # [B, C, H, W]
-
-        y_hat = y_hat / (
-            y_hat.max(dim=-1, keepdim=True)[0].max(dim=-2, keepdim=True)[0] + 1e-8
-        )
-        y_hat = torch.clamp(y_hat, min=0.0, max=1.0)
-
-        return y_hat  # [B, C, H, W]
 
     def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
         B, C, _ = params.shape
@@ -1332,7 +1245,6 @@ class MoE(nn.Module):
             gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
         )  # [B, C, K, H, W, 2]
 
-        # Compute (x - mu)
         x_sub_mu = grid_expanded - mu_expanded  # [B, C, K, H, W, 2]
         x_sub_mu_flat = x_sub_mu.view(
             B * C * K, height * width, 2, 1
@@ -1347,14 +1259,10 @@ class MoE(nn.Module):
             sigma += epsilon * torch.eye(2, device=sigma.device).unsqueeze(0)
             L = torch.linalg.cholesky(sigma)
 
-        # Solve for y using torch.cholesky_solve
-        # Reshape x_sub_mu_flat to match expected dimensions
         x_sub_mu_flat_squeezed = x_sub_mu_flat.squeeze(-1)  # [BCK, HW, 2]
 
-        # Transpose to match cholesky_solve input requirements
         x_sub_mu_flat_t = x_sub_mu_flat_squeezed.transpose(0, 1)  # [HW, BCK, 2]
 
-        # Expand L to match batch size
         L_expanded = L.unsqueeze(0).expand(
             height * width, -1, -1, -1
         )  # [HW, BCK, 2, 2]
@@ -1365,7 +1273,6 @@ class MoE(nn.Module):
 
         y = y.squeeze(-1).transpose(0, 1)  # [BCK, HW, 2]
 
-        # Compute the quadratic form
         exp_terms_flat = -0.5 * torch.sum(
             x_sub_mu_flat_squeezed * y, dim=-1
         )  # [BCK, HW]
@@ -1374,13 +1281,11 @@ class MoE(nn.Module):
 
         e = torch.exp(exp_terms)  # [B, C, K, H, W]
 
-        # Apply weights
         w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, C, K, 1, 1]
         weighted_e = e * w  # [B, C, K, H, W]
 
         y_hat = weighted_e.sum(dim=2)  # [B, C, H, W]
 
-        # Normalize and clamp the output
         y_hat = y_hat / (y_hat.amax(dim=[-1, -2], keepdim=True) + 1e-8)
         y_hat = torch.clamp(y_hat, min=0.0, max=1.0)
 

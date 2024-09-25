@@ -4,7 +4,7 @@ from typing import Any
 
 import torch
 import torch.distributed as dist
-from torch.nn.modules.module import Module
+
 from torch.nn.parallel import DataParallel, DistributedDataParallel
 from torch.optim import SGD, Adam, Adamax, AdamW, RAdam, RMSprop, lr_scheduler
 from torch_optimizer import Lookahead
@@ -107,7 +107,7 @@ class ModelBase(ABC):
                 network,
                 device_ids=[device_id],
                 output_device=device_id,
-                find_unused_parameters=False,
+                find_unused_parameters=True,
             )
             if self.opt.get("use_static_graph", False):
                 self._set_static_graph(network)

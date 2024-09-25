@@ -20,7 +20,6 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
-import atexit
 
 
 def synchronize():
@@ -313,7 +312,9 @@ def main(**kwargs):
                     logger.error(
                         f"Error during training iteration {i} in epoch {epoch}: {e}"
                     )
-                raise e
+
+                dist.destroy_process_group()
+                sys.exit(1)
             finally:
                 del train_data
                 torch.cuda.empty_cache()
@@ -413,7 +414,7 @@ def cleanup():
         # wandb.finish()
 
 
-atexit.register(cleanup)
+# atexit.register(cleanup)
 
 if __name__ == "__main__":
     try:
