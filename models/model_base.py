@@ -20,6 +20,7 @@ class ModelBase(ABC):
         if opt["dist"]:
             local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
             self.device = torch.device(f"cuda:{local_rank}")
+            torch.cuda.set_device(local_rank)
         else:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -100,20 +101,9 @@ class ModelBase(ABC):
 
     def model_to_device(self, network: torch.nn.Module) -> torch.nn.Module:
         network = network.to(self.device)
-        
         if self.opt.get("dist", False):
-            num_gpus = torch.cuda.device_count()
-            if num_gpus == 0:
-                raise RuntimeError("Distributed training requires at least one GPU, but none were found.")
-            
-            rank = dist.get_rank()
-            device_id = rank % num_gpus
-            
-            if rank >= num_gpus:
-                print(f"Warning: Rank {rank} exceeds available GPUs {num_gpus}. Using GPU {device_id}.")
-            
-            print(f"Assigning Rank {rank} to GPU {device_id}")
-            
+            device_id = self.device.index
+            print(f"Assigning Rank {dist.get_rank()} to GPU {device_id}")
             network = DistributedDataParallel(
                 network,
                 device_ids=[device_id],
@@ -176,11 +166,11 @@ class ModelBase(ABC):
         load_path: str,
         network: torch.nn.Module,
         strict: bool = True,
-        param_key: str = "params",
+        param_key: str = None,
     ) -> None:
         network = self.get_bare_model(network)
         state_dict = torch.load(load_path, map_location=self.device, weights_only=True)
-        if param_key in state_dict:
+        if param_key and param_key in state_dict:
             state_dict = state_dict[param_key]
         network.load_state_dict(state_dict, strict=strict)
 
@@ -217,15 +207,23 @@ class ModelBase(ABC):
                 lookahead_state = state["lookahead_state_dict"]
                 optimizer.state = lookahead_state["state"]
                 optimizer.param_groups = lookahead_state["param_groups"]
+            else:
+                raise KeyError("Missing optimizer state keys in the saved state.")
         else:
             optimizer.load_state_dict(state)
 
     def update_E(self, decay: float = 0.999) -> None:
-        netG: Module = self.get_bare_model(self.netG)
+        netG = self.get_bare_model(self.netG)
+        netE = self.get_bare_model(self.netE)
         netG_params = dict(netG.named_parameters())
-        netE_params = dict(self.netE.named_parameters())
+        netE_params = dict(netE.named_parameters())
         for k in netG_params.keys():
-            netE_params[k].data.mul_(decay).add_(netG_params[k].data, alpha=1 - decay)
+            if k in netE_params:
+                netE_params[k].data.mul_(decay).add_(
+                    netG_params[k].data, alpha=1 - decay
+                )
+            else:
+                raise KeyError(f"Parameter {k} not found in netE")
 
     def merge_bnorm_train(self) -> None:
         merge_bn(self.netG)
@@ -267,7 +265,7 @@ class ModelBase(ABC):
                 momentum=momentum,
             )
         else:
-            raise NotImplementedError
+            raise NotImplementedError(f"Optimizer '{optim_type}' is not implemented.")
 
         return Lookahead(base_optimizer)
 
@@ -277,8 +275,8 @@ class ModelBase(ABC):
         if scheduler_type == "MultiStepLR":
             return lr_scheduler.MultiStepLR(
                 optimizer,
-                opt_train.get(f"{key}milestones", [30, 80]),
-                opt_train.get(f"{key}gamma", 0.1),
+                milestones=opt_train.get(f"{key}milestones", [30, 80]),
+                gamma=opt_train.get(f"{key}gamma", 0.1),
             )
         elif scheduler_type == "CyclicLR":
             return lr_scheduler.CyclicLR(
@@ -321,4 +319,6 @@ class ModelBase(ABC):
                 last_epoch=-1,
             )
         else:
-            raise NotImplementedError
+            raise NotImplementedError(
+                f"Scheduler '{scheduler_type}' is not implemented."
+            )

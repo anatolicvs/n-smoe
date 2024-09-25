@@ -26,39 +26,53 @@ def init_dist(launcher: str, backend: str = "nccl", **kwargs) -> None:
 
 
 def _init_dist_pytorch(backend, **kwargs):
-    rank = int(os.environ.get("RANK", 0))
-    world_size = int(os.environ.get("WORLD_SIZE", 1))
-    local_rank = int(os.environ.get("LOCAL_RANK", 0))
-    num_gpus = torch.cuda.device_count()
-
-    if num_gpus == 0:
-        raise RuntimeError("No GPUs available. Please check your environment configuration.")
-
-    if local_rank >= num_gpus:
-        raise ValueError(
-            f"Local rank {local_rank} exceeds available GPUs {num_gpus}. "
-            f"Available GPU indices are 0 to {num_gpus - 1}."
-        )
-
-    torch.cuda.set_device(local_rank)
-    device = torch.device("cuda", local_rank)
-
-    print(f"Rank: {rank}, Local Rank: {local_rank}, World Size: {world_size}")
-    print(f"Assigning process to device: {device}")
-
     dist.init_process_group(
         backend=backend,
         init_method="env://",
-        rank=rank,
-        world_size=world_size,
-        **kwargs,
+        **kwargs,  # Do not include 'rank' and 'world_size' here
     )
-
-    print(f"Initialized distributed training: rank {rank}, local_rank {local_rank}, device {device}")
+    local_rank = int(os.environ["LOCAL_RANK"])
+    torch.cuda.set_device(local_rank)
+    print(f"Local Rank: {local_rank}, Assigned Device: cuda:{local_rank}")
     dist.barrier()
     torch.cuda.synchronize()
+    print(f"Distributed setup completed on device cuda:{local_rank}.")
 
-    print(f"Distributed setup completed on device {device} (rank {rank}/{world_size}).")
+
+# def _init_dist_pytorch(backend, **kwargs):
+#     rank = int(os.environ.get("RANK", 0))
+#     world_size = int(os.environ.get("WORLD_SIZE", 1))
+#     local_rank = int(os.environ.get("LOCAL_RANK", 0))
+#     num_gpus = torch.cuda.device_count()
+
+#     if num_gpus == 0:
+#         raise RuntimeError("No GPUs available. Please check your environment configuration.")
+
+#     if local_rank >= num_gpus:
+#         raise ValueError(
+#             f"Local rank {local_rank} exceeds available GPUs {num_gpus}. "
+#             f"Available GPU indices are 0 to {num_gpus - 1}."
+#         )
+
+#     torch.cuda.set_device(local_rank)
+#     device = torch.device("cuda", local_rank)
+
+#     print(f"Rank: {rank}, Local Rank: {local_rank}, World Size: {world_size}")
+#     print(f"Assigning process to device: {device}")
+
+#     dist.init_process_group(
+#         backend=backend,
+#         init_method="env://",
+#         rank=rank,
+#         world_size=world_size,
+#         **kwargs,
+#     )
+
+#     print(f"Initialized distributed training: rank {rank}, local_rank {local_rank}, device {device}")
+#     dist.barrier()
+#     torch.cuda.synchronize()
+
+#     print(f"Distributed setup completed on device {device} (rank {rank}/{world_size}).")
 
 
 def _init_dist_slurm(backend, port=None):
