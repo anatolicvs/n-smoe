@@ -83,7 +83,7 @@
       
       "netG": {
           "net_type": "unet_moex3",
-          "kernel": 16,
+          "kernel": 32,
           "sharpening_factor": 1.0,
           "model_channels": 64,
           "num_res_blocks": 12,
@@ -112,7 +112,7 @@
       },
   
       "netG_base": {
-        "net_type": "unet_moex3",
+        "net_type": "unet_moex3_rev",
         "kernel": 16,
         "sharpening_factor": 1,
         "model_channels": 64,
@@ -152,9 +152,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 10           // for testing
-        , "checkpoint_save": 10           // for saving model
-        , "checkpoint_print": 2           // for print
+        , "checkpoint_test": 20           // for testing
+        , "checkpoint_save": 20           // for saving model
+        , "checkpoint_print": 5           // for print
       }
   }
   

@@ -1,6 +1,26 @@
-from typing import Any, Dict, List
+from typing import Dict, List
+
+import matplotlib
 import numpy as np
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+
+matplotlib.use("TkAgg")
+
+import cv2
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.gridspec import GridSpec
+from numpy.fft import fft2, fftshift
+from skimage.metrics import adapted_rand_error
+from skimage.metrics import mean_squared_error as mse
+from skimage.metrics import peak_signal_noise_ratio as psnr
+from skimage.metrics import structural_similarity as ssim
+from skimage.metrics import variation_of_information
+
+plt.rcParams["font.family"] = "Times New Roman"
+plt.rcParams["font.size"] = 12
+plt.rcParams["text.usetex"] = True  # Enable LaTeX rendering
 
 
 def visualize_with_segmentation(
@@ -12,18 +32,6 @@ def visualize_with_segmentation(
     visualize: bool = False,
     error_map: bool = False,
 ):
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-
-    import cv2
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    from skimage.metrics import adapted_rand_error, variation_of_information
-
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 12
-    plt.rcParams["text.usetex"] = True
 
     def calculate_metrics(gt_mask, pred_mask):
         gt_seg = gt_mask[0]["segmentation"]
@@ -64,6 +72,7 @@ def visualize_with_segmentation(
                 cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
         ax.imshow(img)
 
+    # plt.style.use("seaborn-v0_8-whitegrid")
     fig = plt.figure(figsize=(19, 3.5))
     ncols = len(images) + 1
     gs = GridSpec(
@@ -87,10 +96,38 @@ def visualize_with_segmentation(
 
     ax_img_hr = fig.add_subplot(gs[0:2, 1])
     ax_img_hr.imshow(images[0], cmap=cmap)
-    ax_img_hr.axis("off")
-    ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
+
+    # ax_img_hr.axis("off")
+    # ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
 
     ground_truth_index = 2
+    ground_truth_crop = images[ground_truth_index]
+    hr_image = images[0]
+
+    if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
+        gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
+    else:
+        gray_hr = hr_image.copy()
+
+    if len(ground_truth_crop.shape) == 3 and ground_truth_crop.shape[2] == 3:
+        gray_crop = cv2.cvtColor(ground_truth_crop, cv2.COLOR_RGB2GRAY)
+    else:
+        gray_crop = ground_truth_crop.copy()
+
+    res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+    x, y = max_loc
+    crop_height, crop_width = ground_truth_crop.shape[:2]
+
+    rect = patches.Rectangle(
+        (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
+    )
+    ax_img_hr.add_patch(rect)
+
+    ax_img_hr.axis("off")
+    ax_img_hr.set_title("High-Resolution Image", fontsize=12, weight="bold")
+
     gt_mask = None
     vi_scores = {}
     are_scores = {}
@@ -180,16 +217,6 @@ def visualize_with_error_map(
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-
-    import matplotlib.pyplot as plt
-    from matplotlib.colors import LinearSegmentedColormap
-    from matplotlib.gridspec import GridSpec
-    from skimage.metrics import mean_squared_error as mse
-    from skimage.metrics import peak_signal_noise_ratio as psnr
-    from skimage.metrics import structural_similarity as ssim
 
     def create_error_cmap():
         colors = ["navy", "blue", "cyan", "limegreen", "yellow", "red"]
@@ -197,10 +224,6 @@ def visualize_with_error_map(
 
     def calculate_error_map(gt_image, reconstructed_image):
         return (gt_image.astype(float) - reconstructed_image.astype(float)) ** 2
-
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 11
-    plt.rcParams["text.usetex"] = True
 
     fig = plt.figure(figsize=(15, 3.41))
     gs = GridSpec(
@@ -224,8 +247,35 @@ def visualize_with_error_map(
 
     ax_img_hr = fig.add_subplot(gs[0:2, 0])
     ax_img_hr.imshow(images[0], cmap=cmap)
+    
+    hr_image = images[0]
+
+    if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
+        gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
+    else:
+        gray_hr = hr_image.copy()
+
+    if len(reference_image.shape) == 3 and reference_image.shape[2] == 3:
+        gray_crop = cv2.cvtColor(reference_image, cv2.COLOR_RGB2GRAY)
+    else:
+        gray_crop = reference_image.copy()
+
+    res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
+    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+    x, y = max_loc
+    crop_height, crop_width = reference_image.shape[:2]
+
+    rect = patches.Rectangle(
+        (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
+    )
+    ax_img_hr.add_patch(rect)
+
     ax_img_hr.axis("off")
-    ax_img_hr.set_title(titles[0], fontsize=12, fontweight="bold")
+    ax_img_hr.set_title("High-Resolution Image", fontsize=12, weight="bold")
+
+    # ax_img_hr.axis("off")
+    # ax_img_hr.set_title(titles[0], fontsize=12, fontweight="bold")
 
     max_error = 0
 
@@ -329,19 +379,6 @@ def visualize_data(
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    from numpy.fft import fft2, fftshift
-    from skimage.metrics import peak_signal_noise_ratio as psnr
-    from skimage.metrics import structural_similarity as ssim
-
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 12
-    plt.rcParams["text.usetex"] = True
 
     num_images = len(images)
     fig = plt.figure(figsize=(19, 7.8), constrained_layout=True)
@@ -462,17 +499,6 @@ def visualize_sharpening_results(
     save_path: str = None,
     visualize: bool = True,
 ):
-
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-
-    plt.rcParams["font.family"] = "Times New Roman"
-    plt.rcParams["font.size"] = 12
-    plt.rcParams["text.usetex"] = True  # Enable LaTeX rendering
 
     fig = plt.figure(figsize=(16, 6))
     gs = GridSpec(2, 5, figure=fig, height_ratios=[1, 1])
@@ -727,15 +753,6 @@ def visualize_data_with_spectra(self):
 
 
 def visualize_data_pair(images, titles):
-    import matplotlib
-
-    matplotlib.use("TkAgg")
-    import matplotlib.pyplot as plt
-    from matplotlib.gridspec import GridSpec
-    from numpy.fft import fft2, fftshift
-    from skimage.metrics import peak_signal_noise_ratio as psnr
-    from skimage.metrics import structural_similarity as ssim
-
     num_images = len(images)
     fig = plt.figure(figsize=(18, 10), constrained_layout=True)
     gs = GridSpec(5, num_images + 1, figure=fig, height_ratios=[3, 0.5, 0.5, 1, 2])
