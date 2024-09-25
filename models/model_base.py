@@ -20,7 +20,6 @@ class ModelBase(ABC):
         if opt["dist"]:
             local_rank = int(os.environ.get("LOCAL_RANK", opt["rank"]))
             self.device = torch.device(f"cuda:{local_rank}")
-            torch.cuda.set_device(local_rank)
         else:
             self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
