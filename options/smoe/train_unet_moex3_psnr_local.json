@@ -1,5 +1,5 @@
 {
-    "task": "local_moex3_medium_sr_plain" 
+    "task": "local_moex4_medium_sr_plain_v3_adam" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -82,8 +82,8 @@
     },
       
       "netG": {
-          "net_type": "unet_moex3",
-          "kernel": 16,
+          "net_type": "unet_moex3_rev",
+          "kernel": 32,
           "sharpening_factor": 1.0,
           "model_channels": 64,
           "num_res_blocks": 12,
@@ -154,7 +154,7 @@
     
         , "checkpoint_test": 10           // for testing
         , "checkpoint_save": 10           // for saving model
-        , "checkpoint_print": 2           // for print
+        , "checkpoint_print": 5           // for print
       }
   }
   
