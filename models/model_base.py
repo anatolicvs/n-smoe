@@ -107,7 +107,7 @@ class ModelBase(ABC):
                 network,
                 device_ids=[device_id],
                 output_device=device_id,
-                find_unused_parameters=True,
+                find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
                 self._set_static_graph(network)
