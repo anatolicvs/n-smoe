@@ -22,9 +22,9 @@ from utils_n.utils_dist import init_dist
 # import atexit
 
 
-def synchronize():
-    if dist.is_initialized():
-        dist.barrier()
+# def synchronize():
+#     if dist.is_initialized():
+#         dist.barrier()
 
 
 def set_seed(seed):
@@ -79,7 +79,7 @@ def initialize_distributed(opt):
             init_dist("pytorch")
             opt["world_size"] = dist.get_world_size()
             opt["rank"] = dist.get_rank()
-            synchronize()
+            # synchronize()
         else:
             opt["rank"], opt["world_size"] = 0, 1
     except Exception as e:
@@ -411,6 +411,7 @@ def main(**kwargs):
 def cleanup():
     if dist.is_initialized():
         dist.destroy_process_group()
+        torch.cuda.empty_cache()
         # wandb.finish()
 
 
