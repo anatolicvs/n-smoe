@@ -118,7 +118,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-module load CUDA/12.6.1
+# module load CUDA/12.6.1
 
 echo "Starting job at: \$(date)"
 nvidia-smi
@@ -129,7 +129,7 @@ export TORCH_NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=1200
+export NCCL_TIMEOUT=1800
 # export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_P2P_LEVEL=PXB
 export NCCL_P2P_DISABLE=1
