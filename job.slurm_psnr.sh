@@ -64,7 +64,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=32
 MEMORY="32G"
-TIME="16:00:00"
+TIME="14:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -163,3 +163,8 @@ chmod +x "$JOB_SCRIPT"
 job_id=$(sbatch "$JOB_SCRIPT" | awk '{print $4}')
 
 echo "Job submission complete. Job ID: $job_id"
+
+sleep 5
+
+echo "Job status:"
+squeue -j $job_id

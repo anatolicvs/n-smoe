@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="16:00:00"
+TIME="14:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -174,3 +174,7 @@ chmod +x "$JOB_SCRIPT"
 job_id=$(sbatch "$JOB_SCRIPT" | awk '{print $4}')
 
 echo "Job submission complete. Job ID: $job_id"
+
+sleep 5
+echo "Job status:"
+squeue -j $job_id
