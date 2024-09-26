@@ -852,7 +852,7 @@ class Gaussians:
     scale: Optional[torch.Tensor] = None
 
 
-class MoE_v0(Backbone[MoEConfig]):
+class MoE(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig) -> None:
         super(MoE, self).__init__(cfg)
         self.kernel: int = cfg.kernel
@@ -1181,7 +1181,7 @@ class MoE_v0(Backbone[MoEConfig]):
         return y_hat
 
 
-class MoE(nn.Module):
+class MoE_v1(nn.Module):
     def __init__(self, cfg: MoEConfig) -> None:
         super(MoE, self).__init__()
         self.kernel = cfg.kernel
