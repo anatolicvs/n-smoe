@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_medium_gan_v2_x4_medical_krnl_64_batch_16" 
+    "task": "moex3_rev_sr_base_gan_v1_x4" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     

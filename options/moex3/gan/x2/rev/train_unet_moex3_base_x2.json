@@ -1,5 +1,5 @@
 {
-    "task": "moex3_sr_base_gan_v1_x2_medico_act_gelu"
+    "task": "moex3_rev_sr_base_gan_v1_x2"
     , "model": "gan" // "gan"
     , "gpu_ids": [0, 1, 2, 3]
     
