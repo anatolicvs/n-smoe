@@ -78,7 +78,7 @@ def initialize_distributed(opt):
         if opt.get("dist", False):
             init_dist("pytorch")
             opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
-            opt["rank"] = int(os.environ.get("LOCAL_RANK", 0))
+            opt["rank"] = int(os.environ.get("RANK", 0))
             # synchronize()
         else:
             opt["rank"], opt["world_size"] = 0, 1
