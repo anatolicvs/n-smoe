@@ -41,6 +41,7 @@ def _init_dist_pytorch(backend="nccl", **kwargs):
         rank=rank,
         **kwargs,
     )
+    torch.cuda.synchronize()
 
 
 def _init_dist_slurm(backend, port=None):
