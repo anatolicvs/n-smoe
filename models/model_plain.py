@@ -23,12 +23,12 @@ class ModelPlain(ModelBase):
             self.netE = define_G(opt).to(self.device).eval()
 
     def init_train(self):
-        self.load() 
-        self.netG.train()  
-        self.define_loss()  
-        self.define_optimizer()  
-        self.load_optimizers()  
-        self.define_scheduler()  
+        self.load()
+        self.netG.train()
+        self.define_loss()
+        self.define_optimizer()
+        self.load_optimizers()
+        self.define_scheduler()
         self.log_dict = OrderedDict()
 
     def load(self):
@@ -125,7 +125,6 @@ class ModelPlain(ModelBase):
         else:
             self.E = self.netG(self.L)
 
-    
     def optimize_parameters(self, current_step):
         self.G_optimizer.zero_grad()
         self.netG_forward()
@@ -185,6 +184,8 @@ class ModelPlain(ModelBase):
 
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
+
+        torch.cuda.synchronize()
 
     # ----------------------------------------
     # test / inference

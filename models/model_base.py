@@ -105,8 +105,9 @@ class ModelBase(ABC):
             print(f"Assigning Rank {dist.get_rank()} to GPU {device_id}")
             network = DistributedDataParallel(
                 network,
-                device_ids=[device_id],
-                output_device=device_id,
+                device_ids=[torch.cuda.current_device()],
+                # device_ids=[device_id],
+                # output_device=device_id,
                 find_unused_parameters=False,
             )
             if self.opt.get("use_static_graph", False):
