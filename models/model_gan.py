@@ -335,6 +335,8 @@ class ModelGAN(ModelBase):
         if self.opt_train["E_decay"] > 0:
             self.update_E(self.opt_train["E_decay"])
 
+        torch.cuda.synchronize()
+
     def test(self):
         self.netG.eval()
         with torch.no_grad():
