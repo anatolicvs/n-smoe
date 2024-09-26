@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-        "root": "/hpcwork/p0021791/superresolution"  
+        "root": "/hpcwork/p0021791/superresolution_v2"  
       , "pretrained_netG": null // "/hpcwork/p0021791/superresolution/moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_32/models/45000_G.pth"
       , "pretrained_netD": null 
       , "pretrained_netE": null 
