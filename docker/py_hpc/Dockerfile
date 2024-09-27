@@ -35,14 +35,14 @@ RUN conda create -y --name venv python=3.11
 ENV PATH=/opt/miniconda/envs/venv/bin:$PATH
 RUN echo "source activate venv" >> ~/.bashrc && conda init bash
 
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
-    pip install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm pandas wandb scikit-learn timm lightning['extra'] tensorboard monailabel pytorch-metric-learning pytorch-ignite pytorchvideo torchmetrics torch_optimizer torchsampler torchgeometry torchio piq torchdiffeq hydra-core fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d diffusers[torch] && \
-    pip install --no-cache-dir --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu124
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel && \
+    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124 && \
+    pip3 install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops plyfile e3nn lpips colorspacious tqdm pandas wandb scikit-learn timm lightning['extra'] tensorboard monailabel pytorch-metric-learning pytorch-ignite pytorchvideo torchmetrics torch_optimizer torchsampler torchgeometry torchio piq torchdiffeq hydra-core fvcore flax[all] jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html gsplat segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d diffusers[torch]
 
 RUN git clone https://github.com/facebookresearch/segment-anything-2.git && \
     cd segment-anything-2 && pip install -e .
 
-RUN pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+RUN pip3 install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
     --extra-index-url=https://pypi.nvidia.com \
     "cudf-cu12==24.8.2" \
     "dask-cudf-cu12==24.8.2" \
