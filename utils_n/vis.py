@@ -23,15 +23,216 @@ plt.rcParams["font.size"] = 12
 plt.rcParams["text.usetex"] = True
 
 
+# def visualize_with_segmentation(
+#     images: List[np.ndarray],
+#     titles: List[str],
+#     mask_generator: SAM2AutomaticMaskGenerator,
+#     cmap: str = "gray",
+#     save_path: str = None,
+#     visualize: bool = False,
+#     error_map: bool = False,
+# ):
+
+#     def calculate_metrics(gt_mask, pred_mask):
+#         gt_seg = gt_mask[0]["segmentation"]
+#         pred_seg = pred_mask[0]["segmentation"]
+
+#         vi_split, vi_merge = variation_of_information(gt_seg, pred_seg)
+#         vi_score = vi_split + vi_merge
+#         are_score, _, _ = adapted_rand_error(gt_seg, pred_seg)
+
+#         return vi_score, are_score
+
+#     def show_anns(anns, borders=True):
+#         if len(anns) == 0:
+#             return
+#         sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
+#         ax = plt.gca()
+#         ax.set_autoscale_on(False)
+#         img = np.ones(
+#             (
+#                 sorted_anns[0]["segmentation"].shape[0],
+#                 sorted_anns[0]["segmentation"].shape[1],
+#                 4,
+#             )
+#         )
+#         img[:, :, 3] = 0
+#         for ann in sorted_anns:
+#             m = ann["segmentation"]
+#             color_mask = np.concatenate([np.random.random(3), [0.5]])
+#             img[m] = color_mask
+#             if borders:
+#                 contours, _ = cv2.findContours(
+#                     m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+#                 )
+#                 contours = [
+#                     cv2.approxPolyDP(contour, epsilon=0.01, closed=True)
+#                     for contour in contours
+#                 ]
+#                 cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
+#         ax.imshow(img)
+
+#     num_images = len(images)
+#     num_titles = len(titles)
+#     assert num_images == num_titles, "Number of images must match number of titles."
+
+#     ncols = num_images + 1
+#     nrows = 3
+#     width_ratios = [2, 2] + [1] * (ncols - 2)
+#     total_ratio = sum(width_ratios)
+
+#     unit_width = 19 / 12
+
+#     fig_width = unit_width * total_ratio
+
+#     fig_height = 3.5
+
+#     fig = plt.figure(figsize=(fig_width, fig_height))
+#     gs = GridSpec(
+#         nrows=nrows,
+#         ncols=ncols,
+#         height_ratios=[2, 2, 0.5],
+#         width_ratios=width_ratios,
+#         # width_ratios=[2, 2, 1, 1, 1, 1, 1, 1],
+#         hspace=0.01,  # Reducing space between rows
+#         wspace=0.01,  # Reducing space between columns
+#         figure=fig,
+#     )
+
+#     annotated_mask = mask_generator.generate(
+#         np.repeat(images[0][:, :, np.newaxis], 3, axis=-1)
+#     )
+#     ax_annotated = fig.add_subplot(gs[0:2, 0])
+#     ax_annotated.imshow(images[0], cmap=cmap)
+#     show_anns(annotated_mask)
+#     ax_annotated.axis("off")
+#     ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
+
+#     ax_img_hr = fig.add_subplot(gs[0:2, 1])
+#     ax_img_hr.imshow(images[0], cmap=cmap)
+
+#     # ax_img_hr.axis("off")
+#     # ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
+
+#     ground_truth_index = 2
+#     ground_truth_crop = images[ground_truth_index]
+#     hr_image = images[0]
+
+#     if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
+#         gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
+#     else:
+#         gray_hr = hr_image.copy()
+
+#     if len(ground_truth_crop.shape) == 3 and ground_truth_crop.shape[2] == 3:
+#         gray_crop = cv2.cvtColor(ground_truth_crop, cv2.COLOR_RGB2GRAY)
+#     else:
+#         gray_crop = ground_truth_crop.copy()
+
+#     res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
+#     _, max_val, _, max_loc = cv2.minMaxLoc(res)
+
+#     x, y = max_loc
+#     crop_height, crop_width = ground_truth_crop.shape[:2]
+
+#     rect = patches.Rectangle(
+#         (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
+#     )
+#     ax_img_hr.add_patch(rect)
+
+#     ax_img_hr.axis("off")
+#     ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
+
+#     gt_mask = None
+#     vi_scores = {}
+#     are_scores = {}
+
+#     for i in range(1, len(images)):
+#         ax_img = fig.add_subplot(gs[0, i + 1])
+#         ax_img.imshow(images[i], cmap=cmap)
+#         ax_img.axis("off")
+
+#         mask = mask_generator.generate(np.repeat(images[i][:, :, None], 3, axis=-1))
+#         ax_seg = fig.add_subplot(gs[1, i + 1])
+#         ax_seg.imshow(images[i], cmap=cmap)
+#         show_anns(mask)
+#         ax_seg.axis("off")
+#         ax_title = fig.add_subplot(gs[2, i + 1])
+
+#         if i == ground_truth_index:
+#             gt_mask = mask
+
+#         if i > ground_truth_index:
+#             vi_score, are_score = calculate_metrics(gt_mask, mask)
+#             vi_scores[i] = vi_score
+#             are_scores[i] = are_score
+
+#     sorted_vi = sorted(vi_scores.items(), key=lambda x: x[1])
+#     sorted_are = sorted(are_scores.items(), key=lambda x: x[1])
+
+#     for i in range(1, len(images)):
+#         ax_title = fig.add_subplot(gs[2, i + 1])
+#         if i > ground_truth_index:
+#             vi_score = vi_scores[i]
+#             are_score = are_scores[i]
+
+#             vi_text = f"VoI: {vi_score:.4f}"
+#             are_text = f"ARE: {are_score:.4f}"
+
+#             if i == sorted_vi[0][0]:
+#                 vi_text = r"\textbf{VoI: %.4f}" % vi_score
+#             elif i == sorted_vi[1][0]:
+#                 vi_text = r"\underline{VoI: %.4f}" % vi_score
+
+#             if i == sorted_are[0][0]:
+#                 are_text = r"\textbf{ARE: %.4f}" % are_score
+#             elif i == sorted_are[1][0]:
+#                 are_text = r"\underline{ARE: %.4f}" % are_score
+
+#             display_title = f"{titles[i]}\n{vi_text}\n{are_text}"
+
+#             ax_title.text(
+#                 0.5,
+#                 0.0,
+#                 display_title,
+#                 va="center",
+#                 ha="center",
+#                 transform=ax_title.transAxes,
+#             )
+#         else:
+#             display_title = titles[i]
+#             ax_title.text(
+#                 0.5,
+#                 0.5,
+#                 display_title,
+#                 weight="bold",
+#                 va="center",
+#                 ha="center",
+#                 transform=ax_title.transAxes,
+#             )
+
+#     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
+#     plt.subplots_adjust(
+#         left=0.12, bottom=0.12, right=0.89, top=0.89, wspace=0, hspace=0
+#     )
+
+#     for ax in fig.get_axes():
+#         ax.axis("off")
+
+#     if save_path:
+#         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
+#     if visualize:
+#         plt.show()
+
 def visualize_with_segmentation(
-    images: List[np.ndarray],
-    titles: List[str],
+    images: Dict[str, Dict[str, Any]],
     mask_generator: SAM2AutomaticMaskGenerator,
+    hr_key: str = "H_img",
+    ref_key: str = "H_crop_img",
+    lrcrop_key: str = "L_crop_img",
     cmap: str = "gray",
     save_path: str = None,
-    visualize: bool = False,
-    error_map: bool = False,
-):
+    visualize: bool = False
+    error_map: bool = False) -> None:
 
     def calculate_metrics(gt_mask, pred_mask):
         gt_seg = gt_mask[0]["segmentation"]
@@ -44,9 +245,9 @@ def visualize_with_segmentation(
         return vi_score, are_score
 
     def show_anns(anns, borders=True):
-        if len(anns) == 0:
+        if not anns or not all('segmentation' in ann for ann in anns):
             return
-        sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
+        sorted_anns = sorted(anns, key=lambda x: x["area"], reverse=True)
         ax = plt.gca()
         ax.set_autoscale_on(False)
         img = np.ones(
@@ -72,51 +273,56 @@ def visualize_with_segmentation(
                 cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
         ax.imshow(img)
 
+    # Extract titles from images dictionary
+    titles = [v['title'] for k, v in images.items()]
     num_images = len(images)
-    num_titles = len(titles)
-    assert num_images == num_titles, "Number of images must match number of titles."
+    assert num_images == len(titles), "Number of images must match number of titles."
 
-    ncols = num_images + 1
+    # Identify reconstructed image keys
+    recon_keys = [k for k in images.keys() if k not in [hr_key, ref_key, lrcrop_key]]
+    num_recon = len(recon_keys)
+
+    # Set up figure layout
+    ncols = 2 + num_recon
     nrows = 3
-    width_ratios = [2, 2] + [1] * (ncols - 2)
-    total_ratio = sum(width_ratios)
+    width_ratios = [2, 2] + [1] * num_recon
+    height_ratios = [2, 2, 0.5]
 
     unit_width = 19 / 12
-
-    fig_width = unit_width * total_ratio
-
+    fig_width = unit_width * sum(width_ratios)
     fig_height = 3.5
 
-    fig = plt.figure(figsize=(fig_width, fig_height))
+    fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
     gs = GridSpec(
         nrows=nrows,
         ncols=ncols,
-        height_ratios=[2, 2, 0.5],
+        height_ratios=height_ratios,
         width_ratios=width_ratios,
-        # width_ratios=[2, 2, 1, 1, 1, 1, 1, 1],
-        hspace=0.01,  # Reducing space between rows
-        wspace=0.01,  # Reducing space between columns
+        hspace=0.01,
+        wspace=0.01,
         figure=fig,
     )
 
+    error_cmap = LinearSegmentedColormap.from_list(
+        "custom_diverging", ["navy", "blue", "cyan", "limegreen", "yellow", "red"], N=256
+    )
+
+    # Annotated HR Image
     annotated_mask = mask_generator.generate(
-        np.repeat(images[0][:, :, np.newaxis], 3, axis=-1)
+        np.repeat(images[hr_key]['image'][:, :, np.newaxis], 3, axis=-1)
     )
     ax_annotated = fig.add_subplot(gs[0:2, 0])
-    ax_annotated.imshow(images[0], cmap=cmap)
+    ax_annotated.imshow(images[hr_key]['image'], cmap=cmap)
     show_anns(annotated_mask)
     ax_annotated.axis("off")
-    ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
+    ax_annotated.set_title(titles[0], fontsize=12, weight="bold")
 
+    # HR Image with Ground Truth Crop
     ax_img_hr = fig.add_subplot(gs[0:2, 1])
-    ax_img_hr.imshow(images[0], cmap=cmap)
+    ax_img_hr.imshow(images[hr_key]['image'], cmap=cmap)
 
-    # ax_img_hr.axis("off")
-    # ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
-
-    ground_truth_index = 2
-    ground_truth_crop = images[ground_truth_index]
-    hr_image = images[0]
+    ground_truth_crop = images[ref_key]['image']
+    hr_image = images[hr_key]['image']
 
     if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
         gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
@@ -140,66 +346,83 @@ def visualize_with_segmentation(
     ax_img_hr.add_patch(rect)
 
     ax_img_hr.axis("off")
-    ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
+    ax_img_hr.set_title(titles[1], fontsize=12, weight="bold")
 
-    gt_mask = None
+    # Generate ground truth mask
+    gt_mask = mask_generator.generate(
+        np.repeat(images[ref_key]['image'][:, :, np.newaxis], 3, axis=-1)
+    )
+
     vi_scores = {}
     are_scores = {}
 
-    for i in range(1, len(images)):
-        ax_img = fig.add_subplot(gs[0, i + 1])
-        ax_img.imshow(images[i], cmap=cmap)
+    for i, key in enumerate(recon_keys, start=2):
+        item = images[key]
+        ax_img = fig.add_subplot(gs[0, i])
+        ax_img.imshow(item['image'], cmap=cmap)
         ax_img.axis("off")
 
-        mask = mask_generator.generate(np.repeat(images[i][:, :, None], 3, axis=-1))
-        ax_seg = fig.add_subplot(gs[1, i + 1])
-        ax_seg.imshow(images[i], cmap=cmap)
+        mask = mask_generator.generate(np.repeat(item['image'][:, :, None], 3, axis=-1))
+        ax_seg = fig.add_subplot(gs[1, i])
+        ax_seg.imshow(item['image'], cmap=cmap)
         show_anns(mask)
         ax_seg.axis("off")
-        ax_title = fig.add_subplot(gs[2, i + 1])
 
-        if i == ground_truth_index:
-            gt_mask = mask
-
-        if i > ground_truth_index:
-            vi_score, are_score = calculate_metrics(gt_mask, mask)
-            vi_scores[i] = vi_score
-            are_scores[i] = are_score
+        vi_score, are_score = calculate_metrics(gt_mask, mask)
+        vi_scores[key] = vi_score
+        are_scores[key] = are_score
 
     sorted_vi = sorted(vi_scores.items(), key=lambda x: x[1])
     sorted_are = sorted(are_scores.items(), key=lambda x: x[1])
 
-    for i in range(1, len(images)):
-        ax_title = fig.add_subplot(gs[2, i + 1])
-        if i > ground_truth_index:
-            vi_score = vi_scores[i]
-            are_score = are_scores[i]
+    for i, key in enumerate(recon_keys, start=2):
+        item = images[key]
+        ax_title = fig.add_subplot(gs[2, i])
+        ax_title.axis("off")
+
+        if key in vi_scores and key in are_scores:
+            vi_score = vi_scores[key]
+            are_score = are_scores[key]
 
             vi_text = f"VoI: {vi_score:.4f}"
             are_text = f"ARE: {are_score:.4f}"
 
-            if i == sorted_vi[0][0]:
-                vi_text = r"\textbf{VoI: %.4f}" % vi_score
-            elif i == sorted_vi[1][0]:
-                vi_text = r"\underline{VoI: %.4f}" % vi_score
+            if key == sorted_vi[0][0]:
+                vi_text = r"\textbf{" + vi_text + "}"
+            if len(sorted_vi) > 1 and key == sorted_vi[1][0]:
+                vi_text = r"\underline{" + vi_text + "}"
 
-            if i == sorted_are[0][0]:
-                are_text = r"\textbf{ARE: %.4f}" % are_score
-            elif i == sorted_are[1][0]:
-                are_text = r"\underline{ARE: %.4f}" % are_score
-
-            display_title = f"{titles[i]}\n{vi_text}\n{are_text}"
+            if key == sorted_are[0][0]:
+                are_text = r"\textbf{" + are_text + "}"
+            if len(sorted_are) > 1 and key == sorted_are[1][0]:
+                are_text = r"\underline{" + are_text + "}"
 
             ax_title.text(
                 0.5,
-                0.0,
-                display_title,
-                va="center",
-                ha="center",
+                0.7,
+                vi_text,
+                ha="center", va="center",
                 transform=ax_title.transAxes,
+                fontsize=10
+            )
+            ax_title.text(
+                0.5,
+                0.5,
+                are_text,
+                ha="center", va="center",
+                transform=ax_title.transAxes,
+                fontsize=10
+            )
+            ax_title.text(
+                0.5,
+                0.3,
+                item['title'],
+                ha="center", va="center",
+                transform=ax_title.transAxes,
+                fontsize=10,
             )
         else:
-            display_title = titles[i]
+            display_title = item['title']
             ax_title.text(
                 0.5,
                 0.5,
@@ -208,20 +431,18 @@ def visualize_with_segmentation(
                 va="center",
                 ha="center",
                 transform=ax_title.transAxes,
+                fontsize=10,
             )
-
-    plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
-    plt.subplots_adjust(
-        left=0.12, bottom=0.12, right=0.89, top=0.89, wspace=0, hspace=0
-    )
 
     for ax in fig.get_axes():
         ax.axis("off")
 
     if save_path:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
+
 
 
 # def visualize_with_error_map(
