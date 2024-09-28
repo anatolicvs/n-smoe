@@ -450,14 +450,6 @@ def main(**kwargs):
             v.requires_grad = False
         model_esrgan = model_esrgan.to(device)
 
-        # titles = [
-        #     "High Resolution",
-        #     "Low Resolution Crop",
-        #     "High Resolution Crop",
-        #     "N-SMoE",
-        #     "DPSR",
-        # ]
-
         model_cfg = "sam2_hiera_l.yaml"
 
         sam2 = build_sam2(
@@ -589,7 +581,6 @@ def main(**kwargs):
                     img_dir,
                     f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
                 )
-
                 error_map_figure_path = os.path.join(
                     img_dir,
                     f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
@@ -612,72 +603,73 @@ def main(**kwargs):
                     for metric in metrics:
                         print(f"  {metric.upper()}: {results[method][metric]}")
 
-                L_crop_img = util.tensor2uint(test_data["L"])
-                H_crop_img = util.tensor2uint(test_data["H"])
+                if opt["visualize"] == True:
+                    L_crop_img = util.tensor2uint(test_data["L"])
+                    H_crop_img = util.tensor2uint(test_data["H"])
 
-                img_H = util.tensor2uint(test_data["O"])
-                img_H = util.modcrop(img_H, border)
+                    img_H = util.tensor2uint(test_data["O"])
+                    img_H = util.modcrop(img_H, border)
 
-                images: Dict[str, Dict[str, Any]] = {
-                    "H_img": {
-                        "image": img_H,
-                        "title": "High Resolution",
-                    },
-                    "H_crop_img": {
-                        "image": H_crop_img,
-                        "title": f"Ground Truth \nCrop",
-                    },
-                    "L_crop_img": {
-                        "image": L_crop_img,
-                        "title": f"Noisy Low \nResolution",
-                    },
-                    "E_Bicubic_img": {
-                        "image": results["Bicubic"]["e_img"],
-                        "title": "Bicubic",
-                    },
-                    "E_SMoE_img": {
-                        "image": results["N-SMoE"]["e_img"],
-                        "title": "N-SMoE",
-                    },
-                    "E_SMoE_II_img": {
-                        "image": results["N-SMoE-II"]["e_img"],
-                        "title": "N-SMoE-II",
-                    },
-                    "E_SMoE_III_img": {
-                        "image": results["N-SMoE-III"]["e_img"],
-                        "title": "N-SMoE-III",
-                    },
-                    "E_DPSR_img": {
-                        "image": results["DPSR"]["e_img"],
-                        "title": "DPSR",
-                    },
-                    "E_ESRGAN_img": {
-                        "image": results["ESRGAN"]["e_img"],
-                        "title": "ESRGAN",
-                    },
-                }
+                    images: Dict[str, Dict[str, Any]] = {
+                        "H_img": {
+                            "image": img_H,
+                            "title": "High Resolution",
+                        },
+                        "H_crop_img": {
+                            "image": H_crop_img,
+                            "title": f"Ground Truth \nCrop",
+                        },
+                        "L_crop_img": {
+                            "image": L_crop_img,
+                            "title": f"Noisy Low \nResolution",
+                        },
+                        "E_Bicubic_img": {
+                            "image": results["Bicubic"]["e_img"],
+                            "title": "Bicubic",
+                        },
+                        "E_SMoE_img": {
+                            "image": results["N-SMoE"]["e_img"],
+                            "title": "N-SMoE",
+                        },
+                        "E_SMoE_II_img": {
+                            "image": results["N-SMoE-II"]["e_img"],
+                            "title": "N-SMoE-II",
+                        },
+                        "E_SMoE_III_img": {
+                            "image": results["N-SMoE-III"]["e_img"],
+                            "title": "N-SMoE-III",
+                        },
+                        "E_DPSR_img": {
+                            "image": results["DPSR"]["e_img"],
+                            "title": "DPSR",
+                        },
+                        "E_ESRGAN_img": {
+                            "image": results["ESRGAN"]["e_img"],
+                            "title": "ESRGAN",
+                        },
+                    }
 
-                # visualize_with_segmentation(
-                #     images,
-                #     mask_generator,
-                #     cmap="gray",
-                #     save_path=seg_figure_path,
-                #     visualize=opt["visualize"],
-                # )
+                    # visualize_with_segmentation(
+                    #     images,
+                    #     mask_generator,
+                    #     cmap="gray",
+                    #     save_path=seg_figure_path,
+                    #     visualize=opt["visualize"],
+                    # )
 
-                # visualize_with_error_map(
-                #     images,
-                #     cmap="gray",
-                #     save_path=error_map_figure_path,
-                #     visualize=opt["visualize"],
-                # )
+                    # visualize_with_error_map(
+                    #     images,
+                    #     cmap="gray",
+                    #     save_path=error_map_figure_path,
+                    #     visualize=opt["visualize"],
+                    # )
 
-                visualize_data(
-                    images,
-                    cmap="gray",
-                    save_path=figure_path,
-                    visualize=opt["visualize"],
-                )
+                    visualize_data(
+                        images,
+                        cmap="gray",
+                        save_path=figure_path,
+                        visualize=opt["visualize"],
+                    )
 
         for metric in metrics:
             average_metric_data[metric] = {}

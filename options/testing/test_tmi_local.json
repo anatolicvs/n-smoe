@@ -41,7 +41,7 @@
           "name": "EM" //Cremi
         , "scale": 2  
         , "dataset_type": "medical_sr"            
-        , "lq_patchsize": 64 // 96
+        , "lq_patchsize": 256 // 96
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "exclude_dirs": []
         , "length" : 5
@@ -50,7 +50,7 @@
         , "dataroot_L": null              // path of L testing dataset
         , "use_dataset_cache": true
         , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_cremi_5.pkl"
-        , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+        , "H_size": 512                   // patch size 40 | 64 | 96 | 128 | 192
         , "dataloader_num_workers": 16
         , "dataloader_batch_size": 1 
         , "use_imgH": true

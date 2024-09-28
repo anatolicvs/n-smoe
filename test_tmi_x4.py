@@ -452,14 +452,6 @@ def main(**kwargs):
             v.requires_grad = False
         model_esrgan = model_esrgan.to(device)
 
-        # titles = [
-        #     "High Resolution",
-        #     "Low Resolution Crop",
-        #     "High Resolution Crop",
-        #     "N-SMoE",
-        #     "DPSR",
-        # ]
-
         model_cfg = "sam2_hiera_l.yaml"
 
         sam2 = build_sam2(
@@ -605,64 +597,65 @@ def main(**kwargs):
                     for metric in metrics:
                         print(f"  {metric.upper()}: {results[method][metric]}")
 
-                L_crop_img = util.tensor2uint(test_data["L"])
-                H_crop_img = util.tensor2uint(test_data["H"])
+                if opt["visualize"] == True:
+                    L_crop_img = util.tensor2uint(test_data["L"])
+                    H_crop_img = util.tensor2uint(test_data["H"])
 
-                img_H = util.tensor2uint(test_data["O"])
-                img_H = util.modcrop(img_H, border)
+                    img_H = util.tensor2uint(test_data["O"])
+                    img_H = util.modcrop(img_H, border)
 
-                images: Dict[str, Dict[str, Any]] = {
-                    "H_img": {
-                        "image": img_H,
-                        "title": "High Resolution",
-                    },
-                    "H_crop_img": {
-                        "image": H_crop_img,
-                        "title": f"Ground Truth \nCrop",
-                    },
-                    "L_crop_img": {
-                        "image": L_crop_img,
-                        "title": f"Noisy Low \nResolution",
-                    },
-                    "E_Bicubic_img": {
-                        "image": results["Bicubic"]["e_img"],
-                        "title": "Bicubic",
-                    },
-                    "E_SMoE_img": {
-                        "image": results["N-SMoE"]["e_img"],
-                        "title": "N-SMoE",
-                    },
-                    "E_DPSR_img": {
-                        "image": results["DPSR"]["e_img"],
-                        "title": "DPSR",
-                    },
-                    "E_ESRGAN_img": {
-                        "image": results["ESRGAN"]["e_img"],
-                        "title": "ESRGAN",
-                    },
-                }
+                    images: Dict[str, Dict[str, Any]] = {
+                        "H_img": {
+                            "image": img_H,
+                            "title": "High Resolution",
+                        },
+                        "H_crop_img": {
+                            "image": H_crop_img,
+                            "title": f"Ground Truth \nCrop",
+                        },
+                        "L_crop_img": {
+                            "image": L_crop_img,
+                            "title": f"Noisy Low \nResolution",
+                        },
+                        "E_Bicubic_img": {
+                            "image": results["Bicubic"]["e_img"],
+                            "title": "Bicubic",
+                        },
+                        "E_SMoE_img": {
+                            "image": results["N-SMoE"]["e_img"],
+                            "title": "N-SMoE",
+                        },
+                        "E_DPSR_img": {
+                            "image": results["DPSR"]["e_img"],
+                            "title": "DPSR",
+                        },
+                        "E_ESRGAN_img": {
+                            "image": results["ESRGAN"]["e_img"],
+                            "title": "ESRGAN",
+                        },
+                    }
 
-                visualize_with_segmentation(
-                    images,
-                    mask_generator,
-                    cmap="gray",
-                    save_path=seg_figure_path,
-                    visualize=opt["visualize"],
-                )
+                    visualize_with_segmentation(
+                        images,
+                        mask_generator,
+                        cmap="gray",
+                        save_path=seg_figure_path,
+                        visualize=opt["visualize"],
+                    )
 
-                visualize_with_error_map(
-                    images,
-                    cmap="gray",
-                    save_path=error_map_figure_path,
-                    visualize=opt["visualize"],
-                )
+                    visualize_with_error_map(
+                        images,
+                        cmap="gray",
+                        save_path=error_map_figure_path,
+                        visualize=opt["visualize"],
+                    )
 
-                visualize_data(
-                    images,
-                    cmap="gray",
-                    save_path=figure_path,
-                    visualize=opt["visualize"],
-                )
+                    visualize_data(
+                        images,
+                        cmap="gray",
+                        save_path=figure_path,
+                        visualize=opt["visualize"],
+                    )
 
                 # region: save images to .mat file
                 # images: dict[str, Any] = {
