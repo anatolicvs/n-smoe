@@ -435,7 +435,7 @@ def visualize_data(
     width_ratios = [1] * num_images
     total_width_ratio = sum(width_ratios)
 
-    unit_width = 20 / 8
+    unit_width = 21 / 8
     fig_width = unit_width * total_width_ratio
     fig_height = 8
 
