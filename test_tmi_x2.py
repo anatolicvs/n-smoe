@@ -519,18 +519,6 @@ def main(**kwargs):
             "Bicubic": default_resizer,
         }
 
-        titles: list[str] = [
-            "High-Resolution",
-            "Noisy Low-Resolution",
-            "Ground Truth",
-            "Bicubic",
-            "N-SMoE",
-            "N-SMoE-II",
-            "N-SMoE-III",
-            "DPSR",
-            "ESRGAN",
-        ]
-
         metrics = ["psnr", "ssim", "lpips", "dists", "brisque"]
         metric_data = {
             metric: {
@@ -624,101 +612,72 @@ def main(**kwargs):
                     for metric in metrics:
                         print(f"  {metric.upper()}: {results[method][metric]}")
 
-                E_img_moex1 = util.tensor2uint(results["N-SMoE"]["e_img"])
-                E_img_moex3_16 = util.tensor2uint(results["N-SMoE-II"]["e_img"])
-                E_img_moex3_32 = util.tensor2uint(results["N-SMoE-III"]["e_img"])
-                E_img_dpsr = util._tensor2uint(results["DPSR"]["e_img"])
-                E_img_esrgan = util._tensor2uint(results["ESRGAN"]["e_img"])
-                E_bicubic = util._tensor2uint(results["Bicubic"]["e_img"])
-
                 L_crop_img = util.tensor2uint(test_data["L"])
                 H_crop_img = util.tensor2uint(test_data["H"])
 
                 img_H = util.tensor2uint(test_data["O"])
-                # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
                 img_H = util.modcrop(img_H, border)
 
-                # images: dict[str, Any] = {
-                #     "H_img": img_H,
-                #     "H_img_size": H_img_size,
-                #     "L_crop_img": L_crop_img,
-                #     "H_crop_img": H_crop_img,
-                #     "E_Bicubic_img": E_bicubic,
-                #     "E_SMoE_img": E_img_moex1,
-                #     "E_DPSR_img": E_img_dpsr,
-                #     "E_ESRGAN_img": E_img_esrgan,
-                #     "Degradation_Model": degrdation,
-                #     "scale": scale,
-                # }
+                images: Dict[str, Dict[str, Any]] = {
+                    "H_img": {
+                        "image": img_H,
+                        "title": "High Resolution",
+                    },
+                    "H_crop_img": {
+                        "image": H_crop_img,
+                        "title": f"Ground Truth \nCrop",
+                    },
+                    "L_crop_img": {
+                        "image": L_crop_img,
+                        "title": f"Noisy Low \nResolution",
+                    },
+                    "E_Bicubic_img": {
+                        "image": results["Bicubic"]["e_img"],
+                        "title": "Bicubic",
+                    },
+                    "E_SMoE_img": {
+                        "image": results["N-SMoE"]["e_img"],
+                        "title": "N-SMoE",
+                    },
+                    "E_SMoE_II_img": {
+                        "image": results["N-SMoE-II"]["e_img"],
+                        "title": "N-SMoE-II",
+                    },
+                    "E_SMoE_III_img": {
+                        "image": results["N-SMoE-III"]["e_img"],
+                        "title": "N-SMoE-III",
+                    },
+                    "E_DPSR_img": {
+                        "image": results["DPSR"]["e_img"],
+                        "title": "DPSR",
+                    },
+                    "E_ESRGAN_img": {
+                        "image": results["ESRGAN"]["e_img"],
+                        "title": "ESRGAN",
+                    },
+                }
 
-                # scipy.io.savemat(f"{fname}.mat", images)
+                # visualize_with_segmentation(
+                #     images,
+                #     mask_generator,
+                #     cmap="gray",
+                #     save_path=seg_figure_path,
+                #     visualize=opt["visualize"],
+                # )
 
-                # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
-
-                visualize_with_segmentation(
-                    [
-                        img_H,
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles,
-                    mask_generator,
-                    cmap="gray",
-                    save_path=seg_figure_path,
-                    visualize=opt["visualize"],
-                )
-
-                visualize_with_error_map(
-                    [
-                        img_H,
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles,
-                    cmap="gray",
-                    save_path=error_map_figure_path,
-                    visualize=opt["visualize"],
-                )
+                # visualize_with_error_map(
+                #     images,
+                #     cmap="gray",
+                #     save_path=error_map_figure_path,
+                #     visualize=opt["visualize"],
+                # )
 
                 visualize_data(
-                    [
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles[1:],
+                    images,
                     cmap="gray",
                     save_path=figure_path,
                     visualize=opt["visualize"],
                 )
-
-                # current_psnr = util.calculate_psnr(
-                #     E_img_moex1, H_crop_img, border=border
-                # )
-                # logger.info(
-                #     "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
-                #         idx, image_name_ext, current_psnr
-                #     )
-                # )
-
-                # avg_psnr += current_psnr
 
         for metric in metrics:
             average_metric_data[metric] = {}

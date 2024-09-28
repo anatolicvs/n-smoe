@@ -23,205 +23,25 @@ plt.rcParams["font.size"] = 12
 plt.rcParams["text.usetex"] = True
 
 
-# def visualize_with_segmentation(
-#     images: List[np.ndarray],
-#     titles: List[str],
-#     mask_generator: SAM2AutomaticMaskGenerator,
-#     cmap: str = "gray",
-#     save_path: str = None,
-#     visualize: bool = False,
-#     error_map: bool = False,
-# ):
+def format_metric(
+    title: str, sorted_metrics: list, value: float, metric_name: str
+) -> str:
+    if sorted_metrics and title == sorted_metrics[0][0]:
+        if metric_name == "PSNR":
+            return rf"\textbf{{{metric_name}: {value:.2f} dB}}"
+        else:
+            return rf"\textbf{{{metric_name}: {value:.4f}}}"
+    elif len(sorted_metrics) > 1 and title == sorted_metrics[1][0]:
+        if metric_name == "PSNR":
+            return rf"\underline{{{metric_name}: {value:.2f} dB}}"
+        else:
+            return rf"\underline{{{metric_name}: {value:.4f}}}"
+    else:
+        if metric_name == "PSNR":
+            return f"{metric_name}: {value:.2f} dB"
+        else:
+            return f"{metric_name}: {value:.4f}"
 
-#     def calculate_metrics(gt_mask, pred_mask):
-#         gt_seg = gt_mask[0]["segmentation"]
-#         pred_seg = pred_mask[0]["segmentation"]
-
-#         vi_split, vi_merge = variation_of_information(gt_seg, pred_seg)
-#         vi_score = vi_split + vi_merge
-#         are_score, _, _ = adapted_rand_error(gt_seg, pred_seg)
-
-#         return vi_score, are_score
-
-#     def show_anns(anns, borders=True):
-#         if len(anns) == 0:
-#             return
-#         sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
-#         ax = plt.gca()
-#         ax.set_autoscale_on(False)
-#         img = np.ones(
-#             (
-#                 sorted_anns[0]["segmentation"].shape[0],
-#                 sorted_anns[0]["segmentation"].shape[1],
-#                 4,
-#             )
-#         )
-#         img[:, :, 3] = 0
-#         for ann in sorted_anns:
-#             m = ann["segmentation"]
-#             color_mask = np.concatenate([np.random.random(3), [0.5]])
-#             img[m] = color_mask
-#             if borders:
-#                 contours, _ = cv2.findContours(
-#                     m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-#                 )
-#                 contours = [
-#                     cv2.approxPolyDP(contour, epsilon=0.01, closed=True)
-#                     for contour in contours
-#                 ]
-#                 cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
-#         ax.imshow(img)
-
-#     num_images = len(images)
-#     num_titles = len(titles)
-#     assert num_images == num_titles, "Number of images must match number of titles."
-
-#     ncols = num_images + 1
-#     nrows = 3
-#     width_ratios = [2, 2] + [1] * (ncols - 2)
-#     total_ratio = sum(width_ratios)
-
-#     unit_width = 19 / 12
-
-#     fig_width = unit_width * total_ratio
-
-#     fig_height = 3.5
-
-#     fig = plt.figure(figsize=(fig_width, fig_height))
-#     gs = GridSpec(
-#         nrows=nrows,
-#         ncols=ncols,
-#         height_ratios=[2, 2, 0.5],
-#         width_ratios=width_ratios,
-#         # width_ratios=[2, 2, 1, 1, 1, 1, 1, 1],
-#         hspace=0.01,  # Reducing space between rows
-#         wspace=0.01,  # Reducing space between columns
-#         figure=fig,
-#     )
-
-#     annotated_mask = mask_generator.generate(
-#         np.repeat(images[0][:, :, np.newaxis], 3, axis=-1)
-#     )
-#     ax_annotated = fig.add_subplot(gs[0:2, 0])
-#     ax_annotated.imshow(images[0], cmap=cmap)
-#     show_anns(annotated_mask)
-#     ax_annotated.axis("off")
-#     ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
-
-#     ax_img_hr = fig.add_subplot(gs[0:2, 1])
-#     ax_img_hr.imshow(images[0], cmap=cmap)
-
-#     # ax_img_hr.axis("off")
-#     # ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
-
-#     ground_truth_index = 2
-#     ground_truth_crop = images[ground_truth_index]
-#     hr_image = images[0]
-
-#     if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
-#         gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
-#     else:
-#         gray_hr = hr_image.copy()
-
-#     if len(ground_truth_crop.shape) == 3 and ground_truth_crop.shape[2] == 3:
-#         gray_crop = cv2.cvtColor(ground_truth_crop, cv2.COLOR_RGB2GRAY)
-#     else:
-#         gray_crop = ground_truth_crop.copy()
-
-#     res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
-#     _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-#     x, y = max_loc
-#     crop_height, crop_width = ground_truth_crop.shape[:2]
-
-#     rect = patches.Rectangle(
-#         (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
-#     )
-#     ax_img_hr.add_patch(rect)
-
-#     ax_img_hr.axis("off")
-#     ax_img_hr.set_title(titles[0], fontsize=12, weight="bold")
-
-#     gt_mask = None
-#     vi_scores = {}
-#     are_scores = {}
-
-#     for i in range(1, len(images)):
-#         ax_img = fig.add_subplot(gs[0, i + 1])
-#         ax_img.imshow(images[i], cmap=cmap)
-#         ax_img.axis("off")
-
-#         mask = mask_generator.generate(np.repeat(images[i][:, :, None], 3, axis=-1))
-#         ax_seg = fig.add_subplot(gs[1, i + 1])
-#         ax_seg.imshow(images[i], cmap=cmap)
-#         show_anns(mask)
-#         ax_seg.axis("off")
-#         ax_title = fig.add_subplot(gs[2, i + 1])
-
-#         if i == ground_truth_index:
-#             gt_mask = mask
-
-#         if i > ground_truth_index:
-#             vi_score, are_score = calculate_metrics(gt_mask, mask)
-#             vi_scores[i] = vi_score
-#             are_scores[i] = are_score
-
-#     sorted_vi = sorted(vi_scores.items(), key=lambda x: x[1])
-#     sorted_are = sorted(are_scores.items(), key=lambda x: x[1])
-
-#     for i in range(1, len(images)):
-#         ax_title = fig.add_subplot(gs[2, i + 1])
-#         if i > ground_truth_index:
-#             vi_score = vi_scores[i]
-#             are_score = are_scores[i]
-
-#             vi_text = f"VoI: {vi_score:.4f}"
-#             are_text = f"ARE: {are_score:.4f}"
-
-#             if i == sorted_vi[0][0]:
-#                 vi_text = r"\textbf{VoI: %.4f}" % vi_score
-#             elif i == sorted_vi[1][0]:
-#                 vi_text = r"\underline{VoI: %.4f}" % vi_score
-
-#             if i == sorted_are[0][0]:
-#                 are_text = r"\textbf{ARE: %.4f}" % are_score
-#             elif i == sorted_are[1][0]:
-#                 are_text = r"\underline{ARE: %.4f}" % are_score
-
-#             display_title = f"{titles[i]}\n{vi_text}\n{are_text}"
-
-#             ax_title.text(
-#                 0.5,
-#                 0.0,
-#                 display_title,
-#                 va="center",
-#                 ha="center",
-#                 transform=ax_title.transAxes,
-#             )
-#         else:
-#             display_title = titles[i]
-#             ax_title.text(
-#                 0.5,
-#                 0.5,
-#                 display_title,
-#                 weight="bold",
-#                 va="center",
-#                 ha="center",
-#                 transform=ax_title.transAxes,
-#             )
-
-#     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
-#     plt.subplots_adjust(
-#         left=0.12, bottom=0.12, right=0.89, top=0.89, wspace=0, hspace=0
-#     )
-
-#     for ax in fig.get_axes():
-#         ax.axis("off")
-
-#     if save_path:
-#         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
-#     if visualize:
-#         plt.show()
 
 def visualize_with_segmentation(
     images: Dict[str, Dict[str, Any]],
@@ -231,23 +51,22 @@ def visualize_with_segmentation(
     lrcrop_key: str = "L_crop_img",
     cmap: str = "gray",
     save_path: str = None,
-    visualize: bool = False
-    error_map: bool = False) -> None:
+    visualize: bool = False,
+    error_map: bool = False,
+):
 
     def calculate_metrics(gt_mask, pred_mask):
         gt_seg = gt_mask[0]["segmentation"]
         pred_seg = pred_mask[0]["segmentation"]
-
         vi_split, vi_merge = variation_of_information(gt_seg, pred_seg)
         vi_score = vi_split + vi_merge
         are_score, _, _ = adapted_rand_error(gt_seg, pred_seg)
-
         return vi_score, are_score
 
     def show_anns(anns, borders=True):
-        if not anns or not all('segmentation' in ann for ann in anns):
+        if len(anns) == 0:
             return
-        sorted_anns = sorted(anns, key=lambda x: x["area"], reverse=True)
+        sorted_anns = sorted(anns, key=(lambda x: x["area"]), reverse=True)
         ax = plt.gca()
         ax.set_autoscale_on(False)
         img = np.ones(
@@ -262,125 +81,98 @@ def visualize_with_segmentation(
             m = ann["segmentation"]
             color_mask = np.concatenate([np.random.random(3), [0.5]])
             img[m] = color_mask
-            if borders:
-                contours, _ = cv2.findContours(
-                    m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
-                )
-                contours = [
-                    cv2.approxPolyDP(contour, epsilon=0.01, closed=True)
-                    for contour in contours
-                ]
-                cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
+            contours, _ = cv2.findContours(
+                m.astype(np.uint8), cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE
+            )
+            contours = [
+                cv2.approxPolyDP(contour, epsilon=0.01, closed=True)
+                for contour in contours
+            ]
+            cv2.drawContours(img, contours, -1, (0, 0, 1, 0.4), thickness=1)
         ax.imshow(img)
 
-    # Extract titles from images dictionary
-    titles = [v['title'] for k, v in images.items()]
-    num_images = len(images)
-    assert num_images == len(titles), "Number of images must match number of titles."
-
-    # Identify reconstructed image keys
-    recon_keys = [k for k in images.keys() if k not in [hr_key, ref_key, lrcrop_key]]
-    num_recon = len(recon_keys)
-
-    # Set up figure layout
-    ncols = 2 + num_recon
+    ordered_keys = list(images.keys())
+    ncols = len(ordered_keys) + 1
     nrows = 3
-    width_ratios = [2, 2] + [1] * num_recon
-    height_ratios = [2, 2, 0.5]
-
-    unit_width = 19 / 12
-    fig_width = unit_width * sum(width_ratios)
+    width_ratios = [2, 2] + [1] * (ncols - 2)
+    fig_width = 21 / 13.3 * sum(width_ratios)
     fig_height = 3.5
 
-    fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
+    fig = plt.figure(figsize=(fig_width, fig_height))
     gs = GridSpec(
         nrows=nrows,
         ncols=ncols,
-        height_ratios=height_ratios,
+        height_ratios=[2, 2, 0.5],
         width_ratios=width_ratios,
         hspace=0.01,
         wspace=0.01,
         figure=fig,
     )
 
-    error_cmap = LinearSegmentedColormap.from_list(
-        "custom_diverging", ["navy", "blue", "cyan", "limegreen", "yellow", "red"], N=256
-    )
-
-    # Annotated HR Image
     annotated_mask = mask_generator.generate(
-        np.repeat(images[hr_key]['image'][:, :, np.newaxis], 3, axis=-1)
+        np.repeat(images[hr_key]["image"][:, :, np.newaxis], 3, axis=-1)
     )
     ax_annotated = fig.add_subplot(gs[0:2, 0])
-    ax_annotated.imshow(images[hr_key]['image'], cmap=cmap)
+    ax_annotated.imshow(images[hr_key]["image"], cmap=cmap)
     show_anns(annotated_mask)
     ax_annotated.axis("off")
-    ax_annotated.set_title(titles[0], fontsize=12, weight="bold")
+    ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
 
-    # HR Image with Ground Truth Crop
     ax_img_hr = fig.add_subplot(gs[0:2, 1])
-    ax_img_hr.imshow(images[hr_key]['image'], cmap=cmap)
+    ax_img_hr.imshow(images[hr_key]["image"], cmap=cmap)
 
-    ground_truth_crop = images[ref_key]['image']
-    hr_image = images[hr_key]['image']
-
-    if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
-        gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
-    else:
-        gray_hr = hr_image.copy()
-
-    if len(ground_truth_crop.shape) == 3 and ground_truth_crop.shape[2] == 3:
-        gray_crop = cv2.cvtColor(ground_truth_crop, cv2.COLOR_RGB2GRAY)
-    else:
-        gray_crop = ground_truth_crop.copy()
-
+    gray_hr = (
+        cv2.cvtColor(images[hr_key]["image"], cv2.COLOR_RGB2GRAY)
+        if images[hr_key]["image"].ndim == 3
+        else images[hr_key]["image"]
+    )
+    gray_crop = (
+        cv2.cvtColor(images[ref_key]["image"], cv2.COLOR_RGB2GRAY)
+        if images[ref_key]["image"].ndim == 3
+        else images[ref_key]["image"]
+    )
     res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
     _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
     x, y = max_loc
-    crop_height, crop_width = ground_truth_crop.shape[:2]
-
+    crop_height, crop_width = images[ref_key]["image"].shape[:2]
     rect = patches.Rectangle(
         (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
     )
     ax_img_hr.add_patch(rect)
-
     ax_img_hr.axis("off")
-    ax_img_hr.set_title(titles[1], fontsize=12, weight="bold")
+    ax_img_hr.set_title(images[hr_key]["title"], fontsize=12, weight="bold")
 
-    # Generate ground truth mask
-    gt_mask = mask_generator.generate(
-        np.repeat(images[ref_key]['image'][:, :, np.newaxis], 3, axis=-1)
-    )
-
+    gt_mask = None
     vi_scores = {}
     are_scores = {}
 
-    for i, key in enumerate(recon_keys, start=2):
-        item = images[key]
-        ax_img = fig.add_subplot(gs[0, i])
-        ax_img.imshow(item['image'], cmap=cmap)
+    for idx, key in enumerate(ordered_keys[1:], start=2):
+        ax_img = fig.add_subplot(gs[0, idx])
+        ax_img.imshow(images[key]["image"], cmap=cmap)
         ax_img.axis("off")
 
-        mask = mask_generator.generate(np.repeat(item['image'][:, :, None], 3, axis=-1))
-        ax_seg = fig.add_subplot(gs[1, i])
-        ax_seg.imshow(item['image'], cmap=cmap)
+        mask = mask_generator.generate(
+            np.repeat(images[key]["image"][:, :, np.newaxis], 3, axis=-1)
+        )
+        ax_seg = fig.add_subplot(gs[1, idx])
+        ax_seg.imshow(images[key]["image"], cmap=cmap)
         show_anns(mask)
         ax_seg.axis("off")
 
-        vi_score, are_score = calculate_metrics(gt_mask, mask)
-        vi_scores[key] = vi_score
-        are_scores[key] = are_score
+        if key == ref_key:
+            gt_mask = mask
+
+        if key not in [hr_key, ref_key, lrcrop_key]:
+            vi_score, are_score = calculate_metrics(gt_mask, mask)
+            vi_scores[key] = vi_score
+            are_scores[key] = are_score
 
     sorted_vi = sorted(vi_scores.items(), key=lambda x: x[1])
     sorted_are = sorted(are_scores.items(), key=lambda x: x[1])
 
-    for i, key in enumerate(recon_keys, start=2):
-        item = images[key]
-        ax_title = fig.add_subplot(gs[2, i])
-        ax_title.axis("off")
-
-        if key in vi_scores and key in are_scores:
+    for idx, key in enumerate(ordered_keys[1:], start=2):
+        ax_title = fig.add_subplot(gs[2, idx])
+        if key not in [hr_key, ref_key, lrcrop_key]:
             vi_score = vi_scores[key]
             are_score = are_scores[key]
 
@@ -388,236 +180,46 @@ def visualize_with_segmentation(
             are_text = f"ARE: {are_score:.4f}"
 
             if key == sorted_vi[0][0]:
-                vi_text = r"\textbf{" + vi_text + "}"
-            if len(sorted_vi) > 1 and key == sorted_vi[1][0]:
-                vi_text = r"\underline{" + vi_text + "}"
+                vi_text = r"\textbf{VoI: %.4f}" % vi_score
+            elif key == sorted_vi[1][0]:
+                vi_text = r"\underline{VoI: %.4f}" % vi_score
 
             if key == sorted_are[0][0]:
-                are_text = r"\textbf{" + are_text + "}"
-            if len(sorted_are) > 1 and key == sorted_are[1][0]:
-                are_text = r"\underline{" + are_text + "}"
+                are_text = r"\textbf{ARE: %.4f}" % are_score
+            elif key == sorted_are[1][0]:
+                are_text = r"\underline{ARE: %.4f}" % are_score
 
+            display_title = f"{images[key]['title']}\n{vi_text}\n{are_text}"
             ax_title.text(
                 0.5,
-                0.7,
-                vi_text,
-                ha="center", va="center",
+                0.0,
+                display_title,
+                va="center",
+                ha="center",
                 transform=ax_title.transAxes,
-                fontsize=10
-            )
-            ax_title.text(
-                0.5,
-                0.5,
-                are_text,
-                ha="center", va="center",
-                transform=ax_title.transAxes,
-                fontsize=10
-            )
-            ax_title.text(
-                0.5,
-                0.3,
-                item['title'],
-                ha="center", va="center",
-                transform=ax_title.transAxes,
-                fontsize=10,
             )
         else:
-            display_title = item['title']
+            display_title = images[key]["title"]
             ax_title.text(
                 0.5,
-                0.5,
+                0.2,
                 display_title,
                 weight="bold",
                 va="center",
                 ha="center",
                 transform=ax_title.transAxes,
-                fontsize=10,
             )
+        ax_title.axis("off")
 
-    for ax in fig.get_axes():
-        ax.axis("off")
+    plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
+    plt.subplots_adjust(
+        left=0.12, bottom=0.12, right=0.89, top=0.89, wspace=0, hspace=0
+    )
 
     if save_path:
-        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
-
-
-
-# def visualize_with_error_map(
-#     images: List[np.ndarray],
-#     titles: List[str],
-#     cmap: str = "gray",
-#     save_path: str = None,
-#     visualize: bool = True,
-# ) -> None:
-
-#     def create_error_cmap():
-#         colors = ["navy", "blue", "cyan", "limegreen", "yellow", "red"]
-#         return LinearSegmentedColormap.from_list("custom_diverging", colors, N=256)
-
-#     def calculate_error_map(gt_image, reconstructed_image):
-#         return (gt_image.astype(float) - reconstructed_image.astype(float)) ** 2
-
-#     num_images = len(images)
-#     num_titles = len(titles)
-#     assert num_images == num_titles, "Number of images must match number of titles."
-
-#     if num_images < 2:
-#         raise ValueError(
-#             "At least two images are required: reference and at least one reconstructed image."
-#         )
-#     ncols = num_images
-#     nrows = 3
-#     width_ratios = [2] + [1] * (ncols - 1)
-#     total_ratio = sum(width_ratios)
-
-#     unit_width = 19 / 12
-
-#     fig_width = unit_width * total_ratio
-
-#     fig_height = 3.5
-
-#     fig = plt.figure(figsize=(fig_width, fig_height))
-
-#     gs = GridSpec(
-#         nrows=nrows,
-#         ncols=ncols,
-#         height_ratios=[2, 2, 0.5],
-#         width_ratios=width_ratios,
-#         hspace=0.01,
-#         wspace=0.01,
-#         figure=fig,
-#     )
-
-#     gt_index = 2
-#     ref_img = images[gt_index].squeeze()
-
-#     psnr_values = {}
-#     ssim_values = {}
-#     mse_values = {}
-
-#     error_cmap = create_error_cmap()
-
-#     ax_img_hr = fig.add_subplot(gs[0:2, 0])
-#     ax_img_hr.imshow(images[0], cmap=cmap)
-
-#     hr_image = images[0]
-
-#     if len(hr_image.shape) == 3 and hr_image.shape[2] == 3:
-#         gray_hr = cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
-#     else:
-#         gray_hr = hr_image.copy()
-
-#     if len(ref_img.shape) == 3 and ref_img.shape[2] == 3:
-#         gray_crop = cv2.cvtColor(ref_img, cv2.COLOR_RGB2GRAY)
-#     else:
-#         gray_crop = ref_img.copy()
-
-#     res = cv2.matchTemplate(gray_hr, gray_crop, cv2.TM_CCOEFF_NORMED)
-#     _, max_val, _, max_loc = cv2.minMaxLoc(res)
-
-#     x, y = max_loc
-#     crop_height, crop_width = ref_img.shape[:2]
-
-#     rect = patches.Rectangle(
-#         (x, y), crop_width, crop_height, linewidth=2, edgecolor="r", facecolor="none"
-#     )
-#     ax_img_hr.add_patch(rect)
-
-#     ax_img_hr.axis("off")
-#     ax_img_hr.set_title(titles[0], fontsize=12, fontweight="bold")
-
-#     max_error = 0
-
-#     for i in range(1, len(images)):
-#         img = images[i]
-#         title = titles[i]
-
-#         ax_img = fig.add_subplot(gs[0, i])
-#         ax_img.imshow(img, cmap=cmap)
-#         ax_img.axis("off")
-
-#         if i > 2:
-#             error_map = calculate_error_map(ref_img, img)
-#             error_map_normalized = (error_map - error_map.min()) / (
-#                 error_map.max() - error_map.min()
-#             )
-#             max_error = max(max_error, error_map.max())
-
-#             ax_error_map = fig.add_subplot(gs[1, i])
-#             im = ax_error_map.imshow(
-#                 error_map_normalized, cmap=error_cmap, vmin=0, vmax=1
-#             )
-#             ax_error_map.axis("off")
-
-#             try:
-#                 current_psnr = psnr(ref_img, img)
-#                 current_ssim = ssim(ref_img, img, multichannel=True)
-#                 current_mse = mse(ref_img, img)
-#                 psnr_values[title] = current_psnr
-#                 ssim_values[title] = current_ssim
-#                 mse_values[title] = current_mse
-#             except Exception as e:
-#                 print(f"Error calculating PSNR/SSIM/MSE for {title}: {str(e)}")
-
-#     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
-#     sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
-#     sorted_mse = sorted(mse_values.items(), key=lambda x: x[1])
-
-#     for i in range(1, len(images)):
-#         title = titles[i]
-#         ax_title = fig.add_subplot(gs[2, i])
-#         ax_title.axis("off")
-
-#         if i > 2 and title in psnr_values and title in ssim_values:
-#             psnr_text = f"PSNR: {psnr_values[title]:.2f}"
-#             ssim_text = f"SSIM: {ssim_values[title]:.4f}"
-#             mse_text = f"MSE: {mse_values[title]:.4f}"
-
-#             if title == sorted_psnr[0][0]:
-#                 psnr_text = r"\textbf{" + psnr_text + "}"
-#             elif title == sorted_psnr[1][0]:
-#                 psnr_text = r"\underline{" + psnr_text + "}"
-
-#             if title == sorted_ssim[0][0]:
-#                 ssim_text = r"\textbf{" + ssim_text + "}"
-#             elif title == sorted_ssim[1][0]:
-#                 ssim_text = r"\underline{" + ssim_text + "}"
-
-#             display_title = f"{title}\n${psnr_text}$ dB\n${ssim_text}$\n${mse_text}$"
-#             ax_title.text(
-#                 0.5,
-#                 0.0,
-#                 display_title,
-#                 ha="center",
-#                 va="center",
-#                 transform=ax_title.transAxes,
-#                 fontsize=10,
-#             )
-#         else:
-#             display_title = title
-
-#             ax_title.text(
-#                 0.5,
-#                 4.5,
-#                 display_title,
-#                 ha="center",
-#                 va="center",
-#                 transform=ax_title.transAxes,
-#                 fontsize=10,
-#             )
-
-#     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
-#     plt.subplots_adjust(
-#         left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
-#     )
-
-#     if save_path:
-#         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
-#     if visualize:
-#         plt.show()
 
 
 def visualize_with_error_map(
@@ -659,9 +261,9 @@ def visualize_with_error_map(
     width_ratios = [2, 1, 1] + [1] * num_recon
     height_ratios = [2, 2, 0.5]
 
-    unit_width = 20 / 13
+    unit_width = 21 / 13
     fig_width = unit_width * sum(width_ratios)
-    fig_height = 3.5
+    fig_height = 3.6
 
     fig = plt.figure(figsize=(fig_width, fig_height))
     gs = GridSpec(
@@ -684,12 +286,14 @@ def visualize_with_error_map(
     ax_lrcrop = fig.add_subplot(gs[0, 1])
     ax_lrcrop.imshow(lrcrop_image, cmap=cmap)
     ax_lrcrop.axis("off")
-    ax_lrcrop.set_title(rf"\textbf{{{lrcrop_title}}}", fontsize=10)
+    # ax_lrcrop.set_title(rf"\textbf{{{lrcrop_title}}}", fontsize=10)
+    ax_lrcrop.set_title(lrcrop_title, fontsize=12)
 
     ax_ref = fig.add_subplot(gs[0, 2])
     ax_ref.imshow(ref_image, cmap=cmap)
     ax_ref.axis("off")
-    ax_ref.set_title(rf"\textbf{{{ref_title}}}", fontsize=10)
+    # ax_ref.set_title(rf"\textbf{{{ref_title}}}", fontsize=10)
+    ax_ref.set_title(ref_title, fontsize=12)
 
     gray_hr = (
         cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
@@ -745,7 +349,12 @@ def visualize_with_error_map(
             current_psnr = psnr(
                 ref_image, recon_image, data_range=ref_image.max() - ref_image.min()
             )
-            current_ssim = ssim(ref_image, recon_image, multichannel=True)
+            current_ssim = ssim(
+                ref_image,
+                recon_image,
+                data_range=ref_image.max() - ref_image.min(),
+                multichannel=True,
+            )
             current_mse = mse(ref_image, recon_image)
 
             psnr_values[recon_title] = current_psnr
@@ -771,25 +380,6 @@ def visualize_with_error_map(
             psnr_val = psnr_values[recon_title]
             ssim_val = ssim_values[recon_title]
             mse_val = mse_values[recon_title]
-
-            def format_metric(
-                title: str, sorted_metrics: list, value: float, metric_name: str
-            ) -> str:
-                if sorted_metrics and title == sorted_metrics[0][0]:
-                    if metric_name == "PSNR":
-                        return rf"\textbf{{{metric_name}: {value:.2f} dB}}"
-                    else:
-                        return rf"\textbf{{{metric_name}: {value:.4f}}}"
-                elif len(sorted_metrics) > 1 and title == sorted_metrics[1][0]:
-                    if metric_name == "PSNR":
-                        return rf"\underline{{{metric_name}: {value:.2f} dB}}"
-                    else:
-                        return rf"\underline{{{metric_name}: {value:.4f}}}"
-                else:
-                    if metric_name == "PSNR":
-                        return f"{metric_name}: {value:.2f} dB"
-                    else:
-                        return f"{metric_name}: {value:.4f}"
 
             psnr_display = format_metric(recon_title, sorted_psnr, psnr_val, "PSNR")
             ssim_display = format_metric(recon_title, sorted_ssim, ssim_val, "SSIM")
@@ -829,30 +419,29 @@ def visualize_with_error_map(
 
 
 def visualize_data(
-    images: List[np.ndarray],
-    titles: List[str],
+    images: Dict[str, Dict[str, Any]],
+    ref_key: str = "H_crop_img",
+    lrcrop_key: str = "L_crop_img",
+    hr_key: str = "H_img",
     cmap: str = "gray",
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
-    num_images = len(images)
+
+    ordered_keys = [k for k in images.keys() if k != hr_key]
+
+    num_images = len(ordered_keys)
 
     width_ratios = [1] * num_images
     total_width_ratio = sum(width_ratios)
 
-    # desired_num_images = 9
-    # desired_fig_width = 19  # inches for 9 images
-    # unit_width = desired_fig_width / desired_num_images
-
     unit_width = 20 / 8
-
     fig_width = unit_width * total_width_ratio
     fig_height = 8
 
     ncols = num_images
     nrows = 5
 
-    # fig = plt.figure(figsize=(19, 7.8), constrained_layout=True)
     fig = plt.figure(figsize=(fig_width, fig_height), constrained_layout=True)
 
     gs = GridSpec(
@@ -860,15 +449,20 @@ def visualize_data(
     )
 
     axes_colors = ["darkslategray", "olive", "steelblue", "darkred", "slategray"]
-    ref_index = 1  # Index of "Ground Truth"
-    low_res_index = 0  # Index of "Noisy Low-Resolution"
-    ref_img = images[ref_index].squeeze()
 
+    ref_img = images[ref_key]["image"].squeeze()
     psnr_values = {}
     ssim_values = {}
 
-    for i, (img, title) in enumerate(zip(images, titles)):
+    ax_img_list = []
+
+    for i, key in enumerate(ordered_keys):
+        img = images[key]["image"]
+        title = images[key]["title"]
+
         ax_img = fig.add_subplot(gs[0, i])
+        ax_img_list.append(ax_img)
+
         if img is not None and img.size > 0:
             ax_img.imshow(img, cmap=cmap, aspect="auto")
         else:
@@ -877,17 +471,20 @@ def visualize_data(
         for spine in ax_img.spines.values():
             spine.set_color(axes_colors[i % len(axes_colors)])
 
-        if i != ref_index and i != low_res_index:
-            current_psnr = psnr(ref_img, img)
-            current_ssim = ssim(ref_img, img, multichannel=True)
-            psnr_values[titles[i]] = current_psnr
-            ssim_values[titles[i]] = current_ssim
-            title += f"\n$PSNR: {current_psnr:.2f}$ dB"
-            title += f"\n$SSIM: {current_ssim:.4f}$"
-
-        ax_img.set_title(
-            title, fontsize=12, family="Times New Roman", fontweight="bold"
-        )
+        if key in [ref_key, lrcrop_key]:
+            ax_img.set_title(
+                title, fontsize=12, family="Times New Roman", fontweight="bold"
+            )
+        else:
+            current_psnr = psnr(ref_img, img, data_range=ref_img.max() - ref_img.min())
+            current_ssim = ssim(
+                ref_img,
+                img,
+                data_range=ref_img.max() - ref_img.min(),
+                multichannel=True,
+            )
+            psnr_values[title] = current_psnr
+            ssim_values[title] = current_ssim
 
         freq = fftshift(fft2(img))
         freq_magnitude = np.log(np.abs(freq) + 1)
@@ -929,27 +526,37 @@ def visualize_data(
     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
 
-    for i, (img, title) in enumerate(zip(images, titles)):
-        if i != ref_index and i != low_res_index:
+    for i, key in enumerate(ordered_keys):
+        title = images[key]["title"]
+        if key not in [ref_key, lrcrop_key]:
             current_psnr = psnr_values[title]
             current_ssim = ssim_values[title]
 
-            psnr_text = f"$PSNR: {current_psnr:.2f}$"
-            ssim_text = f"$SSIM: {current_ssim:.4f}$"
+            psnr_display = format_metric(title, sorted_psnr, current_psnr, "PSNR")
+            ssim_display = format_metric(title, sorted_ssim, current_ssim, "SSIM")
 
-            if title == sorted_psnr[0][0]:
-                psnr_text = r"\textbf{" + psnr_text + "}"
-            elif title == sorted_psnr[1][0]:
-                psnr_text = r"\underline{" + psnr_text + "}"
+            ax_img_list[i].set_title(
+                title,
+                verticalalignment="baseline",
+                horizontalalignment="center",
+                y=1.0,
+                pad=10,
+            )
 
-            if title == sorted_ssim[0][0]:
-                ssim_text = r"\textbf{" + ssim_text + "}"
-            elif title == sorted_ssim[1][0]:
-                ssim_text = r"\underline{" + ssim_text + "}"
+            display_title = f"${psnr_display}$\n${ssim_display}$"
 
-            title += f"\n${psnr_text}$ dB\n${ssim_text}$"
+            ax_img_list[i].text(
+                0.5,
+                -0.15,
+                display_title,
+                ha="center",
+                va="top",
+                transform=ax_img_list[i].transAxes,
+                fontsize=12,
+                usetex=True,
+            )
 
-    plt.tight_layout(pad=0, h_pad=0, w_pad=0)
+    # plt.tight_layout()
 
     if save_path:
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)

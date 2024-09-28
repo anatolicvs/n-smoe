@@ -22,20 +22,21 @@ def calc_metrics(data, models, metrics, device) -> dict[Any, Any]:
             elif method == "ESRGAN":
                 E_img: torch.Tensor = model(data["L"].to(device))
 
-        # data_min: float = min(gt.min().item(), E_img.min().item())
-        # data_max: float = max(gt.max().item(), E_img.max().item())
-        # data_range: float = data_max - data_min
+        gt: torch.Tensor = data["H"].to(device)
 
-        gt: torch.Tensor = data["H"].to(
-            device
-        )  # .clamp(0, 1).to(torch.float).to(device)
+        gt_uint = util.tensor2uint(gt)
+        E_img_uint = util.tensor2uint(E_img)
 
-        metric_results = {"e_img": E_img}
+        data_min: float = min(gt_uint.min().item(), E_img_uint.min().item())
+        data_max: float = max(gt_uint.max().item(), E_img_uint.max().item())
+        data_range: float = data_max - data_min
+
+        metric_results = {"e_img": E_img_uint}
         if "psnr" in metrics:
-            metric_results["psnr"] = psnr(util.tensor2uint(gt), util.tensor2uint(E_img))
+            metric_results["psnr"] = psnr(gt_uint, E_img_uint, data_range=data_range)
         if "ssim" in metrics:
             metric_results["ssim"] = ssim(
-                util.tensor2uint(gt), util.tensor2uint(E_img), multichannel=True
+                gt_uint, E_img_uint, data_range=data_range, multichannel=False
             )
 
         if "lpips" in metrics:

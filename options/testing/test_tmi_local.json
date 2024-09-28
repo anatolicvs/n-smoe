@@ -1,9 +1,9 @@
 {
-    "task": "sr_x4" //"sharpening" 
+    "task": "sr_x2" //"sharpening" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 4       // broadcast to "netG" if SISR
+    , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 15
@@ -32,7 +32,7 @@
         // , "moex1_x4" : "/mnt/e/Weights/moex1_sr_gan_v8_x4_mri_rgb_act_gelu/models/30000_G.pth"
         // , "moex1_x4" : "/mnt/e/Weights/superresolution/moex1_sr_plain_v11_x4_mri_rgb_act_gelu/models/70000_G.pth"
         // ,"moex1_x4" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
-        ,"moex1_x4" : "/mnt/e/Weights/moex1_sr_gan_v6_x4_mri_rgb_act_gelu/models/52000_G.pth"
+        ,"moex1_x4" : "/mnt/e/Weights/moex1_sr_gan_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
         ,"moex3_x4" : null
         ,"moex3_x4_32": null
       }
