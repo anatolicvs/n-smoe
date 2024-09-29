@@ -3,17 +3,13 @@ import csv
 import datetime
 import json
 import logging
-
 import os.path
 import random
-from typing import Any, Dict, List
+from typing import List, Dict
 
 import click
 import numpy as np
-import piq
-
 import torch
-
 import torch.nn.functional as F
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 from sam2.build_sam import build_sam2
@@ -24,12 +20,14 @@ from dnnlib import EasyDict
 from utils_n import utils_image as util
 from utils_n import utils_logger
 from utils_n import utils_option as option
+from utils_n.calc_metrics import calc_metrics
+from utils_n.gen_latex_table import gen_latex_table
 from utils_n.utils_dist import get_dist_info, init_dist
 from utils_n.vis import (
-    visualize_with_segmentation,
-    visualize_with_error_map,
     visualize_data,
     visualize_sharpening_results,
+    visualize_with_error_map,
+    visualize_with_segmentation,
 )
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
@@ -43,169 +41,6 @@ def default_resizer(inputs, target_size):
     return F.interpolate(
         inputs, size=target_size, mode="bilinear", align_corners=False, antialias=True
     )
-
-
-def gen_latex_table(average_metric_data):
-    metrics = ["psnr", "ssim", "lpips", "dists"]
-    methods = list(average_metric_data["psnr"].keys())
-    datasets = list(average_metric_data["psnr"][methods[0]].keys())
-    scales = list(average_metric_data["psnr"][methods[0]][datasets[0]].keys())
-
-    latex_str = r"\begin{table*}[t]" + "\n"
-    latex_str += r"\centering" + "\n"
-    latex_str += (
-        r"\caption{Quantitative comparison of reconstruction quality on different datasets for "
-        + ", ".join(f"{scale}" for scale in scales)
-        + r" scales. The best and second-best results are highlighted in \textbf{bold} and \underline{underline}.}"
-        + "\n"
-    )
-    latex_str += r"\resizebox{\textwidth}{!}{" + "\n"
-    latex_str += (
-        r"\begin{tabular}{ l c " + " ".join(["c c c c" for _ in datasets]) + " }" + "\n"
-    )
-    latex_str += r"\toprule" + "\n"
-    latex_str += (
-        r"\textbf{Methods} & \textbf{Scale} & "
-        + " & ".join(
-            [
-                f"\\multicolumn{{4}}{{c}}{{\\textbf{{{dataset}}}}}"
-                for dataset in datasets
-            ]
-        )
-        + r" \\"
-        + "\n"
-    )
-    latex_str += (
-        " ".join(
-            [f"\\cmidrule(lr){{{3 + 4 * i}-{6 + 4 * i}}}" for i in range(len(datasets))]
-        )
-        + "\n"
-    )
-    latex_str += (
-        "& & "
-        + " & ".join(
-            [
-                "\\multicolumn{2}{c}{\\textbf{Fidelity}} & \\multicolumn{2}{c}{\\textbf{Perceptual}}"
-                for _ in datasets
-            ]
-        )
-        + r" \\"
-        + "\n"
-    )
-    latex_str += (
-        " ".join(
-            [
-                f"\\cmidrule(lr){{{3 + 4 * i}-{4 + 4 * i}}} \\cmidrule(lr){{{5 + 4 * i}-{6 + 4 * i}}}"
-                for i in range(len(datasets))
-            ]
-        )
-        + "\n"
-    )
-    latex_str += (
-        "& & "
-        + " & ".join(
-            [
-                "\\textbf{PSNR$\\uparrow$} & \\textbf{SSIM$\\uparrow$} & \\textbf{LPIPS$\\downarrow$} & \\textbf{DISTS$\\downarrow$}"
-                for _ in datasets
-            ]
-        )
-        + r" \\"
-        + "\n"
-    )
-    latex_str += r"\midrule" + "\n"
-
-    all_metric_values = {
-        metric: {dataset: {scale: [] for scale in scales} for dataset in datasets}
-        for metric in metrics
-    }
-
-    for method in methods:
-        for dataset in datasets:
-            for scale in scales:
-                for metric in metrics:
-                    value = average_metric_data[metric][method][dataset][scale]
-                    all_metric_values[metric][dataset][scale].append(value)
-
-    best_values_dict = {
-        metric: {dataset: {scale: {} for scale in scales} for dataset in datasets}
-        for metric in metrics
-    }
-    for metric in metrics:
-        for dataset in datasets:
-            for scale in scales:
-                values = all_metric_values[metric][dataset][scale]
-                sorted_values = sorted(
-                    values, reverse=(metric not in ["lpips", "dists"])
-                )
-                best_values_dict[metric][dataset][scale]["best"] = sorted_values[0]
-                best_values_dict[metric][dataset][scale]["second_best"] = (
-                    sorted_values[1] if len(sorted_values) > 1 else sorted_values[0]
-                )
-
-    for method in methods:
-        for scale in scales:
-            latex_str += method + " & " + f"{scale}" + " & "
-            for dataset in datasets:
-                for metric in metrics:
-                    value = average_metric_data[metric][method][dataset][scale]
-                    best_values = best_values_dict[metric][dataset][scale]
-                    is_best = value == best_values["best"]
-                    is_second_best = value == best_values["second_best"]
-                    if is_best:
-                        formatted_value = "\\textbf{" + f"{value:.4f}" + "}"
-                    elif is_second_best:
-                        formatted_value = "\\underline{" + f"{value:.4f}" + "}"
-                    else:
-                        formatted_value = f"{value:.4f}"
-                    latex_str += formatted_value + " & "
-            latex_str = latex_str.rstrip(" & ")
-            latex_str += r" \\" + "\n"
-        latex_str += r"\midrule" + "\n"
-
-    latex_str += r"\bottomrule" + "\n"
-    latex_str += r"\end{tabular}" + "\n"
-    latex_str += r"}" + "\n"
-    latex_str += r"\end{table*}" + "\n"
-    latex_str += r"\label{tab:quantitative_results_1}" + "\n"
-
-    return latex_str
-
-
-def process_data(data, models, metrics, device) -> dict[Any, Any]:
-    results = {}
-    for method, model in models.items():
-        with torch.no_grad():
-            if method == "N-SMoE" or method == "N-SMoE-II" or method == "N-SMoE-III":
-                E_img = model(data["L_p"].to(device), data["L"].size())
-            elif method == "Bicubic":
-                E_img = model(data["L"], data["H"].size()[2:])
-                E_img = E_img.to(device)
-            else:
-                E_img = model(data["L"].to(device))
-
-            gt = data["H"].clamp(0, 1).to(torch.float).to(device)
-
-            E_img = E_img.clamp(0, 1).to(torch.float)
-
-            metric_results = {"e_img": E_img}
-            if "psnr" in metrics:
-                metric_results["psnr"] = piq.psnr(E_img, gt, data_range=1).float()
-            if "ssim" in metrics:
-                metric_results["ssim"] = piq.ssim(
-                    E_img, gt, data_range=1, reduction="mean"
-                )
-            if "lpips" in metrics:
-                metric_results["lpips"] = piq.LPIPS()(E_img, gt).item()
-            if "dists" in metrics:
-                metric_results["dists"] = piq.DISTS()(E_img, gt).item()
-            if "brisque" in metrics:
-                metric_results["brisque"] = piq.brisque(
-                    E_img, data_range=1.0, reduction="none"
-                )
-
-            results[method] = metric_results
-
-    return results
 
 
 @click.command()
@@ -263,12 +98,10 @@ def main(**kwargs):
     if task == "sr_x2":
         from models.network_dpsr import MSRResNet_prior as dpsr
         from models.network_rrdb import RRDB as rrdb
-
         from models.network_unetmoex1 import Autoencoder as ae1
         from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
         from models.network_unetmoex1 import EncoderConfig as enc1_cfg
         from models.network_unetmoex1 import MoEConfig as moe1_cfg
-
         from models.network_unetmoex3 import Autoencoder as ae2
         from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
         from models.network_unetmoex3 import EncoderConfig as enc2_cfg
@@ -617,14 +450,6 @@ def main(**kwargs):
             v.requires_grad = False
         model_esrgan = model_esrgan.to(device)
 
-        # titles = [
-        #     "High Resolution",
-        #     "Low Resolution Crop",
-        #     "High Resolution Crop",
-        #     "N-SMoE",
-        #     "DPSR",
-        # ]
-
         model_cfg = "sam2_hiera_l.yaml"
 
         sam2 = build_sam2(
@@ -668,16 +493,16 @@ def main(**kwargs):
             # use_m2m=True,
         )
 
-        methods: List[str] = [
-            "Bicubic",
-            "DPSR",
-            "ESRGAN",
-            "N-SMoE",
-            "N-SMoE-II",
-            "N-SMoE-III",
-        ]
+        # methods: List[str] = [
+        #     "Bicubic",
+        #     "DPSR",
+        #     "ESRGAN",
+        #     "N-SMoE",
+        #     "N-SMoE-II",
+        #     "N-SMoE-III",
+        # ]
 
-        models = {
+        models: Dict[str, Any] = {
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
             "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
             "N-SMoE-III": model_moex3_32,  # k = 32 | attn=RoPE
@@ -690,7 +515,7 @@ def main(**kwargs):
         metric_data = {
             metric: {
                 method: {dataset: {} for dataset in opt["datasets"].keys()}
-                for method in methods
+                for method in models.keys()
             }
             for metric in metrics
         }
@@ -719,7 +544,7 @@ def main(**kwargs):
             scale = f'x{dataset_opt["scale"]}'
             dataset_name = dataset_opt["name"]
 
-            for method in methods:
+            for method in models.keys():
                 for metric in metrics:
                     metric_data[metric][method][dataset_name][scale] = []
 
@@ -756,15 +581,14 @@ def main(**kwargs):
                     img_dir,
                     f"seg-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
                 )
-
                 error_map_figure_path = os.path.join(
                     img_dir,
                     f"error-map-{img_name}_{degrdation}_{dataset_name}_{timestamp.replace(' ', '_').replace(':', '-')}.pdf",
                 )
 
-                results = process_data(test_data, models, metrics, device)
+                results = calc_metrics(test_data, models, metrics, device)
 
-                for method in methods:
+                for method in models.keys():
                     for metric in metrics:
                         value = results[method][metric]
                         scalar_value = (
@@ -774,121 +598,82 @@ def main(**kwargs):
                             scalar_value
                         )
 
-                for method in methods:
+                for method in models.keys():
                     print(f"{method}:")
                     for metric in metrics:
                         print(f"  {metric.upper()}: {results[method][metric]}")
 
-                E_img_moex1 = util.tensor2uint(results["N-SMoE"]["e_img"])
-                E_img_moex3_16 = util.tensor2uint(results["N-SMoE-II"]["e_img"])
-                E_img_moex3_32 = util.tensor2uint(results["N-SMoE-III"]["e_img"])
-                E_img_dpsr = util._tensor2uint(results["DPSR"]["e_img"])
-                E_img_esrgan = util._tensor2uint(results["ESRGAN"]["e_img"])
-                E_bicubic = util._tensor2uint(results["Bicubic"]["e_img"])
+                if opt["visualize"] == True:
+                    L_crop_img = util.tensor2uint(test_data["L"])
+                    H_crop_img = util.tensor2uint(test_data["H"])
 
-                L_crop_img = util.tensor2uint(test_data["L"])
-                H_crop_img = util.tensor2uint(test_data["H"])
+                    img_H = util.tensor2uint(test_data["O"])
+                    img_H = util.modcrop(img_H, border)
 
-                img_H = util.tensor2uint(test_data["O"])
-                # img_H = util.imread_uint(test_data["H_path"][0], n_channels=1)
-                img_H = util.modcrop(img_H, border)
+                    images: Dict[str, Dict[str, Any]] = {
+                        "H_img": {
+                            "image": img_H,
+                            "title": "High Resolution",
+                        },
+                        "H_crop_img": {
+                            "image": H_crop_img,
+                            "title": f"Ground Truth \nCrop",
+                        },
+                        "L_crop_img": {
+                            "image": L_crop_img,
+                            "title": f"Noisy Low \nResolution",
+                        },
+                        "E_Bicubic_img": {
+                            "image": results["Bicubic"]["e_img"],
+                            "title": "Bicubic",
+                        },
+                        "E_SMoE_img": {
+                            "image": results["N-SMoE"]["e_img"],
+                            "title": "N-SMoE",
+                        },
+                        "E_SMoE_II_img": {
+                            "image": results["N-SMoE-II"]["e_img"],
+                            "title": "N-SMoE-II",
+                        },
+                        "E_SMoE_III_img": {
+                            "image": results["N-SMoE-III"]["e_img"],
+                            "title": "N-SMoE-III",
+                        },
+                        "E_DPSR_img": {
+                            "image": results["DPSR"]["e_img"],
+                            "title": "DPSR",
+                        },
+                        "E_ESRGAN_img": {
+                            "image": results["ESRGAN"]["e_img"],
+                            "title": "ESRGAN",
+                        },
+                    }
 
-                # images: dict[str, Any] = {
-                #     "H_img": img_H,
-                #     "H_img_size": H_img_size,
-                #     "L_crop_img": L_crop_img,
-                #     "H_crop_img": H_crop_img,
-                #     "E_Bicubic_img": E_bicubic,
-                #     "E_SMoE_img": E_img_moex1,
-                #     "E_DPSR_img": E_img_dpsr,
-                #     "E_ESRGAN_img": E_img_esrgan,
-                #     "Degradation_Model": degrdation,
-                #     "scale": scale,
-                # }
+                    # visualize_with_segmentation(
+                    #     images,
+                    #     mask_generator,
+                    #     cmap="gray",
+                    #     save_path=seg_figure_path,
+                    #     visualize=opt["visualize"],
+                    # )
 
-                # scipy.io.savemat(f"{fname}.mat", images)
+                    # visualize_with_error_map(
+                    #     images,
+                    #     cmap="gray",
+                    #     save_path=error_map_figure_path,
+                    #     visualize=opt["visualize"],
+                    # )
 
-                # visualize_data([L_crop_img, H_crop_img, E_img_moex1], titles)
-
-                titles: list[str] = [
-                    "HR",
-                    "Noisy LR Crop",
-                    "Ground Truth Crop",
-                    "Bicubic",
-                    "N-SMoE",
-                    "N-SMoE-II",
-                    "N-SMoE-III",
-                    "DPSR",
-                    "ESRGAN",
-                ]
-
-                visualize_with_segmentation(
-                    [
-                        img_H,
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles,
-                    mask_generator,
-                    cmap="gray",
-                    save_path=seg_figure_path,
-                    visualize=opt["visualize"],
-                )
-
-                visualize_with_error_map(
-                    [
-                        img_H,
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles,
-                    cmap="gray",
-                    save_path=error_map_figure_path,
-                    visualize=opt["visualize"],
-                )
-                visualize_data(
-                    [
-                        L_crop_img,
-                        H_crop_img,
-                        E_bicubic,
-                        E_img_moex1,
-                        E_img_moex3_16,
-                        E_img_moex3_32,
-                        E_img_dpsr,
-                        E_img_esrgan,
-                    ],
-                    titles[1:],
-                    cmap="gray",
-                    save_path=figure_path,
-                    visualize=opt["visualize"],
-                )
-
-                # current_psnr = util.calculate_psnr(
-                #     E_img_moex1, H_crop_img, border=border
-                # )
-                # logger.info(
-                #     "{:->4d}--> {:>10s} | {:<4.2f}dB".format(
-                #         idx, image_name_ext, current_psnr
-                #     )
-                # )
-
-                # avg_psnr += current_psnr
+                    visualize_data(
+                        images,
+                        cmap="gray",
+                        save_path=figure_path,
+                        visualize=opt["visualize"],
+                    )
 
         for metric in metrics:
             average_metric_data[metric] = {}
-            for method in methods:
+            for method in models.keys():
                 average_metric_data[metric][method] = {}
                 for dataset in opt["datasets"].keys():
                     average_metric_data[metric][method][dataset] = {}
@@ -923,7 +708,7 @@ def main(**kwargs):
             )
 
             for dataset in sorted(opt["datasets"].keys()):
-                for method in methods:
+                for method in models.keys():
                     for scale in sorted(
                         average_metric_data["psnr"][method][dataset].keys()
                     ):
@@ -961,6 +746,8 @@ def main(**kwargs):
 
     elif task == "sharpening":
         import matlab.engine
+        from skimage.metrics import peak_signal_noise_ratio as psnr
+        from skimage.metrics import structural_similarity as ssim
 
         eng = matlab.engine.start_matlab()
 
@@ -1093,14 +880,31 @@ def main(**kwargs):
                 sharpened_images[factor] = E_img_moex_t.squeeze().cpu().numpy()
 
                 si_moex1 = calculate_sharpness_index(E_img_moex_t)
-                psnr_moex1 = piq.psnr(E_img_moex_t, img_H, data_range=1).float()
-                ssim_moex1 = piq.ssim(
-                    E_img_moex_t, img_H, data_range=1, reduction="mean"
+
+                data_min = min(E_img_moex_t.min().item(), img_H.min().item())
+                data_max = max(E_img_moex_t.max().item(), img_H.max().item())
+                data_range = data_max - data_min
+
+                psnr_moex1 = psnr(
+                    img_H.cpu().numpy(),
+                    E_img_moex_t.cpu().numpy(),
+                    data_range=data_range,
+                )
+                ssim_moex1 = ssim(
+                    img_H.squeeze().cpu().numpy(),
+                    E_img_moex_t.squeeze().cpu().numpy(),
+                    data_range=data_range,
+                    multichannel=True,
                 )
 
+                # psnr_moex1 = piq.psnr(E_img_moex_t, img_H, data_range=1).float()
+                # ssim_moex1 = piq.ssim(
+                #     E_img_moex_t, img_H, data_range=1, reduction="mean"
+                # )
+
                 metrics[factor] = {
-                    "PSNR": psnr_moex1.item(),
-                    "SSIM": ssim_moex1.item(),
+                    "PSNR": psnr_moex1,
+                    "SSIM": ssim_moex1,
                     "SI": si_moex1,
                 }
 
