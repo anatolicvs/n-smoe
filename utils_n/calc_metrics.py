@@ -17,9 +17,7 @@ def calc_metrics(data, models, metrics, device) -> dict[Any, Any]:
             elif method == "Bicubic":
                 E_img: torch.Tensor = model(data["L"], data["H"].size()[2:])
                 E_img = E_img.to(device)
-            elif method == "DPSR":
-                E_img: torch.Tensor = model(data["L"].to(device))
-            elif method == "ESRGAN":
+            else:
                 E_img: torch.Tensor = model(data["L"].to(device))
 
         gt: torch.Tensor = data["H"].to(device)

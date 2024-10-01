@@ -1,5 +1,5 @@
 from typing import Dict, Optional, Any
-
+import torch
 import matplotlib
 import numpy as np
 from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
@@ -18,6 +18,21 @@ from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import variation_of_information
 import seaborn as sns
+
+
+def run_model_with_memory_optimization(model, input_data):
+    with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        if torch.cuda.get_device_properties(0).major >= 8:
+            torch.backends.cuda.matmul.allow_tf32 = True
+            torch.backends.cudnn.allow_tf32 = True
+
+        output = model(input_data)
+
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
+
+    return output
+
 
 plt.style.use("seaborn-v0_8-paper")
 plt.rcParams.update(
@@ -154,6 +169,12 @@ def visualize_with_segmentation(
     annotated_mask = mask_generator.generate(
         np.repeat(images[hr_key]["image"][:, :, np.newaxis], 3, axis=-1)
     )
+
+    # annotated_mask = run_model_with_memory_optimization(
+    #     mask_generator.generate,
+    #     np.repeat(images[hr_key]["image"][:, :, np.newaxis], 3, axis=-1),
+    # )
+
     ax_annotated = fig.add_subplot(gs[0:2, 0])
     ax_annotated.imshow(images[hr_key]["image"], cmap=cmap)
     show_anns(annotated_mask)
@@ -619,101 +640,11 @@ def visualize_data(
         plt.show()
 
 
-def visualize_sharpening_results_0(
+def visualize_sharpening_results(
     img_L: np.ndarray,
     img_H: np.ndarray,
     sharpened_images: Dict[float, np.ndarray],
     metrics: Dict[float, Dict[str, float]],
-    save_path: str = None,
-    visualize: bool = True,
-):
-
-    fig = plt.figure(figsize=(16, 6))
-    plt.style.use("seaborn-v0_8-whitegrid")
-
-    gs = GridSpec(2, 5, figure=fig, height_ratios=[1, 1])
-    gs.update(wspace=0.2, hspace=0.1)
-
-    spine_color = "#004594"  # Deep blue color
-
-    ax_L = fig.add_subplot(gs[0, 0])
-    ax_L.imshow(img_L, cmap="gray")
-    ax_L.set_title("Low Resolution", fontweight="bold")
-    ax_L.axis("on")
-    for spine in ax_L.spines.values():
-        spine.set_color(spine_color)
-        spine.set_linewidth(1)
-    ax_L.tick_params(axis="both", colors=spine_color)
-
-    ax_H = fig.add_subplot(gs[0, 1])
-    ax_H.imshow(img_H, cmap="gray")
-    ax_H.set_title("High Resolution", fontweight="bold")
-    ax_H.axis("on")
-    for spine in ax_H.spines.values():
-        spine.set_color(spine_color)
-        spine.set_linewidth(1)
-    ax_H.tick_params(axis="both", colors=spine_color)
-
-    factors = list(metrics.keys())
-    psnr_values = [metrics[f]["PSNR"] for f in factors]
-    ssim_values = [metrics[f]["SSIM"] for f in factors]
-    si_values = [metrics[f]["SI"] for f in factors]
-
-    ax_psnr = fig.add_subplot(gs[0, 2])
-    ax_psnr.plot(factors, psnr_values, "bo-")
-    ax_psnr.set_title("PSNR (dB)", fontweight="bold")
-    ax_psnr.set_xlabel("Sharpening Factor (SF)")
-    ax_psnr.grid(True)
-    ax_psnr.tick_params(axis="both", which="major", labelsize=8)
-
-    ax_ssim = fig.add_subplot(gs[0, 3])
-    ax_ssim.plot(factors, ssim_values, "ro-")
-    ax_ssim.set_title("SSIM", fontweight="bold")
-    ax_ssim.set_xlabel("SF")
-    ax_ssim.grid(True)
-    ax_ssim.tick_params(axis="both", which="major", labelsize=8)
-
-    ax_si = fig.add_subplot(gs[0, 4])
-    ax_si.plot(factors, si_values, "go-")
-    ax_si.set_title("Sharpness Index", fontweight="bold")
-    ax_si.set_xlabel("SF")
-    ax_si.grid(True)
-    ax_si.tick_params(axis="both", which="major", labelsize=8)
-
-    for ax in [ax_L, ax_H, ax_psnr, ax_ssim, ax_si]:
-        ax.set_aspect("auto")
-
-    for i, (factor, img) in enumerate(list(sharpened_images.items())[:5]):
-        ax = fig.add_subplot(gs[1, i])
-        ax.imshow(img, cmap="gray")
-        ax.axis("off")
-        ax.text(
-            0.5,
-            -0.05,
-            r"$\alpha= %.2f$" % factor,
-            ha="center",
-            va="top",
-            usetex=True,
-            transform=ax.transAxes,
-            fontsize=12,
-        )
-
-    plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.1)
-
-    if save_path:
-        plt.savefig(
-            save_path, format="pdf", bbox_inches="tight", dpi=300, transparent=True
-        )
-    if visualize:
-        plt.show()
-    plt.close()
-
-
-def visualize_sharpening_results(
-    img_L: np.ndarray,
-    img_H: np.ndarray,
-    sharpened_images: dict,
-    metrics: dict,
     save_path: str = None,
     visualize: bool = True,
 ):
@@ -754,7 +685,7 @@ def visualize_sharpening_results(
         )
     ax_psnr.set_title("PSNR (dB)")
     ax_psnr.set_xlabel(r"Sharpening Factor (SF)")
-    ax_psnr.yaxis.set_tick_params(rotation=90)
+    ax_psnr.yaxis.set_tick_params(rotation=90, pad=0.01)
     ax_psnr.grid(True)
     ax_psnr.legend(loc="best")
 
@@ -766,7 +697,7 @@ def visualize_sharpening_results(
         ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
     ax_ssim.set_title("SSIM")
     ax_ssim.set_xlabel(r"SF")
-    ax_ssim.yaxis.set_tick_params(rotation=90)  # Rotate y-axis labels
+    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
     ax_ssim.grid(True)
 
     ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
@@ -777,7 +708,7 @@ def visualize_sharpening_results(
         ax_si.plot(sorted(metrics[model_name].keys()), si_values)
     ax_si.set_title(r"Sharpness Index")
     ax_si.set_xlabel(r"SF")
-    ax_si.yaxis.set_tick_params(rotation=90)  # Rotate y-axis labels
+    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
     ax_si.grid(True)
 
     factors = sorted(next(iter(metrics.values())).keys())
@@ -816,6 +747,131 @@ def visualize_sharpening_results(
     plt.tight_layout()
     plt.subplots_adjust(
         left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
+    )
+
+    if save_path:
+        plt.savefig(
+            save_path, format="pdf", bbox_inches="tight", dpi=600, transparent=True
+        )
+    if visualize:
+        plt.show()
+    plt.close()
+
+
+def visualize_sharpening_results_(
+    img_L: np.ndarray,
+    img_H: np.ndarray,
+    sharpened_images: Dict[float, np.ndarray],
+    metrics: Dict[float, Dict[str, float]],
+    save_path: str = None,
+    visualize: bool = True,
+):
+    num_factors = len(next(iter(sharpened_images.values())))
+    num_models = len(sharpened_images)
+
+    total_rows = 1 + num_models
+    total_cols = 1 + num_factors + 3
+    fig = plt.figure(figsize=(2 * total_cols, 2 * total_rows))
+
+    gs = GridSpec(
+        total_rows + 1,
+        total_cols,
+        figure=fig,
+        height_ratios=[1] + [0.5] + [1] * num_models,
+        width_ratios=[0.5] + [1] * num_factors + [1.5, 1.6, 1.6],
+    )
+    gs.update(wspace=0.3, hspace=0.2)
+
+    ax_L = fig.add_subplot(gs[0, 1])
+    ax_L.imshow(img_L, cmap="gray")
+    ax_L.set_title("Low Resolution", fontsize=14)
+    ax_L.axis("off")
+
+    ax_H = fig.add_subplot(gs[0, 2])
+    ax_H.imshow(img_H, cmap="gray")
+    ax_H.set_title("High Resolution", fontsize=14)
+    ax_H.axis("off")
+
+    metrics_start_col = 3
+    ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
+    for model_name in metrics.keys():
+        psnr_values = [
+            metrics[model_name][f]["PSNR"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_psnr.plot(
+            sorted(metrics[model_name].keys()),
+            psnr_values,
+            label=f"{model_name}",
+            linewidth=2,
+        )
+    ax_psnr.set_title("PSNR (dB)", fontsize=14)
+    ax_psnr.set_xlabel(r"Sharpening Factor (SF)", fontsize=12)
+    ax_psnr.set_ylabel(r"PSNR (dB)", fontsize=12)
+    ax_psnr.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_psnr.grid(True)
+    ax_psnr.legend(loc="best", fontsize=10)
+
+    ax_ssim = fig.add_subplot(gs[0, metrics_start_col + 1])
+    for model_name in metrics.keys():
+        ssim_values = [
+            metrics[model_name][f]["SSIM"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values, linewidth=2)
+    ax_ssim.set_title("SSIM", fontsize=14)
+    ax_ssim.set_xlabel(r"SF", fontsize=12)
+    ax_ssim.set_ylabel("SSIM", fontsize=12)
+    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_ssim.grid(True)
+
+    ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
+    for model_name in metrics.keys():
+        si_values = [
+            metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_si.plot(sorted(metrics[model_name].keys()), si_values, linewidth=2)
+    ax_si.set_title(r"Sharpness Index", fontsize=14)
+    ax_si.set_xlabel(r"SF", fontsize=12)
+    ax_si.set_ylabel("Sharpness Index", fontsize=12)
+    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_si.grid(True)
+
+    factors = sorted(next(iter(metrics.values())).keys())
+    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
+        row = 2 + model_index
+
+        ax_model_name = fig.add_subplot(gs[row, 0])
+        ax_model_name.text(
+            0.9,
+            0.5,
+            model_name,
+            ha="right",
+            va="center",
+            rotation=90,
+            fontweight="bold",
+            fontsize=12,
+        )
+        ax_model_name.axis("off")
+
+        for i, factor in enumerate(factors):
+            col = 1 + i
+            ax_model = fig.add_subplot(gs[row, col])
+            ax_model.imshow(model_images[factor], cmap="gray")
+            ax_model.axis("off")
+
+            if model_index == num_models - 1:
+                ax_model.text(
+                    0.5,
+                    -0.1,
+                    r"$\alpha = %.2f$" % factor,
+                    ha="center",
+                    va="top",
+                    transform=ax_model.transAxes,
+                    fontsize=12,
+                )
+
+    plt.tight_layout()
+    plt.subplots_adjust(
+        left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.2, hspace=0.2
     )
 
     if save_path:

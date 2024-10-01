@@ -31,11 +31,31 @@ from utils_n.vis import (
 )
 from models.model_factory import load_model, ModelConfig
 
-torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+
+# torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
     # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
+
+
+class BFloat16SAM2(torch.nn.Module):
+    def __init__(self, sam2_model):
+        super().__init__()
+        self.sam2_model = sam2_model
+
+    def forward(self, *args, **kwargs):
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            return self.sam2_model(*args, **kwargs)
+
+
+class BFloat16SAM2AutomaticMaskGenerator:
+    def __init__(self, mask_generator):
+        self.mask_generator = mask_generator
+
+    def __call__(self, *args, **kwargs):
+        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+            return self.mask_generator(*args, **kwargs)
 
 
 def default_resizer(inputs, target_size):
@@ -107,6 +127,47 @@ def main(**kwargs):
         from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
         from models.network_unetmoex3 import EncoderConfig as enc2_cfg
         from models.network_unetmoex3 import MoEConfig as moe2_cfg
+
+        from models.moex.network_unetmoex3 import Autoencoder as ae23
+        from models.moex.network_unetmoex3 import AutoencoderConfig as ae3_cfg
+        from models.moex.network_unetmoex3 import EncoderConfig as enc3_cfg
+        from models.network_swinir import SwinIR as swinir
+
+        json_moex3_32_rev = """
+        {       
+            "netG": {
+                "net_type": "unet_moex3_rev",
+                "kernel": 32,
+                "sharpening_factor": 1.0,
+                "model_channels": 64,
+                "num_res_blocks": 12,
+                "attention_resolutions": [64,32,16],
+                "dropout": 0.0,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [1,2,4,8,16],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 3,
+                "resizer_avg_pool": true,
+                "init_type": "orthogonal",
+                "init_bn_type": "constant",
+                "init_gain": 1.0,
+                "scale": 2,
+                "n_channels": 1,
+                "ang_res": 5,
+                "phw": 16,
+                "overlap": 14
+            }
+            }
+        """
 
         json_moex3 = """
         {
@@ -346,6 +407,60 @@ def main(**kwargs):
             device=device,
         )
 
+        netG_moex3_32_rev = json.loads(json_moex3_32_rev)["netG"]
+
+        encoder_cfg3_32_rev = enc3_cfg(
+            model_channels=netG_moex3_32_rev["model_channels"],  # 32,
+            num_res_blocks=netG_moex3_32_rev["num_res_blocks"],  # 4,
+            attention_resolutions=netG_moex3_32_rev[
+                "attention_resolutions"
+            ],  # [16, 8],
+            dropout=netG_moex3_32_rev["dropout"],  # 0.2,
+            channel_mult=netG_moex3_32_rev["channel_mult"],  # (2, 4, 8),
+            conv_resample=netG_moex3_32_rev["conv_resample"],  # False,
+            dims=2,
+            use_checkpoint=netG_moex3_32_rev["use_checkpoint"],  # True,
+            use_fp16=netG_moex3_32_rev["use_fp16"],  # False,
+            num_heads=netG_moex3_32_rev["num_heads"],  # 4,
+            # num_head_channels=netG_moex3_32_rev["num_head_channels"],  # 8,
+            resblock_updown=netG_moex3_32_rev["resblock_updown"],  # False,
+            num_groups=netG_moex3_32_rev["num_groups"],  # 32,
+            resample_2d=netG_moex3_32_rev["resample_2d"],  # True,
+            scale_factor=netG_moex3_32_rev["scale"],
+            resizer_num_layers=netG_moex3_32_rev["resizer_num_layers"],  # 4,
+            resizer_avg_pool=netG_moex3_32_rev["resizer_avg_pool"],  # False,
+            activation=netG_moex3_32_rev["activation"],
+            rope_theta=netG_moex3_32_rev["rope_theta"],  # 10000.0,
+            attention_type=netG_moex3_32_rev[
+                "attention_type"
+            ],  # "cross_attention",  # "attention" or "cross_attention"
+        )
+
+        moex3_conf_32_rev_conf = ModelConfig(
+            encoder_config=encoder_cfg3_32_rev,
+            moe_cfg_class=moe2_cfg,
+            ae_cfg_class=ae3_cfg,
+            ae_class=ae23,
+            model_params={
+                "kernel": netG_moex3_32_rev["kernel"],
+                "sharpening_factor": netG_moex3_32_rev["sharpening_factor"],
+                "n_channels": netG_moex3_32_rev["n_channels"],
+                "z": int(
+                    2 * netG_moex3_32_rev["kernel"]
+                    + 4 * netG_moex3_32_rev["kernel"]
+                    + netG_moex3_32_rev["kernel"]
+                ),
+            },
+            opt=opt,
+        )
+
+        model_moex3_32_rev = load_model(
+            moex3_conf_32_rev_conf,
+            sharpening_factor=netG_moex3_32_rev["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["moex3_x2_32_rev"],
+            device=device,
+        )
+
         json_dpsr = """
             {
             "netG": {
@@ -438,14 +553,77 @@ def main(**kwargs):
             v.requires_grad = False
         model_esrgan = model_esrgan.to(device)
 
-        model_cfg = "sam2_hiera_l.yaml"
+        json_swinir = """
+        {
+            "netG": {
+                "net_type": "swinir",
+                "upscale": 2,
+                "in_chans": 1,
+                "img_size": 48,
+                "window_size": 8,
+                "img_range": 1.0,
+                "depths": [
+                    6,
+                    6,
+                    6,
+                    6,
+                    6,
+                    6
+                ],
+                "embed_dim": 180,
+                "num_heads": [
+                    6,
+                    6,
+                    6,
+                    6,
+                    6,
+                    6
+                ],
+                "mlp_ratio": 2,
+                "upsampler": "pixelshuffle",
+                "resi_connection": "1conv",
+                "init_type": "default",
+                "scale": 2,
+                "n_channels": 1,
+                "ang_res": 5
+            }
+        }
+        """
 
+        # netG_swinir = json.loads(json_swinir)["netG"]
+
+        # model_swinir = swinir(
+        #     upscale=netG_swinir["upscale"],
+        #     in_chans=netG_swinir["in_chans"],
+        #     img_size=netG_swinir["img_size"],
+        #     window_size=netG_swinir["window_size"],
+        #     img_range=netG_swinir["img_range"],
+        #     depths=netG_swinir["depths"],
+        #     embed_dim=netG_swinir["embed_dim"],
+        #     num_heads=netG_swinir["num_heads"],
+        #     mlp_ratio=netG_swinir["mlp_ratio"],
+        #     upsampler=netG_swinir["upsampler"],
+        #     resi_connection=netG_swinir["resi_connection"],
+        # )
+        # model_swinir.eval()
+        # for k, v in model_swinir.named_parameters():
+        #     v.requires_grad = False
+        # model_swinir = model_swinir.to(device)
+
+        # with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
+        #     if torch.cuda.get_device_properties(0).major >= 8:
+        #         torch.backends.cuda.matmul.allow_tf32 = True
+        #         torch.backends.cudnn.allow_tf32 = True
+
+        model_cfg = "sam2_hiera_l.yaml"
         sam2 = build_sam2(
             model_cfg,
             opt["pretrained_models"]["sam2"],
             device="cuda",
             apply_postprocessing=True,
         )
+
+        sam2 = BFloat16SAM2(sam2)
 
         # mask_generator = SAM2AutomaticMaskGenerator(
         #     model=sam2,
@@ -480,22 +658,15 @@ def main(**kwargs):
             # min_mask_region_area=25.0,
             # use_m2m=True,
         )
-
-        # methods: List[str] = [
-        #     "Bicubic",
-        #     "DPSR",
-        #     "ESRGAN",
-        #     "N-SMoE",
-        #     "N-SMoE-II",
-        #     "N-SMoE-III",
-        # ]
+        mask_generator = BFloat16SAM2AutomaticMaskGenerator(mask_generator)
 
         models: Dict[str, Any] = {
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
             "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
-            "N-SMoE-III": model_moex3_32,  # k = 32 | attn=RoPE
+            "N-SMoE-III": model_moex3_32,  # model_moex3_32,  # k = 32 | attn=RoPE | model_moex3_32_rev
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
+            # "SwinIR": model_swinir,
             "Bicubic": default_resizer,
         }
 
@@ -635,6 +806,10 @@ def main(**kwargs):
                             "image": results["ESRGAN"]["e_img"],
                             "title": "ESRGAN",
                         },
+                        # "E_SwinIR_img": {
+                        #     "image": results["SwinIR"]["e_img"],
+                        #     "title": "SwinIR",
+                        # },
                     }
 
                     # visualize_with_segmentation(
@@ -883,12 +1058,12 @@ def main(**kwargs):
                             factor,
                         )
 
-                        sharpened_images["n-smoe"][factor] = (
+                        sharpened_images["N-SMoE"][factor] = (
                             E_img.squeeze().cpu().numpy()
                         )
-                        sharpened_images["bicubic"][factor] = E_bicubic.cpu().numpy()
+                        sharpened_images["Bicubic"][factor] = E_bicubic.cpu().numpy()
 
-                        for method in ["n-smoe", "bicubic"]:
+                        for method in ["N-SMoE", "Bicubic"]:
                             img = sharpened_images[method][factor]
                             si = calculate_sharpness_index(img)
                             data_min, data_max = img.min(), img.max()

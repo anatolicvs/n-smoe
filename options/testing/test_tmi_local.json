@@ -22,6 +22,7 @@
         ,"moex1_x2" :  "/mnt/e/Weights/superresolution/n-smoe/x2/15000_G.pth" //"/mnt/e/Weights/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth"   // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_medico_grayscale_act_gelu/models/120000_G.pth" // "/mnt/e/Weights/superresolution/n-smoe/x2/15000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth" // "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_gan_v3_x2_rgb_act_gelu/models/10000_G.pth" // rgb | grayscale RGB:"/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v1_x2_rgb_act_gelu/models/40000_G.pth" | old:/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v5_x2_mri_rgb_act_gelu/models/25000_G.pth
         ,"moex3_x2" : "/mnt/e/Weights/superresolution/moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_16/models/45000_G.pth"
         ,"moex3_x2_32": "/mnt/e/Weights/moex3_sr_gan_v2_x2_medico_act_gelu/models_v2/42000_G.pth" // "/mnt/e/Weights/moex3_sr_gan_v2_x2_medico_act_gelu/models/40000_G.pth" // "/mnt/e/Weights/superresolution/moex3_sr_plain_medium_v5_x2_medical_mix_act_gelu_krnl_32/models/30000_G.pth"
+        ,"moex3_x2_32_rev" : "/mnt/e/Weights/moex3_rev_sr_base_gan_v1_x2/models/24000_G.pth"
         ,"sam2":  "/mnt/d/zoo/sam2/finetuned/88000_G.pth" // "/home/ozkan/segment-anything-2/checkpoints/sam2_hiera_large.pt" // "/home/ozkan/works/n-smoe/.checkpoints/sam2-finetuned.pt" 
         
         
@@ -41,7 +42,7 @@
           "name": "EM" //Cremi
         , "scale": 2  
         , "dataset_type": "medical_sr"            
-        , "lq_patchsize": 256 // 96
+        , "lq_patchsize": 96 // 96
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "exclude_dirs": []
         , "length" : 5
