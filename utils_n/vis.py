@@ -1,4 +1,4 @@
-from typing import Dict, List, Any
+from typing import Dict, Optional, Any
 
 import matplotlib
 import numpy as np
@@ -17,10 +17,52 @@ from skimage.metrics import mean_squared_error as mse
 from skimage.metrics import peak_signal_noise_ratio as psnr
 from skimage.metrics import structural_similarity as ssim
 from skimage.metrics import variation_of_information
+import seaborn as sns
 
-plt.rcParams["font.family"] = "Times New Roman"
-plt.rcParams["font.size"] = 12
-plt.rcParams["text.usetex"] = True
+plt.style.use("seaborn-v0_8-paper")
+plt.rcParams.update(
+    {
+        # --- Font Settings ---
+        "font.family": "serif",  # Set default font family to serif
+        "font.serif": [
+            "Times New Roman",
+            "Times",
+            "Palatino",
+            "serif",
+        ],  # Primary serif fonts
+        "font.sans-serif": [
+            "Arial",
+            "Liberation Sans",
+            "Bitstream Vera Sans",
+            "sans-serif",
+        ],  # Primary sans-serif fonts
+        # --- Font Sizes ---
+        "font.size": 10,  # Base font size
+        "axes.labelsize": 10,  # Font size for axis labels
+        "axes.titlesize": 12,  # Font size for titles
+        "xtick.labelsize": 10,  # Font size for x-axis ticks
+        "ytick.labelsize": 10,  # Font size for y-axis ticks
+        "legend.fontsize": 9,  # Font size for legends
+        # --- Line and Marker Settings ---
+        "lines.linewidth": 1.5,  # Line width for clarity
+        "lines.markersize": 5,  # Marker size for data points
+        # --- Grid Settings ---
+        # "grid.color": "gray",  # Light gray grid lines
+        # "grid.alpha": 0.5,  # 50% transparency for grid lines
+        # "axes.grid": True,  # Enable grid by default
+        # --- Figure Settings ---
+        # "figure.dpi": 300,  # High resolution for on-screen display
+        "savefig.dpi": 600,  # High resolution for saved figures
+        # "figure.figsize": (3.5, 2.5),  # Single-column width in inches
+        # --- Font Embedding ---
+        "pdf.fonttype": 42,  # Embed fonts as TrueType in PDF
+        "ps.fonttype": 42,  # Embed fonts as TrueType in PS
+        # --- Miscellaneous ---
+        "legend.frameon": False,  # Remove legend frame for a cleaner look
+        "text.usetex": True,  # Disable LaTeX for text rendering (optional)
+        # "style.use": "seaborn-v0_8-paper",
+    }
+)
 
 
 def format_metric(
@@ -231,6 +273,7 @@ def visualize_with_error_map(
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
+
     def create_error_cmap() -> LinearSegmentedColormap:
         colors = ["navy", "blue", "cyan", "limegreen", "yellow", "red"]
         return LinearSegmentedColormap.from_list("custom_diverging", colors, N=256)
@@ -337,7 +380,10 @@ def visualize_with_error_map(
         )
 
         ax_error = fig.add_subplot(gs[1, idx])
-        ax_error.imshow(error_map_normalized, cmap=error_cmap, vmin=0, vmax=1)
+        # ax_error.imshow(error_map_normalized, cmap=error_cmap, vmin=0, vmax=1)
+        im_error = ax_error.imshow(
+            error_map_normalized, cmap=error_cmap, vmin=0, vmax=1
+        )
         ax_error.axis("off")
 
         try:
@@ -363,6 +409,14 @@ def visualize_with_error_map(
         except Exception as e:
             print(f"Error calculating PSNR/SSIM/MSE for '{recon_title}': {str(e)}")
 
+    bbox = ax_error.get_position()
+    cbar_width = 0.005
+    cbar_ax = fig.add_axes([bbox.x1 + 0.004, bbox.y0, cbar_width, bbox.height])
+
+    cbar = fig.colorbar(im_error, cax=cbar_ax)
+    cbar.ax.tick_params(labelsize=8)
+
+    sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
     sorted_mse = sorted(mse_values.items(), key=lambda x: x[1])
@@ -408,9 +462,10 @@ def visualize_with_error_map(
             )
 
     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
-    plt.subplots_adjust(
-        left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
-    )
+    # plt.subplots_adjust(
+    #     left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
+    # )
+    plt.subplots_adjust(right=0.9)
 
     if save_path:
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
@@ -564,7 +619,7 @@ def visualize_data(
         plt.show()
 
 
-def visualize_sharpening_results(
+def visualize_sharpening_results_0(
     img_L: np.ndarray,
     img_H: np.ndarray,
     sharpened_images: Dict[float, np.ndarray],
@@ -575,6 +630,7 @@ def visualize_sharpening_results(
 
     fig = plt.figure(figsize=(16, 6))
     plt.style.use("seaborn-v0_8-whitegrid")
+
     gs = GridSpec(2, 5, figure=fig, height_ratios=[1, 1])
     gs.update(wspace=0.2, hspace=0.1)
 
@@ -647,6 +703,124 @@ def visualize_sharpening_results(
     if save_path:
         plt.savefig(
             save_path, format="pdf", bbox_inches="tight", dpi=300, transparent=True
+        )
+    if visualize:
+        plt.show()
+    plt.close()
+
+
+def visualize_sharpening_results(
+    img_L: np.ndarray,
+    img_H: np.ndarray,
+    sharpened_images: dict,
+    metrics: dict,
+    save_path: str = None,
+    visualize: bool = True,
+):
+    num_factors = len(next(iter(sharpened_images.values())))
+    num_models = len(sharpened_images)
+
+    total_rows = 1 + num_models
+    total_cols = 1 + num_factors + 3
+    fig = plt.figure(figsize=(2 * total_cols, 2 * total_rows))
+
+    gs = GridSpec(
+        total_rows + 1,
+        total_cols,
+        figure=fig,
+        height_ratios=[1] + [0.5] + [1] * num_models,
+        width_ratios=[0.5] + [1] * num_factors + [1.5, 1.6, 1.6],
+    )
+    gs.update(wspace=0.2, hspace=0.1)
+
+    ax_L = fig.add_subplot(gs[0, 1])
+    ax_L.imshow(img_L, cmap="gray")
+    ax_L.set_title("Low Resolution")
+    ax_L.axis("off")
+
+    ax_H = fig.add_subplot(gs[0, 2])
+    ax_H.imshow(img_H, cmap="gray")
+    ax_H.set_title("High Resolution")
+    ax_H.axis("off")
+
+    metrics_start_col = 3
+    ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
+    for model_name in metrics.keys():
+        psnr_values = [
+            metrics[model_name][f]["PSNR"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_psnr.plot(
+            sorted(metrics[model_name].keys()), psnr_values, label=f"{model_name}"
+        )
+    ax_psnr.set_title("PSNR (dB)")
+    ax_psnr.set_xlabel(r"Sharpening Factor (SF)")
+    ax_psnr.yaxis.set_tick_params(rotation=90)
+    ax_psnr.grid(True)
+    ax_psnr.legend(loc="best")
+
+    ax_ssim = fig.add_subplot(gs[0, metrics_start_col + 1])
+    for model_name in metrics.keys():
+        ssim_values = [
+            metrics[model_name][f]["SSIM"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
+    ax_ssim.set_title("SSIM")
+    ax_ssim.set_xlabel(r"SF")
+    ax_ssim.yaxis.set_tick_params(rotation=90)  # Rotate y-axis labels
+    ax_ssim.grid(True)
+
+    ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
+    for model_name in metrics.keys():
+        si_values = [
+            metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_si.plot(sorted(metrics[model_name].keys()), si_values)
+    ax_si.set_title(r"Sharpness Index")
+    ax_si.set_xlabel(r"SF")
+    ax_si.yaxis.set_tick_params(rotation=90)  # Rotate y-axis labels
+    ax_si.grid(True)
+
+    factors = sorted(next(iter(metrics.values())).keys())
+    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
+        row = 2 + model_index
+
+        ax_model_name = fig.add_subplot(gs[row, 0])
+        ax_model_name.text(
+            0.9,
+            0.5,
+            model_name,
+            ha="right",
+            va="center",
+            rotation=90,
+            fontweight="bold",
+        )
+        ax_model_name.axis("off")
+
+        for i, factor in enumerate(factors):
+            col = 1 + i
+            ax_model = fig.add_subplot(gs[row, col])
+            ax_model.imshow(model_images[factor], cmap="gray")
+            ax_model.axis("off")
+
+            if model_index == num_models - 1:
+                ax_model.text(
+                    0.5,
+                    -0.1,
+                    r"$\alpha = %.2f$" % factor,
+                    ha="center",
+                    va="top",
+                    transform=ax_model.transAxes,
+                    fontsize=12,
+                )
+
+    plt.tight_layout()
+    plt.subplots_adjust(
+        left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
+    )
+
+    if save_path:
+        plt.savefig(
+            save_path, format="pdf", bbox_inches="tight", dpi=600, transparent=True
         )
     if visualize:
         plt.show()

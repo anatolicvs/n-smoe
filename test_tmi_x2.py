@@ -29,6 +29,7 @@ from utils_n.vis import (
     visualize_with_error_map,
     visualize_with_segmentation,
 )
+from models.model_factory import load_model, ModelConfig
 
 torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
@@ -174,7 +175,7 @@ def main(**kwargs):
             "netG": {
                 "net_type": "unet_moex1",
                 "kernel": 16,
-                "sharpening_factor": 1.3,
+                "sharpening_factor": 1.1,
                 "model_channels": 64,
                 "num_res_blocks": 8,
                 "attention_resolutions": [16,8,4],
@@ -199,8 +200,6 @@ def main(**kwargs):
 
         netG_moex1 = json.loads(json_moex1)["netG"]
 
-        z = 2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
-
         encoder_cfg1 = enc1_cfg(
             model_channels=netG_moex1["model_channels"],
             num_res_blocks=netG_moex1["num_res_blocks"],
@@ -218,35 +217,32 @@ def main(**kwargs):
             pool=netG_moex1["pool"],
             activation=netG_moex1["activation"],
         )
+        moex1_conf = ModelConfig(
+            encoder_config=encoder_cfg1,
+            moe_cfg_class=moe1_cfg,
+            ae_cfg_class=ae1_cfg,
+            ae_class=ae1,
+            model_params={
+                "kernel": netG_moex1["kernel"],
+                "sharpening_factor": netG_moex1["sharpening_factor"],
+                "n_channels": netG_moex1["n_channels"],
+                "z": int(
+                    2 * netG_moex1["kernel"]
+                    + 4 * netG_moex1["kernel"]
+                    + netG_moex1["kernel"]
+                ),
+            },
+            opt=opt,
+        )
 
-        decoder_cfg1 = moe1_cfg(
-            kernel=netG_moex1["kernel"],
+        model_moex1 = load_model(
+            moex1_conf,
             sharpening_factor=netG_moex1["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["moex1_x2"],
+            device=device,
         )
-
-        autoenocer_cfg1 = ae1_cfg(
-            EncoderConfig=encoder_cfg1,
-            DecoderConfig=decoder_cfg1,
-            d_in=netG_moex1["n_channels"],
-            d_out=z,
-            phw=opt["phw"],
-            overlap=opt["overlap"],
-        )
-
-        model_moex1 = ae1(cfg=autoenocer_cfg1)
-
-        model_moex1.load_state_dict(
-            torch.load(opt["pretrained_models"]["moex1_x2"], weights_only=True),
-            strict=True,
-        )
-        model_moex1.eval()
-        for k, v in model_moex1.named_parameters():
-            v.requires_grad = False
-        model_moex1 = model_moex1.to(device)
 
         netG_moex3 = json.loads(json_moex3)["netG"]
-
-        z = 2 * netG_moex3["kernel"] + 4 * netG_moex3["kernel"] + netG_moex3["kernel"]
 
         encoder_cfg3 = enc2_cfg(
             model_channels=netG_moex3["model_channels"],  # 32,
@@ -273,39 +269,32 @@ def main(**kwargs):
             ],  # "cross_attention",  # "attention" or "cross_attention"
         )
 
-        decoder_cfg3 = moe2_cfg(
-            kernel=netG_moex3["kernel"],
+        moex3_conf = ModelConfig(
+            encoder_config=encoder_cfg3,
+            moe_cfg_class=moe2_cfg,
+            ae_cfg_class=ae2_cfg,
+            ae_class=ae2,
+            model_params={
+                "kernel": netG_moex3["kernel"],
+                "sharpening_factor": netG_moex3["sharpening_factor"],
+                "n_channels": netG_moex3["n_channels"],
+                "z": int(
+                    2 * netG_moex3["kernel"]
+                    + 4 * netG_moex3["kernel"]
+                    + netG_moex3["kernel"]
+                ),
+            },
+            opt=opt,
+        )
+
+        model_moex3 = load_model(
+            moex3_conf,
             sharpening_factor=netG_moex3["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["moex3_x2"],
+            device=device,
         )
-
-        autoenocer_cfg3 = ae2_cfg(
-            EncoderConfig=encoder_cfg3,
-            DecoderConfig=decoder_cfg3,
-            d_in=netG_moex3["n_channels"],
-            d_out=z,
-            phw=opt["phw"],
-            overlap=opt["overlap"],
-        )
-
-        model_moex3 = ae2(cfg=autoenocer_cfg3)
-
-        model_moex3.load_state_dict(
-            torch.load(opt["pretrained_models"]["moex3_x2"], weights_only=True),
-            strict=True,
-        )
-
-        model_moex3.eval()
-        for k, v in model_moex3.named_parameters():
-            v.requires_grad = False
-        model_moex3 = model_moex3.to(device)
 
         netG_moex3_32 = json.loads(json_moex3_32)["netG"]
-
-        z_32 = (
-            2 * netG_moex3_32["kernel"]
-            + 4 * netG_moex3_32["kernel"]
-            + netG_moex3_32["kernel"]
-        )
 
         encoder_cfg3_32 = enc2_cfg(
             model_channels=netG_moex3_32["model_channels"],  # 32,
@@ -332,31 +321,30 @@ def main(**kwargs):
             ],  # "cross_attention",  # "attention" or "cross_attention"
         )
 
-        decoder_cfg3_32 = moe2_cfg(
-            kernel=netG_moex3_32["kernel"],
+        moex3_conf_32 = ModelConfig(
+            encoder_config=encoder_cfg3_32,
+            moe_cfg_class=moe2_cfg,
+            ae_cfg_class=ae2_cfg,
+            ae_class=ae2,
+            model_params={
+                "kernel": netG_moex3_32["kernel"],
+                "sharpening_factor": netG_moex3_32["sharpening_factor"],
+                "n_channels": netG_moex3_32["n_channels"],
+                "z": int(
+                    2 * netG_moex3_32["kernel"]
+                    + 4 * netG_moex3_32["kernel"]
+                    + netG_moex3_32["kernel"]
+                ),
+            },
+            opt=opt,
+        )
+
+        model_moex3_32 = load_model(
+            moex3_conf_32,
             sharpening_factor=netG_moex3_32["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["moex3_x2_32"],
+            device=device,
         )
-
-        autoenocer_cfg3_32 = ae2_cfg(
-            EncoderConfig=encoder_cfg3_32,
-            DecoderConfig=decoder_cfg3_32,
-            d_in=netG_moex3["n_channels"],
-            d_out=z_32,
-            phw=opt["phw"],
-            overlap=opt["overlap"],
-        )
-
-        model_moex3_32 = ae2(cfg=autoenocer_cfg3_32)
-
-        model_moex3_32.load_state_dict(
-            torch.load(opt["pretrained_models"]["moex3_x2_32"], weights_only=True),
-            strict=True,
-        )
-
-        model_moex3_32.eval()
-        for k, v in model_moex3_32.named_parameters():
-            v.requires_grad = False
-        model_moex3_32 = model_moex3_32.to(device)
 
         json_dpsr = """
             {
@@ -657,12 +645,12 @@ def main(**kwargs):
                     #     visualize=opt["visualize"],
                     # )
 
-                    # visualize_with_error_map(
-                    #     images,
-                    #     cmap="gray",
-                    #     save_path=error_map_figure_path,
-                    #     visualize=opt["visualize"],
-                    # )
+                    visualize_with_error_map(
+                        images,
+                        cmap="gray",
+                        save_path=error_map_figure_path,
+                        visualize=opt["visualize"],
+                    )
 
                     visualize_data(
                         images,
@@ -748,25 +736,34 @@ def main(**kwargs):
         import matlab.engine
         from skimage.metrics import peak_signal_noise_ratio as psnr
         from skimage.metrics import structural_similarity as ssim
-
-        eng = matlab.engine.start_matlab()
-
-        matlab_func_dir = os.path.join(os.path.dirname(__file__), "matlab")
-
-        eng.addpath(matlab_func_dir, nargout=0)
-
-        def calculate_sharpness_index(image):
-            image_np = image.squeeze().cpu().numpy()
-            image_matlab = matlab.double(image_np.tolist())
-
-            si = eng.sharpness_index(image_matlab)
-
-            return si
-
+        from collections import defaultdict
         from models.network_unetmoex1 import Autoencoder as ae1
         from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
         from models.network_unetmoex1 import EncoderConfig as enc1_cfg
         from models.network_unetmoex1 import MoEConfig as moe1_cfg
+
+        eng = matlab.engine.start_matlab()
+        matlab_func_dir = os.path.join(os.path.dirname(__file__), "matlab")
+        eng.addpath(matlab_func_dir, nargout=0)
+
+        def calculate_sharpness_index(image):
+            image_np = (
+                image.squeeze().cpu().numpy()
+                if isinstance(image, torch.Tensor)
+                else image
+            )
+            return eng.sharpness_index(matlab.double(image_np.tolist()))
+
+        def matlab_imsharpen(image, radius=1.5, amount=0.8):
+            image_np = image.squeeze().cpu().numpy()
+            sharpened = eng.imsharpen(
+                matlab.double(image_np.tolist()),
+                "Radius",
+                float(radius),
+                "Amount",
+                float(amount),
+            )
+            return torch.tensor(np.array(sharpened, dtype=np.float32)).float()
 
         json_moex1 = """
         {
@@ -791,15 +788,15 @@ def main(**kwargs):
                 "resizer_num_layers": 2,
                 "resizer_avg_pool": false,
                 "scale": 2,
-                "n_channels": 1
+                "n_channels": 1,
+                "z": 0
             }
         }
         """
-
         netG_moex1 = json.loads(json_moex1)["netG"]
-
-        z = 2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
-
+        netG_moex1["z"] = int(
+            2 * netG_moex1["kernel"] + 4 * netG_moex1["kernel"] + netG_moex1["kernel"]
+        )
         encoder_cfg = enc1_cfg(
             model_channels=netG_moex1["model_channels"],
             num_res_blocks=netG_moex1["num_res_blocks"],
@@ -817,109 +814,116 @@ def main(**kwargs):
             pool=netG_moex1["pool"],
             activation=netG_moex1["activation"],
         )
+        moex1_conf = ModelConfig(
+            encoder_config=encoder_cfg,
+            moe_cfg_class=moe1_cfg,
+            ae_cfg_class=ae1_cfg,
+            ae_class=ae1,
+            model_params=netG_moex1,
+            opt=opt,
+        )
 
-        sharpening_factors = [1.0, 1.1, 1.2, 1.3, 1.4, 1.5]
-
+        sharpening_factors = [1.0, 1.1, 1.2, 1.3, 1.4]
         timestamp: str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        idx = 0
-        for test_data in test_loader:
-            if test_data is None:
-                continue
 
-            idx += 1
-            image_name_ext = os.path.basename(test_data["L_path"][0])
-            img_name, ext = os.path.splitext(image_name_ext)
-
-            img_dir = os.path.join(opt["path"]["images"], img_name)
-            util.mkdir(img_dir)
-
-            fname = os.path.join(
-                img_dir,
-                f"{img_name}_{degrdation}_{dataset_name}_sharpening_{timestamp.replace(' ', '_').replace(':', '-')}",
+        for phase, dataset_opt in opt["datasets"].items():
+            test_set = define_Dataset(dataset_opt)
+            test_loader = DataLoader(
+                test_set,
+                batch_size=1,
+                shuffle=False,
+                num_workers=16,
+                drop_last=False,
+                pin_memory=True,
+                collate_fn=util.custom_pad_collate_fn,
             )
-            si_figure_path = f"{fname}.pdf"
+            H_img_size = dataset_opt["H_size"]
+            degrdation = dataset_opt["degradation_type"]
+            scale = f'x{dataset_opt["scale"]}'
+            dataset_name = dataset_opt["name"]
 
-            img_L = test_data["L"].to(device)
-            img_H = test_data["H"].to(device)
-            img_L_p = test_data["L_p"].to(device)
-            img_L_size = test_data["L"].size()
-            sharpened_images = {}
-            metrics = {}
+            for idx, test_data in enumerate(test_loader, 1):
+                if test_data is None:
+                    continue
 
-            img_H = img_H.clamp(0, 1).to(torch.float).to(device)
-
-            for factor in sharpening_factors:
-
-                decoder_cfg = moe1_cfg(
-                    kernel=netG_moex1["kernel"],
-                    sharpening_factor=factor,
+                image_name = os.path.splitext(os.path.basename(test_data["L_path"][0]))[
+                    0
+                ]
+                img_dir = os.path.join(opt["path"]["images"], image_name)
+                util.mkdir(img_dir)
+                fname = os.path.join(
+                    img_dir,
+                    f"{image_name}_{degrdation}_{dataset_name}_sharpening_{timestamp}",
                 )
-                autoenocer_cfg = ae1_cfg(
-                    EncoderConfig=encoder_cfg,
-                    DecoderConfig=decoder_cfg,
-                    d_in=netG_moex1["n_channels"],
-                    d_out=z,
-                    phw=opt["phw"],
-                    overlap=opt["overlap"],
-                )
+                si_figure_path = f"{fname}.pdf"
 
-                model_moex1 = ae1(cfg=autoenocer_cfg)
-                model_moex1.load_state_dict(
-                    torch.load(opt["pretrained_models"]["moex1_x2"], weights_only=True),
-                    strict=True,
+                img_L, img_H, img_L_p = (
+                    test_data["L"].to(device),
+                    test_data["H"].clamp(0, 1).to(device),
+                    test_data["L_p"].to(device),
                 )
-                model_moex1.eval()
-                for k, v in model_moex1.named_parameters():
-                    v.requires_grad = False
-                model_moex1 = model_moex1.to(device)
+                sharpened_images, metrics = defaultdict(dict), defaultdict(dict)
 
                 with torch.no_grad():
-                    E_img_moex1 = model_moex1(img_L_p, img_L_size)
+                    for factor in sharpening_factors:
+                        weights_path = opt["pretrained_models"]["moex1_x2"]
+                        model = load_model(
+                            config=moex1_conf,
+                            sharpening_factor=factor,
+                            weights_path=weights_path,
+                            device=device,
+                        )
 
-                E_img_moex_t = E_img_moex1.clamp(0, 1).to(torch.float)
-                sharpened_images[factor] = E_img_moex_t.squeeze().cpu().numpy()
+                        E_img = model(img_L_p, img_L.size()).clamp(0, 1).to(torch.float)
+                        E_bicubic = matlab_imsharpen(
+                            default_resizer(img_L, img_H.size()[2:])
+                            .clamp(0, 1)
+                            .to(torch.float),
+                            1,
+                            factor,
+                        )
 
-                si_moex1 = calculate_sharpness_index(E_img_moex_t)
+                        sharpened_images["n-smoe"][factor] = (
+                            E_img.squeeze().cpu().numpy()
+                        )
+                        sharpened_images["bicubic"][factor] = E_bicubic.cpu().numpy()
 
-                data_min = min(E_img_moex_t.min().item(), img_H.min().item())
-                data_max = max(E_img_moex_t.max().item(), img_H.max().item())
-                data_range = data_max - data_min
+                        for method in ["n-smoe", "bicubic"]:
+                            img = sharpened_images[method][factor]
+                            si = calculate_sharpness_index(img)
+                            data_min, data_max = img.min(), img.max()
+                            data_range = data_max - data_min
+                            psnr_val = psnr(
+                                img_H.cpu().squeeze().numpy(),
+                                img,
+                                data_range=data_range,
+                            )
+                            ssim_val = ssim(
+                                img_H.cpu().squeeze().numpy(),
+                                img,
+                                data_range=data_range,
+                                channel_axis=-1,
+                            )
 
-                psnr_moex1 = psnr(
-                    img_H.cpu().numpy(),
-                    E_img_moex_t.cpu().numpy(),
-                    data_range=data_range,
+                            metrics[method][factor] = {
+                                "PSNR": psnr_val,
+                                "SSIM": ssim_val,
+                                "SI": si,
+                            }
+
+                            print(
+                                f"Image {idx}, {method}, Factor {factor}: PSNR={psnr_val:.2f}, SSIM={ssim_val:.4f}, SI={si:.4f}"
+                            )
+
+                visualize_sharpening_results(
+                    img_L.cpu().numpy().squeeze(),
+                    img_H.cpu().numpy().squeeze(),
+                    sharpened_images,
+                    metrics,
+                    save_path=si_figure_path,
+                    visualize=opt["visualize"],
                 )
-                ssim_moex1 = ssim(
-                    img_H.squeeze().cpu().numpy(),
-                    E_img_moex_t.squeeze().cpu().numpy(),
-                    data_range=data_range,
-                    multichannel=True,
-                )
 
-                # psnr_moex1 = piq.psnr(E_img_moex_t, img_H, data_range=1).float()
-                # ssim_moex1 = piq.ssim(
-                #     E_img_moex_t, img_H, data_range=1, reduction="mean"
-                # )
-
-                metrics[factor] = {
-                    "PSNR": psnr_moex1,
-                    "SSIM": ssim_moex1,
-                    "SI": si_moex1,
-                }
-
-                print(
-                    f"Image {idx}, Sharpening factor {factor}: PSNR = {psnr_moex1:.2f}, SSIM = {ssim_moex1:.4f}, SI = {si_moex1:.4f}"
-                )
-
-            visualize_sharpening_results(
-                img_L.cpu().numpy().squeeze(),
-                img_H.cpu().numpy().squeeze(),
-                sharpened_images,
-                metrics,
-                save_path=si_figure_path,
-                visualize=opt["visualize"],
-            )
         eng.quit()
 
     elif task == "upsampling":
