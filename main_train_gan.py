@@ -22,9 +22,9 @@ from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
 
-# def synchronize():
-#     if dist.is_initialized():
-#         dist.barrier()
+def synchronize():
+    if dist.is_initialized():
+        dist.barrier()
 
 
 def set_seed(seed):
@@ -312,9 +312,9 @@ def main(**kwargs):
                     logger.error(
                         f"Error during training iteration {i} in epoch {epoch}: {e}"
                     )
-
-                dist.destroy_process_group()
-                sys.exit(1)
+                # dist.destroy_process_group()
+                # sys.exit(1)
+                break
             finally:
                 del train_data
                 torch.cuda.empty_cache()
@@ -325,14 +325,14 @@ def main(**kwargs):
                 for k, v in logs.items():
                     message += f" {k}: {v:.3e}"
 
-                    # wandb.log(
-                    #     {
-                    #         "epoch": epoch,
-                    #         f"{k}": v,
-                    #         "step": current_step,
-                    #         "learning_rate": model.current_learning_rate(),
-                    #     }
-                    # )
+                # wandb.log(
+                #     {
+                #         "epoch": epoch,
+                #         f"{k}": v,
+                #         "step": current_step,
+                #         "learning_rate": model.current_learning_rate(),
+                #     }
+                # )
 
                 logger.info(message)
 
@@ -346,60 +346,75 @@ def main(**kwargs):
                         logger.error(f"Error saving model at step {current_step}: {e}")
                     raise e
 
-            if current_step % test_interval == 0 and opt["rank"] == 0:
-                local_psnr_sum: float = 0.0
-                local_count: int = 0
-                try:
-                    for test_data in test_loader:
-                        if test_data is None:
-                            continue
+            if current_step % test_interval == 0:
+                synchronize()
+                if opt["rank"] == 0:
+                    local_psnr_sum: float = 0.0
+                    local_count: int = 0
+                    try:
+                        for test_data in test_loader:
+                            try:
+                                if test_data is None:
+                                    continue
 
-                        image_name_ext = os.path.basename(test_data["L_path"][0])
+                                image_name_ext = os.path.basename(
+                                    test_data["L_path"][0]
+                                )
 
-                        model.feed_data(test_data)
-                        model.test()
+                                model.feed_data(test_data)
+                                model.test()
 
-                        visuals = model.current_visuals()
-                        E_img = util.tensor2uint(visuals["E"])
-                        H_img = util.tensor2uint(visuals["H"])
-                        current_psnr = util.calculate_psnr(E_img, H_img, border)
+                                visuals = model.current_visuals()
+                                E_img = util.tensor2uint(visuals["E"])
+                                H_img = util.tensor2uint(visuals["H"])
+                                current_psnr = util.calculate_psnr(E_img, H_img, border)
 
-                        local_psnr_sum += current_psnr
-                        local_count += 1
+                                local_psnr_sum += current_psnr
+                                local_count += 1
 
-                        log_message = f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
+                                log_message = f"{local_count:->4d}--> GPU {opt['rank']} -->  {image_name_ext:>10s} | {current_psnr:<4.2f}dB"
 
-                        logger.info(log_message)
+                                logger.info(log_message)
 
-                        # wandb.log(
-                        #     {
-                        #         "info": log_message,
-                        #         "Local Count": local_count,
-                        #         "PSNR": current_psnr,
-                        #         "GPU": opt["rank"],
-                        #         "Image Name": image_name_ext,
-                        #     }
-                        # )
+                                # wandb.log(
+                                #     {
+                                #         "info": log_message,
+                                #         "Local Count": local_count,
+                                #         "PSNR": current_psnr,
+                                #         "GPU": opt["rank"],
+                                #         "Image Name": image_name_ext,
+                                #     }
+                                # )
 
-                        del visuals, E_img, H_img
-                        torch.cuda.empty_cache()
+                                del visuals, E_img, H_img
+                                torch.cuda.empty_cache()
+                            except Exception as e:
+                                if opt["rank"] == 0:
+                                    logger.error(
+                                        f"Error processing test image {image_name_ext}: {e}"
+                                    )
+                                continue
 
-                    avg_psnr: float = local_psnr_sum / local_count
-                    log_message: str = (
-                        f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
-                    )
-                    logger.info(log_message)
-
-                    # wandb.log(
-                    #     {"epoch": epoch, "step": current_step, "avg_psnr": avg_psnr}
-                    # )
-
-                except Exception as e:
-                    if opt["rank"] == 0:
-                        logger.error(
-                            f"Error during testing at step {current_step} in epoch {epoch}: {e}"
-                        )
-                    raise e
+                        if local_count > 0:
+                            avg_psnr: float = local_psnr_sum / local_count
+                            log_message: str = (
+                                f"<epoch:{epoch:3d}, iter:{current_step:8,d}, Average PSNR: {avg_psnr:.2f} dB>"
+                            )
+                            logger.info(log_message)
+                        else:
+                            logger.warning("No valid test images processed.")
+                            # wandb.log(
+                            #     {"epoch": epoch, "step": current_step, "avg_psnr": avg_psnr}
+                            # )
+                    except Exception as e:
+                        if opt["rank"] == 0:
+                            logger.error(
+                                f"Error during testing at step {current_step} in epoch {epoch}: {e}"
+                            )
+                        break
+                else:
+                    pass
+                synchronize()
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
@@ -410,9 +425,12 @@ def main(**kwargs):
 
 def cleanup():
     if dist.is_initialized():
-        dist.destroy_process_group()
-        torch.cuda.empty_cache()
-        # wandb.finish()
+        try:
+            synchronize()
+            dist.destroy_process_group()
+        except Exception as e:
+            print(f"Error during cleanup: {e}")
+    torch.cuda.empty_cache()
 
 
 # atexit.register(cleanup)
