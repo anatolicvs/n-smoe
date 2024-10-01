@@ -10,7 +10,7 @@
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Max runtime: 1 Hour
 
 USE_APPTAINER=true
-BUILT_VERSION="1.1"
+BUILT_VERSION="1.2"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 

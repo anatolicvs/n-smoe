@@ -1,7 +1,7 @@
 #!/usr/bin/zsh
 
 USE_APPTAINER=true
-BUILT_VERSION="1.1"
+BUILT_VERSION="1.2"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 
