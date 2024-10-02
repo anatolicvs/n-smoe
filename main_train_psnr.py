@@ -8,8 +8,6 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
-
-# import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -18,8 +16,6 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
-
-# import atexit
 
 
 def synchronize():
@@ -85,20 +81,6 @@ def initialize_distributed(opt):
     except Exception as e:
         raise RuntimeError(f"Failed to initialize distributed training: {e}")
     return opt
-
-
-# def initialize_distributed(opt):
-#     try:
-#         if opt.get("dist", False):
-#             init_dist("pytorch")
-#             opt["world_size"] = dist.get_world_size()
-#             opt["rank"] = dist.get_rank()
-#             # synchronize()
-#         else:
-#             opt["rank"], opt["world_size"] = 0, 1
-#     except Exception as e:
-#         raise RuntimeError(f"Failed to initialize distributed training: {e}")
-#     return opt
 
 
 def build_loaders(opt, logger=None):
@@ -329,7 +311,9 @@ def main(**kwargs):
                     logger.error(
                         f"Error during training iteration {i} in epoch {epoch}: {e}"
                     )
-                break
+                # dist.destroy_process_group()
+                # sys.exit(1)
+                continue
             finally:
                 del train_data
                 torch.cuda.empty_cache()
@@ -427,7 +411,7 @@ def main(**kwargs):
                             logger.error(
                                 f"Error during testing at step {current_step} in epoch {epoch}: {e}"
                             )
-                        break
+                        pass
                 else:
                     pass
                 synchronize()
@@ -448,7 +432,6 @@ def cleanup():
     torch.cuda.empty_cache()
 
 
-# atexit.register(cleanup)
 if __name__ == "__main__":
     try:
         main()

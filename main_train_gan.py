@@ -10,8 +10,6 @@ import click
 import numpy as np
 import torch
 import torch.distributed as dist
-
-# import wandb
 from torch.utils.data import DataLoader, DistributedSampler
 
 from data.select_dataset import define_Dataset
@@ -314,7 +312,7 @@ def main(**kwargs):
                     )
                 # dist.destroy_process_group()
                 # sys.exit(1)
-                break
+                continue
             finally:
                 del train_data
                 torch.cuda.empty_cache()
@@ -411,7 +409,7 @@ def main(**kwargs):
                             logger.error(
                                 f"Error during testing at step {current_step} in epoch {epoch}: {e}"
                             )
-                        break
+                        pass
                 else:
                     pass
                 synchronize()
@@ -432,8 +430,6 @@ def cleanup():
             print(f"Error during cleanup: {e}")
     torch.cuda.empty_cache()
 
-
-# atexit.register(cleanup)
 
 if __name__ == "__main__":
     try:
