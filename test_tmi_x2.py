@@ -32,30 +32,11 @@ from utils_n.vis import (
 from models.model_factory import load_model, ModelConfig
 
 
-# torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
 if torch.cuda.get_device_properties(0).major >= 8:
     # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
     torch.backends.cuda.matmul.allow_tf32 = True
     torch.backends.cudnn.allow_tf32 = True
-
-
-class BFloat16SAM2(torch.nn.Module):
-    def __init__(self, sam2_model):
-        super().__init__()
-        self.sam2_model = sam2_model
-
-    def forward(self, *args, **kwargs):
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-            return self.sam2_model(*args, **kwargs)
-
-
-class BFloat16SAM2AutomaticMaskGenerator:
-    def __init__(self, mask_generator):
-        self.mask_generator = mask_generator
-
-    def __call__(self, *args, **kwargs):
-        with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
-            return self.mask_generator(*args, **kwargs)
 
 
 def default_resizer(inputs, target_size):
@@ -74,7 +55,7 @@ def default_resizer(inputs, target_size):
 @click.option("--launcher", default="pytorch", help="job launcher")
 @click.option("--local_rank", type=int, default=0)
 @click.option("--dist", is_flag=True, default=False)
-@click.option("--visualize", is_flag=True, default=True)
+@click.option("--visualize", is_flag=True, default=False)
 @click.option("--backend", default="TkAgg")
 def main(**kwargs):
 
@@ -590,25 +571,29 @@ def main(**kwargs):
         }
         """
 
-        # netG_swinir = json.loads(json_swinir)["netG"]
+        netG_swinir = json.loads(json_swinir)["netG"]
 
-        # model_swinir = swinir(
-        #     upscale=netG_swinir["upscale"],
-        #     in_chans=netG_swinir["in_chans"],
-        #     img_size=netG_swinir["img_size"],
-        #     window_size=netG_swinir["window_size"],
-        #     img_range=netG_swinir["img_range"],
-        #     depths=netG_swinir["depths"],
-        #     embed_dim=netG_swinir["embed_dim"],
-        #     num_heads=netG_swinir["num_heads"],
-        #     mlp_ratio=netG_swinir["mlp_ratio"],
-        #     upsampler=netG_swinir["upsampler"],
-        #     resi_connection=netG_swinir["resi_connection"],
-        # )
-        # model_swinir.eval()
-        # for k, v in model_swinir.named_parameters():
-        #     v.requires_grad = False
-        # model_swinir = model_swinir.to(device)
+        model_swinir = swinir(
+            upscale=netG_swinir["upscale"],
+            in_chans=netG_swinir["in_chans"],
+            img_size=netG_swinir["img_size"],
+            window_size=netG_swinir["window_size"],
+            img_range=netG_swinir["img_range"],
+            depths=netG_swinir["depths"],
+            embed_dim=netG_swinir["embed_dim"],
+            num_heads=netG_swinir["num_heads"],
+            mlp_ratio=netG_swinir["mlp_ratio"],
+            upsampler=netG_swinir["upsampler"],
+            resi_connection=netG_swinir["resi_connection"],
+        )
+        model_swinir.load_state_dict(
+            torch.load(opt["pretrained_models"]["swinir_x2"], weights_only=True),
+            strict=True,
+        )
+        model_swinir.eval()
+        for k, v in model_swinir.named_parameters():
+            v.requires_grad = False
+        model_swinir = model_swinir.to(device)
 
         # with torch.autocast(device_type="cuda", dtype=torch.bfloat16):
         #     if torch.cuda.get_device_properties(0).major >= 8:
@@ -616,14 +601,15 @@ def main(**kwargs):
         #         torch.backends.cudnn.allow_tf32 = True
 
         model_cfg = "sam2_hiera_l.yaml"
+
         sam2 = build_sam2(
             model_cfg,
             opt["pretrained_models"]["sam2"],
             device="cuda",
             apply_postprocessing=True,
-        )
+        )  # .to(dtype=torch.bfloat16)
 
-        sam2 = BFloat16SAM2(sam2)
+        # sam2 = BFloat16SAM2(sam2)
 
         # mask_generator = SAM2AutomaticMaskGenerator(
         #     model=sam2,
@@ -658,7 +644,8 @@ def main(**kwargs):
             # min_mask_region_area=25.0,
             # use_m2m=True,
         )
-        mask_generator = BFloat16SAM2AutomaticMaskGenerator(mask_generator)
+
+        # mask_generator = BFloat16SAM2AutomaticMaskGenerator(mask_generator)
 
         models: Dict[str, Any] = {
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
@@ -666,7 +653,7 @@ def main(**kwargs):
             "N-SMoE-III": model_moex3_32,  # model_moex3_32,  # k = 32 | attn=RoPE | model_moex3_32_rev
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
-            # "SwinIR": model_swinir,
+            "SwinIR": model_swinir,
             "Bicubic": default_resizer,
         }
 
@@ -760,7 +747,9 @@ def main(**kwargs):
                 for method in models.keys():
                     print(f"{method}:")
                     for metric in metrics:
-                        print(f"  {metric.upper()}: {results[method][metric]}")
+                        print(
+                            f" {idx}-{img_name} - {metric.upper()}: {results[method][metric]}"
+                        )
 
                 if opt["visualize"] == True:
                     L_crop_img = util.tensor2uint(test_data["L"])
@@ -806,19 +795,19 @@ def main(**kwargs):
                             "image": results["ESRGAN"]["e_img"],
                             "title": "ESRGAN",
                         },
-                        # "E_SwinIR_img": {
-                        #     "image": results["SwinIR"]["e_img"],
-                        #     "title": "SwinIR",
-                        # },
+                        "E_SwinIR_img": {
+                            "image": results["SwinIR"]["e_img"],
+                            "title": "SwinIR",
+                        },
                     }
 
-                    # visualize_with_segmentation(
-                    #     images,
-                    #     mask_generator,
-                    #     cmap="gray",
-                    #     save_path=seg_figure_path,
-                    #     visualize=opt["visualize"],
-                    # )
+                    visualize_with_segmentation(
+                        images,
+                        mask_generator,
+                        cmap="gray",
+                        save_path=seg_figure_path,
+                        visualize=opt["visualize"],
+                    )
 
                     visualize_with_error_map(
                         images,
