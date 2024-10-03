@@ -3,6 +3,7 @@ import math
 import os
 import random
 import sys
+import time
 
 import click
 import numpy as np
@@ -73,11 +74,13 @@ def initialize_distributed(opt):
     try:
         if opt.get("dist", False):
             init_dist("pytorch")
-            opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
-            opt["rank"] = int(os.environ.get("RANK", 0))
-            # synchronize()
+            # opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
+            # opt["rank"] = int(os.environ.get("RANK", 0))
+            opt["world_size"] = dist.get_world_size()
+            opt["rank"] = dist.get_rank()
+            opt["local_rank"] = int(os.environ.get("LOCAL_RANK", 0))
         else:
-            opt["rank"], opt["world_size"] = 0, 1
+            opt["rank"], opt["world_size"], opt["local_rank"] = 0, 1, 0
     except Exception as e:
         raise RuntimeError(f"Failed to initialize distributed training: {e}")
     return opt
@@ -93,8 +96,9 @@ def build_loaders(opt, logger=None):
 
     def adjust_batch_size(batch_size, opt, logger=None):
         if opt["dist"]:
-            gpu_ids = opt.get("gpu_ids", [0])
-            num_gpu = len(gpu_ids)
+            # gpu_ids = opt.get("gpu_ids", [0])
+            # num_gpu = len(gpu_ids)
+            num_gpu = opt["world_size"]
             if num_gpu <= 0:
                 if logger and opt["rank"] == 0:
                     logger.error("No valid GPUs found. Defaulting to 1.")
@@ -203,6 +207,10 @@ def main(**kwargs):
     opt = initialize_distributed(opt)
     set_seed(opt.get("seed", 2024))
 
+    device = torch.device(
+        f"cuda:{opt['local_rank']}" if torch.cuda.is_available() else "cpu"
+    )
+    torch.cuda.set_device(device)
     logger = None
     if opt["rank"] == 0:
         util.mkdirs(
@@ -311,6 +319,7 @@ def main(**kwargs):
                     logger.error(
                         f"Error during training iteration {i} in epoch {epoch}: {e}"
                     )
+                synchronize()
                 # dist.destroy_process_group()
                 # sys.exit(1)
                 continue
@@ -347,6 +356,8 @@ def main(**kwargs):
 
             if current_step % test_interval == 0:
                 synchronize()
+
+                test_flag = torch.tensor([1], device=device)
                 if opt["rank"] == 0:
                     local_psnr_sum: float = 0.0
                     local_count: int = 0
@@ -355,6 +366,7 @@ def main(**kwargs):
                             try:
                                 if test_data is None:
                                     continue
+
                                 image_name_ext = os.path.basename(
                                     test_data["L_path"][0]
                                 )
@@ -401,20 +413,28 @@ def main(**kwargs):
                             logger.info(log_message)
                         else:
                             logger.warning("No valid test images processed.")
-
                             # wandb.log(
                             #     {"epoch": epoch, "step": current_step, "avg_psnr": avg_psnr}
                             # )
-
                     except Exception as e:
                         if opt["rank"] == 0:
                             logger.error(
                                 f"Error during testing at step {current_step} in epoch {epoch}: {e}"
                             )
                         pass
+                    finally:
+                        test_flag.fill_(0)
+                        dist.broadcast(tensor=test_flag, src=0)
                 else:
-                    pass
+                    while True:
+                        keep_alive = torch.zeros(1, device=device)
+                        dist.all_reduce(keep_alive, op=dist.ReduceOp.SUM)
+                        dist.broadcast(tensor=test_flag, src=0)
+                        if test_flag.item() == 0:
+                            break
+                        time.sleep(1)
                 synchronize()
+
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
 
