@@ -355,7 +355,6 @@ def main(**kwargs):
             if current_step % test_interval == 0:
                 synchronize()
 
-                test_flag = torch.tensor([1], device=device)
                 if opt["rank"] == 0:
                     local_psnr_sum: float = 0.0
                     local_count: int = 0
@@ -420,17 +419,8 @@ def main(**kwargs):
                                 f"Error during testing at step {current_step} in epoch {epoch}: {e}"
                             )
                         pass
-                    finally:
-                        test_flag.fill_(0)
-                        dist.broadcast(tensor=test_flag, src=0)
                 else:
-                    while True:
-                        keep_alive = torch.zeros(1, device=device)
-                        dist.all_reduce(keep_alive, op=dist.ReduceOp.SUM)
-                        dist.broadcast(tensor=test_flag, src=0)
-                        if test_flag.item() == 0:
-                            break
-                        time.sleep(1)
+                    pass
                 synchronize()
 
         if opt["rank"] == 0:

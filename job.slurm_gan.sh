@@ -137,6 +137,7 @@ echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc 
 
 # export TORCH_DISTRIBUTED_DEBUG=INFO
 export TORCH_NCCL_BLOCKING_WAIT=1
+export NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL

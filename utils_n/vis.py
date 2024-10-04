@@ -52,12 +52,12 @@ plt.rcParams.update(
             "sans-serif",
         ],  # Primary sans-serif fonts
         # --- Font Sizes ---
-        "font.size": 10,  # Base font size
-        "axes.labelsize": 10,  # Font size for axis labels
-        "axes.titlesize": 12,  # Font size for titles
-        "xtick.labelsize": 10,  # Font size for x-axis ticks
-        "ytick.labelsize": 10,  # Font size for y-axis ticks
-        "legend.fontsize": 9,  # Font size for legends
+        "font.size": 12,  # Base font size
+        "axes.labelsize": 12,  # Font size for axis labels
+        "axes.titlesize": 15,  # Font size for titles
+        "xtick.labelsize": 12,  # Font size for x-axis ticks
+        "ytick.labelsize": 12,  # Font size for y-axis ticks
+        "legend.fontsize": 11,  # Font size for legends
         # --- Line and Marker Settings ---
         "lines.linewidth": 1.5,  # Line width for clarity
         "lines.markersize": 5,  # Marker size for data points
@@ -179,7 +179,7 @@ def visualize_with_segmentation(
     ax_annotated.imshow(images[hr_key]["image"], cmap=cmap)
     show_anns(annotated_mask)
     ax_annotated.axis("off")
-    ax_annotated.set_title("Annotated Segmentation", fontsize=12, weight="bold")
+    ax_annotated.set_title("Annotated Segmentation", fontweight="bold")
 
     ax_img_hr = fig.add_subplot(gs[0:2, 1])
     ax_img_hr.imshow(images[hr_key]["image"], cmap=cmap)
@@ -203,7 +203,8 @@ def visualize_with_segmentation(
     )
     ax_img_hr.add_patch(rect)
     ax_img_hr.axis("off")
-    ax_img_hr.set_title(images[hr_key]["title"], fontsize=12, weight="bold")
+    title = images[hr_key]["title"]
+    ax_img_hr.set_title(title, fontweight="bold")
 
     gt_mask = None
     vi_scores = {}
@@ -345,19 +346,17 @@ def visualize_with_error_map(
     ax_hr = fig.add_subplot(gs[0:2, 0])
     ax_hr.imshow(hr_image, cmap=cmap)
     ax_hr.axis("off")
-    ax_hr.set_title(rf"\textbf{{{hr_title}}}", fontsize=12)
+    ax_hr.set_title(hr_title, fontweight="bold")
 
     ax_lrcrop = fig.add_subplot(gs[0, 1])
     ax_lrcrop.imshow(lrcrop_image, cmap=cmap)
     ax_lrcrop.axis("off")
-    # ax_lrcrop.set_title(rf"\textbf{{{lrcrop_title}}}", fontsize=10)
-    ax_lrcrop.set_title(lrcrop_title, fontsize=12)
+    ax_lrcrop.set_title(lrcrop_title, fontweight="bold")
 
     ax_ref = fig.add_subplot(gs[0, 2])
     ax_ref.imshow(ref_image, cmap=cmap)
     ax_ref.axis("off")
-    # ax_ref.set_title(rf"\textbf{{{ref_title}}}", fontsize=10)
-    ax_ref.set_title(ref_title, fontsize=12)
+    ax_ref.set_title(ref_title, fontweight="bold")
 
     gray_hr = (
         cv2.cvtColor(hr_image, cv2.COLOR_RGB2GRAY)
@@ -391,7 +390,7 @@ def visualize_with_error_map(
         ax_recon = fig.add_subplot(gs[0, idx])
         ax_recon.imshow(recon_image, cmap=cmap)
         ax_recon.axis("off")
-        ax_recon.set_title(rf"\textbf{{{recon_title}}}", fontsize=10)
+        ax_recon.set_title(recon_title, fontweight="bold")
 
         error_map = calculate_error_map(ref_image, recon_image)
         error_map_normalized = (error_map - error_map.min()) / (
@@ -469,7 +468,6 @@ def visualize_with_error_map(
                 ha="center",
                 va="center",
                 transform=ax_title.transAxes,
-                fontsize=10,
             )
         else:
             ax_title.text(
@@ -479,7 +477,6 @@ def visualize_with_error_map(
                 ha="center",
                 va="center",
                 transform=ax_title.transAxes,
-                fontsize=10,
             )
 
     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
@@ -547,11 +544,9 @@ def visualize_data(
         for spine in ax_img.spines.values():
             spine.set_color(axes_colors[i % len(axes_colors)])
 
-        if key in [ref_key, lrcrop_key]:
-            ax_img.set_title(
-                title, fontsize=12, family="Times New Roman", fontweight="bold"
-            )
-        else:
+        ax_img.set_title(title, fontweight="bold")
+
+        if key not in [ref_key, lrcrop_key]:
             current_psnr = psnr(ref_img, img, data_range=ref_img.max() - ref_img.min())
             current_ssim = ssim(
                 ref_img,
@@ -567,34 +562,26 @@ def visualize_data(
 
         ax_x_spectrum = fig.add_subplot(gs[1, i])
         ax_x_spectrum.plot(np.sum(freq_magnitude, axis=0), color="blue")
-        ax_x_spectrum.set_title(
-            r"$X-\mathrm{Spectrum}$",
-            fontsize=12,
-            family="Times New Roman",
-            fontweight="bold",
-        )
-        ax_x_spectrum.set_xlabel(
-            r"$\mathrm{Frequency\ (pixels)}$", fontsize=11, family="Times New Roman"
-        )
+        ax_x_spectrum.set_title("X-Spectrum", fontweight="bold")
+        ax_x_spectrum.set_xticks([])
+        ax_x_spectrum.set_yticks([])
 
+        ax_x_spectrum.set_xlabel(r"$\mathrm{Frequency\ (pixels)}$")
         ax_y_spectrum = fig.add_subplot(gs[2, i])
         ax_y_spectrum.plot(np.sum(freq_magnitude, axis=1), color="blue")
         ax_y_spectrum.set_title(
-            r"$Y-\mathrm{Spectrum}$",
-            fontsize=12,
-            family="Times New Roman",
+            "Y-Spectrum",
             fontweight="bold",
         )
-        ax_y_spectrum.set_xlabel(
-            r"$\mathrm{Frequency\ (pixels)}$", fontsize=11, family="Times New Roman"
-        )
+        ax_y_spectrum.set_xlabel(r"$\mathrm{Frequency\ (pixels)}$")
+        ax_y_spectrum.set_xticks([])
+        ax_y_spectrum.set_yticks([])
+        # ax_y_spectrum.axis("off")
 
         ax_2d_spectrum = fig.add_subplot(gs[3, i])
         ax_2d_spectrum.imshow(freq_magnitude, cmap="gray")
         ax_2d_spectrum.set_title(
-            r"$2D\ \mathrm{Spectrum}$",
-            fontsize=12,
-            family="Times New Roman",
+            "2D Spectrum",
             fontweight="bold",
         )
         ax_2d_spectrum.axis("on")
@@ -628,7 +615,6 @@ def visualize_data(
                 ha="center",
                 va="top",
                 transform=ax_img_list[i].transAxes,
-                fontsize=12,
                 usetex=True,
             )
 
@@ -653,7 +639,7 @@ def visualize_sharpening_results(
 
     total_rows = 1 + num_models
     total_cols = 1 + num_factors + 3
-    fig = plt.figure(figsize=(2 * total_cols, 2 * total_rows))
+    fig = plt.figure(figsize=(2.8 * total_cols, 2.5 * total_rows))
 
     gs = GridSpec(
         total_rows + 1,
@@ -666,13 +652,17 @@ def visualize_sharpening_results(
 
     ax_L = fig.add_subplot(gs[0, 1])
     ax_L.imshow(img_L, cmap="gray")
-    ax_L.set_title("Low Resolution")
-    ax_L.axis("off")
+    ax_L.set_title("Low Resolution", fontweight="bold")
+    ax_L.yaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_L.xaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_L.axis("on")
 
     ax_H = fig.add_subplot(gs[0, 2])
     ax_H.imshow(img_H, cmap="gray")
-    ax_H.set_title("High Resolution")
-    ax_H.axis("off")
+    ax_H.set_title("High Resolution", fontweight="bold")
+    ax_H.yaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_H.xaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_H.axis("on")
 
     metrics_start_col = 3
     ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
@@ -683,7 +673,7 @@ def visualize_sharpening_results(
         ax_psnr.plot(
             sorted(metrics[model_name].keys()), psnr_values, label=f"{model_name}"
         )
-    ax_psnr.set_title("PSNR (dB)")
+    ax_psnr.set_title("PSNR (dB)", fontweight="bold")
     ax_psnr.set_xlabel(r"Sharpening Factor (SF)")
     ax_psnr.yaxis.set_tick_params(rotation=90, pad=0.01)
     ax_psnr.grid(True)
@@ -695,7 +685,7 @@ def visualize_sharpening_results(
             metrics[model_name][f]["SSIM"] for f in sorted(metrics[model_name].keys())
         ]
         ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
-    ax_ssim.set_title("SSIM")
+    ax_ssim.set_title("SSIM", fontweight="bold")
     ax_ssim.set_xlabel(r"SF")
     ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
     ax_ssim.grid(True)
@@ -706,7 +696,7 @@ def visualize_sharpening_results(
             metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
         ]
         ax_si.plot(sorted(metrics[model_name].keys()), si_values)
-    ax_si.set_title(r"Sharpness Index")
+    ax_si.set_title("Sharpness Index", fontweight="bold")
     ax_si.set_xlabel(r"SF")
     ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
     ax_si.grid(True)
@@ -717,7 +707,7 @@ def visualize_sharpening_results(
 
         ax_model_name = fig.add_subplot(gs[row, 0])
         ax_model_name.text(
-            0.9,
+            1.5,
             0.5,
             model_name,
             ha="right",
@@ -747,131 +737,6 @@ def visualize_sharpening_results(
     plt.tight_layout()
     plt.subplots_adjust(
         left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
-    )
-
-    if save_path:
-        plt.savefig(
-            save_path, format="pdf", bbox_inches="tight", dpi=600, transparent=True
-        )
-    if visualize:
-        plt.show()
-    plt.close()
-
-
-def visualize_sharpening_results_(
-    img_L: np.ndarray,
-    img_H: np.ndarray,
-    sharpened_images: Dict[float, np.ndarray],
-    metrics: Dict[float, Dict[str, float]],
-    save_path: str = None,
-    visualize: bool = True,
-):
-    num_factors = len(next(iter(sharpened_images.values())))
-    num_models = len(sharpened_images)
-
-    total_rows = 1 + num_models
-    total_cols = 1 + num_factors + 3
-    fig = plt.figure(figsize=(2 * total_cols, 2 * total_rows))
-
-    gs = GridSpec(
-        total_rows + 1,
-        total_cols,
-        figure=fig,
-        height_ratios=[1] + [0.5] + [1] * num_models,
-        width_ratios=[0.5] + [1] * num_factors + [1.5, 1.6, 1.6],
-    )
-    gs.update(wspace=0.3, hspace=0.2)
-
-    ax_L = fig.add_subplot(gs[0, 1])
-    ax_L.imshow(img_L, cmap="gray")
-    ax_L.set_title("Low Resolution", fontsize=14)
-    ax_L.axis("off")
-
-    ax_H = fig.add_subplot(gs[0, 2])
-    ax_H.imshow(img_H, cmap="gray")
-    ax_H.set_title("High Resolution", fontsize=14)
-    ax_H.axis("off")
-
-    metrics_start_col = 3
-    ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
-    for model_name in metrics.keys():
-        psnr_values = [
-            metrics[model_name][f]["PSNR"] for f in sorted(metrics[model_name].keys())
-        ]
-        ax_psnr.plot(
-            sorted(metrics[model_name].keys()),
-            psnr_values,
-            label=f"{model_name}",
-            linewidth=2,
-        )
-    ax_psnr.set_title("PSNR (dB)", fontsize=14)
-    ax_psnr.set_xlabel(r"Sharpening Factor (SF)", fontsize=12)
-    ax_psnr.set_ylabel(r"PSNR (dB)", fontsize=12)
-    ax_psnr.yaxis.set_tick_params(rotation=90, pad=0.01)
-    ax_psnr.grid(True)
-    ax_psnr.legend(loc="best", fontsize=10)
-
-    ax_ssim = fig.add_subplot(gs[0, metrics_start_col + 1])
-    for model_name in metrics.keys():
-        ssim_values = [
-            metrics[model_name][f]["SSIM"] for f in sorted(metrics[model_name].keys())
-        ]
-        ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values, linewidth=2)
-    ax_ssim.set_title("SSIM", fontsize=14)
-    ax_ssim.set_xlabel(r"SF", fontsize=12)
-    ax_ssim.set_ylabel("SSIM", fontsize=12)
-    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)
-    ax_ssim.grid(True)
-
-    ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
-    for model_name in metrics.keys():
-        si_values = [
-            metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
-        ]
-        ax_si.plot(sorted(metrics[model_name].keys()), si_values, linewidth=2)
-    ax_si.set_title(r"Sharpness Index", fontsize=14)
-    ax_si.set_xlabel(r"SF", fontsize=12)
-    ax_si.set_ylabel("Sharpness Index", fontsize=12)
-    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)
-    ax_si.grid(True)
-
-    factors = sorted(next(iter(metrics.values())).keys())
-    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
-        row = 2 + model_index
-
-        ax_model_name = fig.add_subplot(gs[row, 0])
-        ax_model_name.text(
-            0.9,
-            0.5,
-            model_name,
-            ha="right",
-            va="center",
-            rotation=90,
-            fontweight="bold",
-            fontsize=12,
-        )
-        ax_model_name.axis("off")
-
-        for i, factor in enumerate(factors):
-            col = 1 + i
-            ax_model = fig.add_subplot(gs[row, col])
-            ax_model.imshow(model_images[factor], cmap="gray")
-            ax_model.axis("off")
-
-            if model_index == num_models - 1:
-                ax_model.text(
-                    0.5,
-                    -0.1,
-                    r"$\alpha = %.2f$" % factor,
-                    ha="center",
-                    va="top",
-                    transform=ax_model.transAxes,
-                    fontsize=12,
-                )
-
-    plt.tight_layout()
-    plt.subplots_adjust(
-        left=0.1, bottom=0.1, right=0.9, top=0.9, wspace=0.2, hspace=0.2
     )
 
     if save_path:
