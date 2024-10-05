@@ -54,7 +54,7 @@ plt.rcParams.update(
         # --- Font Sizes ---
         "font.size": 12,  # Base font size
         "axes.labelsize": 12,  # Font size for axis labels
-        "axes.titlesize": 15,  # Font size for titles
+        "axes.titlesize": 12,  # Font size for titles
         "xtick.labelsize": 12,  # Font size for x-axis ticks
         "ytick.labelsize": 12,  # Font size for y-axis ticks
         "legend.fontsize": 11,  # Font size for legends
@@ -625,7 +625,6 @@ def visualize_data(
     if visualize:
         plt.show()
 
-
 def visualize_sharpening_results(
     img_L: np.ndarray,
     img_H: np.ndarray,
@@ -639,14 +638,14 @@ def visualize_sharpening_results(
 
     total_rows = 1 + num_models
     total_cols = 1 + num_factors + 3
-    fig = plt.figure(figsize=(2.8 * total_cols, 2.5 * total_rows))
+    fig = plt.figure(figsize=(3 * total_cols, 2.5 * total_rows))
 
     gs = GridSpec(
         total_rows + 1,
         total_cols,
         figure=fig,
         height_ratios=[1] + [0.5] + [1] * num_models,
-        width_ratios=[0.5] + [1] * num_factors + [1.5, 1.6, 1.6],
+        width_ratios=[0.2] + [1] * num_factors + [1.5, 1.6, 1.6],
     )
     gs.update(wspace=0.2, hspace=0.1)
 
@@ -687,7 +686,7 @@ def visualize_sharpening_results(
         ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
     ax_ssim.set_title("SSIM", fontweight="bold")
     ax_ssim.set_xlabel(r"SF")
-    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
+    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)
     ax_ssim.grid(True)
 
     ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
@@ -698,7 +697,7 @@ def visualize_sharpening_results(
         ax_si.plot(sorted(metrics[model_name].keys()), si_values)
     ax_si.set_title("Sharpness Index", fontweight="bold")
     ax_si.set_xlabel(r"SF")
-    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)  # Rotate y-axis labels
+    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)
     ax_si.grid(True)
 
     factors = sorted(next(iter(metrics.values())).keys())
@@ -734,14 +733,14 @@ def visualize_sharpening_results(
                     fontsize=12,
                 )
 
-    plt.tight_layout()
-    plt.subplots_adjust(
-        left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
-    )
-
     if save_path:
         plt.savefig(
-            save_path, format="pdf", bbox_inches="tight", dpi=600, transparent=True
+            save_path,
+            format="pdf",
+            bbox_inches="tight",
+            dpi=600,
+            pad_inches=0,
+            transparent=True,
         )
     if visualize:
         plt.show()

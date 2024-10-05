@@ -263,6 +263,7 @@ class ModelGAN(ModelBase):
                 self.netG.parameters(), self.opt_train.get("G_clip_value", 1.0)
             )
             self.G_optimizer.step()
+            self.schedulers[0].step()
 
         # ------------------------------------
         # optimize D
@@ -310,6 +311,7 @@ class ModelGAN(ModelBase):
             self.netD.parameters(), self.opt_train.get("D_clip_value", 1.0)
         )
         self.D_optimizer.step()
+        self.schedulers[1].step()
 
         # ------------------------------------
         # record log

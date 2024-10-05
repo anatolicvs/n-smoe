@@ -1,0 +1,181 @@
+{
+    "task": "local_moex4" 
+    , "model": "gan" // "gan"
+    , "gpu_ids": [0]
+    
+    , "scale": 4       // broadcast to "netG" if SISR
+    , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
+    , "phw": 16  
+    , "overlap": 14
+    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
+    , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
+    , "merge_bn": false              // if no BN exists, set false
+    , "merge_bn_startpoint": 400000  // merge BN after N iterations
+        
+    , "path": {
+      "root": "/mnt/d/superresolution"  // "denoising" | "superresolution" server:/work/pb035507/superresolution
+      , "pretrained_netG": null   
+      , "pretrained_netD": null 
+      , "pretrained_netE": null 
+      }
+  
+      , "datasets": {
+        "train": {
+            "name": "train_dataset"          
+          , "dataset_type": "medical_sr"          
+          , "lq_patchsize": 32
+          , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
+          , "exclude_dirs": []
+          , "length" : 50
+          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/echocardiography"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_training_medical_echocardiography_v1_.pkl"
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 1
+          , "dataloader_batch_size": 2 
+        } 
+
+        ,"test": {
+            "name": "test_dataset" //"FLARE22"            
+          , "dataset_type": "medical_sr"            
+          , "lq_patchsize": 32
+          , "degradation_type" : "Downsample + blur" // "bsrgan" , "dpsr"
+          , "exclude_dirs": []
+          , "length" : 50
+          , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
+          , "dataroot_H": ["/mnt/e/Medical/mri/data_for_train/echocardiography"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+          , "dataroot_L": null              // path of L testing dataset
+          , "use_dataset_cache": true
+          , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_echocardiography_v1_.pkl"
+          , "H_size": 128                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 1
+          , "dataloader_batch_size": 1 
+        }
+      },
+      
+      "netG": {
+          "net_type": "unet_moex3_rev",
+          "kernel": 32,
+          "sharpening_factor": 1.0,
+          "model_channels": 64,
+          "num_res_blocks": 8,
+          "attention_resolutions": [64, 32, 16],
+          "dropout": 0.0,
+          "num_groups": 16,
+          "num_heads": 16,
+          "use_new_attention_order": true,
+          "use_checkpoint": true,
+          "use_fp16": false,
+          "resblock_updown": true,
+          "channel_mult": [1, 2, 4, 8, 16],
+          "conv_resample": true,
+          "resample_2d": false,
+          "attention_type": "cross_attention",
+          "activation": "GELU",
+          "rope_theta": 10000.0,
+          "resizer_num_layers": 3,
+          "resizer_avg_pool": false,
+          "init_type": "default"
+
+          // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+          , "init_bn_type": "constant"      // "uniform" | "constant"
+         , "init_gain": 1.0
+      }
+
+      , "netD": {
+        "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
+        , "in_nc": 1
+        , "base_nc": 64
+        , "n_layers": 12                  // only for "net_type":"discriminator_patchgan"
+        , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
+    
+        , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+        , "init_bn_type": "uniform"      // "uniform" | "constant"
+        , "init_gain": 0.2
+      }
+    
+      , "train": {
+          "is_moe": true
+        , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+        , "G_lossfn_weight": 1
+    
+        , "F_lossfn_type": "ssim"  // "l1" | "l2"
+        , "F_lossfn_weight": 1
+        , "F_feature_layer": [2,7,16,25,34]        // 25 | [2,7,16,25,34]
+        , "F_weights": [0.1,0.1,1.0,1.0,1.0]       // 1.0 | [0.1,0.1,1.0,1.0,1.0]
+        , "F_use_input_norm": true
+        , "F_use_range_norm": false
+    
+        , "gan_type": "lsgan"     // "gan" | "ragan" | "lsgan" | "wgan" | "softplusgan"
+        , "D_lossfn_weight": 0.1
+    
+        , "E_decay": 0.999        // Exponential Moving Average for netG: set 0 to disable; default setting 0.999
+    
+        , "D_init_iters": 0
+    
+        , "G_optimizer_type": "adam"
+        , "G_optimizer_lr": 1e-3  // learning rate
+        , "G_optimizer_wd": 0
+    
+        , "D_optimizer_type": "adam"
+        , "D_optimizer_lr": 1e-3  // learning rate
+        , "D_optimizer_wd": 0
+    
+        , "G_scheduler_type": "MultiStepLR"
+        , "G_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
+        , "G_scheduler_gamma": 0.5
+        , "G_optimizer_reuse": true
+    
+        , "D_scheduler_type": "MultiStepLR"
+        , "D_scheduler_milestones": [400000, 500000, 550000, 575000, 600000]
+        , "D_scheduler_gamma": 0.5
+        , "D_optimizer_reuse": false
+    
+        , "G_param_strict": true
+        , "D_param_strict": true
+        , "E_param_strict": true
+    
+        , "checkpoint_test": 100  // skip testing
+        , "checkpoint_save": 100
+        , "checkpoint_print": 10
+      },
+      "train_": {
+        "is_moe": true,
+        "G_lossfn_type": "l1",
+        "G_lossfn_weight": 1.0,
+        "F_lossfn_type": "ssim",
+        "F_lossfn_weight": 1.0,
+        "F_feature_layer": [2, 7, 16, 25, 34],
+        "F_weights": [0.1, 0.2, 0.8, 1.0, 1.2],
+        "F_use_input_norm": true,
+        "F_use_range_norm": true,
+        "gan_type": "wgan",
+        "D_lossfn_weight": 0.25,
+        "E_decay": 0.995,
+        "D_init_iters": 1000,
+        "G_optimizer_type": "adamw",
+        "G_optimizer_lr": 3e-5,
+        "G_optimizer_wd": 1e-4,
+        "D_optimizer_type": "adamw",
+        "D_optimizer_lr": 3e-5,
+        "D_optimizer_wd": 1e-4,
+        "G_scheduler_type": "CosineAnnealingLR",
+        "G_scheduler_t_max": 500000,
+        "G_scheduler_eta_min": 1e-7,
+        "G_optimizer_reuse": true,
+        "D_scheduler_type": "CosineAnnealingLR",
+        "D_scheduler_t_max": 500000,
+        "D_scheduler_eta_min": 1e-7,
+        "D_optimizer_reuse": false,
+        "G_param_strict": true,
+        "D_param_strict": true,
+        "E_param_strict": true,
+        "checkpoint_test": 50,
+        "checkpoint_save": 50,
+        "checkpoint_print": 10
+    }
+  }
+  

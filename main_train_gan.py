@@ -311,7 +311,7 @@ def main(**kwargs):
                 current_step += 1
                 model.feed_data(train_data)
                 model.optimize_parameters(current_step)
-                model.update_learning_rate(current_step)
+                # model.update_learning_rate(current_step)
             except Exception as e:
                 if opt["rank"] == 0:
                     logger.error(
