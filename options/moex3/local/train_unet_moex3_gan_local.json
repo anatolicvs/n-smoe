@@ -60,7 +60,7 @@
           "net_type": "unet_moex3_rev",
           "kernel": 32,
           "sharpening_factor": 1.0,
-          "model_channels": 96,
+          "model_channels": 64,
           "num_res_blocks": 8,
           "attention_resolutions": [64, 32, 16],
           "dropout": 0.0,
