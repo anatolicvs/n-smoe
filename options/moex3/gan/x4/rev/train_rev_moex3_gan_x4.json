@@ -81,12 +81,12 @@
           "net_type": "unet_moex3_rev",
           "kernel": 32,
           "sharpening_factor": 1.0,
-          "model_channels": 96,
+          "model_channels": 64,
           "num_res_blocks": 8,
           "attention_resolutions": [64, 32, 16],
           "dropout": 0.0,
           "num_groups": 16,
-          "num_heads": 16,
+          "num_heads": 8,
           "use_new_attention_order": true,
           "use_checkpoint": true,
           "use_fp16": false,
@@ -109,8 +109,8 @@
       , "netD": {
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
-        , "base_nc": 64
-        , "n_layers": 12                  // only for "net_type":"discriminator_patchgan"
+        , "base_nc": 128
+        , "n_layers": 16                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
         , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
         , "init_bn_type": "uniform"      // "uniform" | "constant"
