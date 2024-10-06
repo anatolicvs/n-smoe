@@ -91,10 +91,21 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 PARTITION="c23g"
 
 
+# get_idle_node() {
+#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+#     # sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+#     sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
+# }
+
 get_idle_node() {
-    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-    # sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
-    sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
+    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" '
+    $2 == "idle" && $1 != "r23g0002" {
+        split($3, gpu_info, ":");
+        if (gpu_info[2] >= gpus) {
+            print $1;
+            exit;
+        }
+    }'
 }
 
 IDLE_NODE=$(get_idle_node)
@@ -110,6 +121,10 @@ if [ ! -f "$JOB_SCRIPT" ]; then
 fi
 
 # idle nodes n23g[0022-0029],r23g[0001-0005],w23g[0001-0003]
+
+VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
+
+export CUDA_VISIBLE_DEVICES=$VISIBLE_DEVICES
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
@@ -130,7 +145,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-# module load CUDA/12.6.1
+module load CUDA/12.6.1
 
 echo "Starting job at: \$(date)"
 nvidia-smi
