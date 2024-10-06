@@ -425,6 +425,13 @@ def main(**kwargs):
 
         if opt["rank"] == 0:
             logger.info(f"Epoch {epoch} completed. Current step: {current_step}")
+            try:
+                logger.info("Saving the model.")
+                model.save(current_step)
+            except Exception as e:
+                if opt["rank"] == 0:
+                    logger.error(f"Error saving model at step {current_step}: {e}")
+                raise e
 
     if opt["rank"] == 0:
         logger.info("Training completed.")

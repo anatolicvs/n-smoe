@@ -883,8 +883,8 @@ class MoE(Backbone[MoEConfig]):
         )
         return R.view(*theta.shape, 2, 2)
 
-    def extract_parameters_v2(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
-        # v2
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+        # v2 - models after Oct 6 uses this version
         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
@@ -894,7 +894,7 @@ class MoE(Backbone[MoEConfig]):
             -1, p.shape[1], k, 2
         )
 
-        scale = F.softplus(scale) + 1e-6  # Ensure positive scales
+        scale = F.softplus(scale) + 1e-8  # Ensure positive scales
 
         rot_idx: int = scale_idx + 2 * k
         theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
@@ -928,8 +928,8 @@ class MoE(Backbone[MoEConfig]):
 
         return Gaussians(mu, None, w, theta, scale)
 
-    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
-        # v0
+    def extract_parameters_v0(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+        # v0, models before Oct 6 uses this version
         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
@@ -1050,7 +1050,8 @@ class MoE(Backbone[MoEConfig]):
 
         return y_hat
 
-    def forward_v2(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        # v2 - models after Oct 6 uses this version 
         batch_size, num_channels, _ = params.shape
         gauss = self.extract_parameters(
             params, self.kernel, num_channels
@@ -1114,7 +1115,8 @@ class MoE(Backbone[MoEConfig]):
 
         return y_hat
 
-    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+    def forward_v3(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        #v3 - models before Oct 6 uses this version
         batch_size, num_channels, _ = params.shape
         gauss = self.extract_parameters(
             params, self.kernel, num_channels
