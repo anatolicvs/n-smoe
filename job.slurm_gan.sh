@@ -93,7 +93,8 @@ PARTITION="c23g"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-    sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+    # sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+    sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 }
 
 IDLE_NODE=$(get_idle_node)
