@@ -93,13 +93,21 @@ PARTITION="c23g"
 
 # get_idle_node() {
 #     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-#     # sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
-#     sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
+#     sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 # }
 
+EXCLUDE_NODES="r23g0002,r23g0002"
+
 get_idle_node() {
-    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" '
-    $2 == "idle" && $1 != "r23g0002" {
+    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
+    $2 == "idle" {
+        split(exclude_nodes, excl_nodes, ",");
+        for (node in excl_nodes) {
+            if ($1 == excl_nodes[node]) {
+                next;  # Skip the excluded nodes
+            }
+        }
         split($3, gpu_info, ":");
         if (gpu_info[2] >= gpus) {
             print $1;
@@ -124,7 +132,6 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-export CUDA_VISIBLE_DEVICES=$VISIBLE_DEVICES
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
