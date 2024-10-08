@@ -1,5 +1,5 @@
 {
-    "task": "rev_moex3_gan_v1_x4" 
+    "task": "rev_moex3_gan_v2_x4" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0,1,2,3]
 
@@ -77,7 +77,7 @@
       },
 
       
-      "netG": {
+      "netG_v0": {
           "net_type": "unet_moex3_rev",
           "kernel": 32,
           "sharpening_factor": 1.0,
@@ -106,10 +106,39 @@
          , "init_gain": 1.0
       }
 
+      , "netG": {
+        "net_type": "unet_moex3_rev",
+        "kernel": 16,
+        "sharpening_factor": 1.0,
+        "model_channels": 64,
+        "num_res_blocks": 8,
+        "attention_resolutions": [64, 32, 16 ,8 ,4],
+        "dropout": 0.0,
+        "num_groups": 16,
+        "num_heads": 32,
+        "use_new_attention_order": true,
+        "use_checkpoint": true,
+        "use_fp16": false,
+        "resblock_updown": false,
+        "channel_mult": [1, 2, 4, 8, 16],
+        "conv_resample": false,
+        "resample_2d": false,
+        "attention_type": "cross_attention",
+        "activation": "LeakyReLU", // "Mish" | "ReLU" | "LeakyReLU" | "GELU" | "SELU" | "CELU" | "Sigmoid" | "Tanh" | "Softplus" | "Softshrink" | "Softsign" | "Hardshrink" | "Hardtanh" | "Hardswish" | "ELU" | "PReLU" | "Swish" | "LogSigmoid" | "Softmax" | "Softmin" | "Softmax2d" | "LogSoftmax" | "Tanhshrink" | "Threshold" | "Threshold2d" | "RReLU" | "GLU" | "LogSoftmax
+        "rope_theta": 10000.0,
+        "resizer_num_layers": 2,
+        "resizer_avg_pool": false,
+        "init_type": "default"
+
+        // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+        , "init_bn_type": "constant"      // "uniform" | "constant"
+       , "init_gain": 1.0
+      }
+
       , "netD": {
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
-        , "base_nc": 128
+        , "base_nc": 96
         , "n_layers": 16                  // only for "net_type":"discriminator_patchgan"
         , "norm_type": "spectral"        // only for "net_type":"discriminator_patchgan"  | 'batch', 'instance', 'spectral', 'batchspectral', 'instancespectral'
         , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
@@ -119,7 +148,7 @@
     
       , "train": {
         "is_moe": true
-      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
       , "G_lossfn_weight": 1
   
       , "F_lossfn_type": "ssim"  // "l1" | "l2"
@@ -158,8 +187,8 @@
       , "D_param_strict": true
       , "E_param_strict": true
   
-      , "checkpoint_test": 14000  // skip testing
-      , "checkpoint_save": 14000
+      , "checkpoint_test": 30000  // skip testing
+      , "checkpoint_save": 30000
       , "checkpoint_print": 500
     }
   }
