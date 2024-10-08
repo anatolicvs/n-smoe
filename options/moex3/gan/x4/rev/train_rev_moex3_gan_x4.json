@@ -1,5 +1,5 @@
 {
-    "task": "rev_moex3_gan_v2_x4" 
+    "task": "rev_moex3_gan_v2_x4_krnl_16" 
     , "model": "gan" // "gan"
     , "gpu_ids": [0,1,2,3]
 

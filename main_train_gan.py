@@ -82,10 +82,6 @@ def initialize_distributed(opt):
             opt["rank"] = dist.get_rank()
             opt["local_rank"] = int(os.environ.get("LOCAL_RANK", 0))
 
-<<<<<<< HEAD
-            # visible_devices = ",".join(map(str, range(opt['local_rank'], opt['local_rank'] + torch.cuda.device_count())))
-            # os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
-=======
             visible_devices = ",".join(
                 map(
                     str,
@@ -95,7 +91,6 @@ def initialize_distributed(opt):
                 )
             )
             os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
->>>>>>> c7fc905 (Refactor GPU device visibility and selection logic)
 
             available_gpus = torch.cuda.device_count()
             if opt["local_rank"] >= available_gpus:
