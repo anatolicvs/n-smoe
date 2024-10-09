@@ -28,3 +28,11 @@
 # [submodule "cvpr/GPEMSR"]
 #         path = cvpr/GPEMSR
 #         url =  https://github.com/jtshou/GPEMSR.git
+
+[submodule "cvpr/3d-gaussian-splatting"]
+	path = cvpr/3d-gaussian-splatting
+	url = https://github.com/WangFeng18/3d-gaussian-splatting.git
+
+[submodule "cvpr/gsgen"]
+	path = cvpr/gsgen
+	url = https://github.com/gsgen3d/gsgen.git
