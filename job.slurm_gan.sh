@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="24:00:00"
+TIME="48:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -91,9 +91,29 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 PARTITION="c23g"
 
 
+# get_idle_node() {
+#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+#     sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
+# }
+
+EXCLUDE_NODES="r23g0002,r23g0001"
+
 get_idle_node() {
-    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-    sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
+    $2 == "idle" {
+        split(exclude_nodes, excl_nodes, ",");
+        for (node in excl_nodes) {
+            if ($1 == excl_nodes[node]) {
+                next;  # Skip the excluded nodes
+            }
+        }
+        split($3, gpu_info, ":");
+        if (gpu_info[2] >= gpus) {
+            print $1;
+            exit;
+        }
+    }'
 }
 
 IDLE_NODE=$(get_idle_node)
@@ -109,6 +129,9 @@ if [ ! -f "$JOB_SCRIPT" ]; then
 fi
 
 # idle nodes n23g[0022-0029],r23g[0001-0005],w23g[0001-0003]
+
+VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
+
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
@@ -129,7 +152,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-# module load CUDA/12.6.1
+module load CUDA/12.6.1
 
 echo "Starting job at: \$(date)"
 nvidia-smi

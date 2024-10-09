@@ -84,8 +84,28 @@ mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp dir
 PARTITION="c23g"
 
 
+# get_idle_node() {
+#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+#     sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
+# }
+
+EXCLUDE_NODES="r23g0002,r23g0001"
+
 get_idle_node() {
-    sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
+    $2 == "idle" {
+        split(exclude_nodes, excl_nodes, ",");
+        for (node in excl_nodes) {
+            if ($1 == excl_nodes[node]) {
+                next;  # Skip the excluded nodes
+            }
+        }
+        split($3, gpu_info, ":");
+        if (gpu_info[2] >= gpus) {
+            print $1;
+            exit;
+        }
+    }'
 }
 
 IDLE_NODE=$(get_idle_node)
@@ -93,6 +113,8 @@ if [ -z "$IDLE_NODE" ]; then
     echo "Error: No idle nodes found in partition $PARTITION" >&2
     exit 1
 fi
+
+VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
 JOB_SCRIPT=$(mktemp /home/p0021791/tmp/job_script.XXXXXX)
 if [ ! -f "$JOB_SCRIPT" ]; then
@@ -118,19 +140,20 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
 
-# module load CUDA/12.6.1
+module load CUDA/12.6.1
 
 echo "Starting job at: \$(date)"
 nvidia-smi
 echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
 # export TORCH_DISTRIBUTED_DEBUG=INFO
-export NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_BLOCKING_WAIT=1
+export TORCH_USE_CUDA_DSA=1
+export NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
-export NCCL_TIMEOUT=1800
+export NCCL_TIMEOUT=1200
 # export TORCH_DISTRIBUTED_DEBUG=DETAIL
 export NCCL_P2P_LEVEL=PXB
 export NCCL_P2P_DISABLE=1

@@ -77,9 +77,27 @@ def initialize_distributed(opt):
             init_dist("pytorch")
             # opt["world_size"] = int(os.environ.get("WORLD_SIZE", 1))
             # opt["rank"] = int(os.environ.get("RANK", 0))
+            
             opt["world_size"] = dist.get_world_size()
             opt["rank"] = dist.get_rank()
             opt["local_rank"] = int(os.environ.get("LOCAL_RANK", 0))
+
+            visible_devices = ",".join(
+                map(
+                    str,
+                    range(
+                        opt["local_rank"], opt["local_rank"] + torch.cuda.device_count()
+                    ),
+                )
+            )
+            os.environ["CUDA_VISIBLE_DEVICES"] = visible_devices
+
+            available_gpus = torch.cuda.device_count()
+            if opt["local_rank"] >= available_gpus:
+                raise RuntimeError(
+                    f"Invalid device ordinal {opt['local_rank']} (available GPUs: {available_gpus})"
+                )
+
         else:
             opt["rank"], opt["world_size"], opt["local_rank"] = 0, 1, 0
     except Exception as e:
@@ -318,9 +336,9 @@ def main(**kwargs):
                         f"Error during training iteration {i} in epoch {epoch}: {e}"
                     )
                 synchronize()
-                # dist.destroy_process_group()
-                # sys.exit(1)
-                continue
+                dist.destroy_process_group()
+                sys.exit(1)
+                # continue
             finally:
                 del train_data
                 torch.cuda.empty_cache()
