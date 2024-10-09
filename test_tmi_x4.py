@@ -108,6 +108,7 @@ def main(**kwargs):
         from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
         from models.network_unetmoex3 import EncoderConfig as enc2_cfg
         from models.network_unetmoex3 import MoEConfig as moe2_cfg
+        from models.network_swinir import SwinIR as swinir
 
         # json_moex3 = """
         # {
@@ -357,7 +358,8 @@ def main(**kwargs):
         model_moex1 = load_model(
             moex1_conf,
             sharpening_factor=netG_moex1["sharpening_factor"],
-            weights_path=opt["pretrained_models"]["moex1_psnr_x4"],
+            # weights_path=opt["pretrained_models"]["moex1_gan_v8_x4"],
+            weights_path=opt["pretrained_models"]["moex1_psnr_v6_x4"],
             device=device,
         )
 
@@ -409,7 +411,7 @@ def main(**kwargs):
         model_moex3_v1_x4_32 = load_model(
             moex3_v1_x4_32_conf,
             sharpening_factor=netG_moex3_v1_x4_32["sharpening_factor"],
-            weights_path=opt["pretrained_models"]["moex3_v1_x4_32"],
+            weights_path=opt["pretrained_models"]["moex3_psnr_v1_x4_32"],
             device=device,
         )
 
@@ -526,6 +528,67 @@ def main(**kwargs):
         # for k, v in model_moex3_32.named_parameters():
         #     v.requires_grad = False
         # model_moex3_32 = model_moex3_32.to(device)
+
+        json_swinir = """
+            {
+            "netG": {
+                "net_type": "swinir",
+                "upscale": 4,
+                "in_chans": 1,
+                "img_size": 64,
+                "window_size": 8,
+                "img_range": 1.0,
+                "depths": [
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+                ],
+                "embed_dim": 180,
+                "num_heads": [
+                6,
+                6,
+                6,
+                6,
+                6,
+                6
+                ],
+                "mlp_ratio": 2,
+                "upsampler": "nearest+conv",
+                "resi_connection": "1conv",
+                "init_type": "default",
+                "scale": 4,
+                "n_channels": 1,
+                "ang_res": 5
+            }
+        }
+        """
+
+        netG_swinir = json.loads(json_swinir)["netG"]
+        model_swinir = swinir(
+            upscale=netG_swinir["upscale"],
+            in_chans=netG_swinir["in_chans"],
+            img_size=netG_swinir["img_size"],
+            window_size=netG_swinir["window_size"],
+            img_range=netG_swinir["img_range"],
+            depths=netG_swinir["depths"],
+            embed_dim=netG_swinir["embed_dim"],
+            num_heads=netG_swinir["num_heads"],
+            mlp_ratio=netG_swinir["mlp_ratio"],
+            upsampler=netG_swinir["upsampler"],
+            resi_connection=netG_swinir["resi_connection"],
+        )
+        model_swinir.load_state_dict(
+            torch.load(opt["pretrained_models"]["swinir_x4"], weights_only=True),
+            strict=True,
+        )
+        model_swinir.eval()
+
+        for k, v in model_swinir.named_parameters():
+            v.requires_grad = False
+        model_swinir = model_swinir.to(device)
 
         json_dpsr = """
             {
@@ -666,6 +729,7 @@ def main(**kwargs):
             "N-SMoE-III": model_moex3_v1_x4_32,  # k = 32 | attn=RoPE
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
+            "SwinIR": model_swinir,
             "Bicubic": default_resizer,
         }
 
@@ -803,6 +867,10 @@ def main(**kwargs):
                         "E_ESRGAN_img": {
                             "image": results["ESRGAN"]["e_img"],
                             "title": "ESRGAN",
+                        },
+                        "E_SwinIR_img": {
+                            "image": results["SwinIR"]["e_img"],
+                            "title": "SwinIR",
                         },
                     }
 
