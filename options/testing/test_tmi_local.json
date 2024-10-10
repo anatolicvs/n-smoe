@@ -38,9 +38,10 @@
         ,"moex1_gan_x4" : "/mnt/e/Weights/moex1_sr_gan_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
         
         //,"moex1_psnr_x4" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
-        , "moex1_psnr_v6_x4" : "/mnt/e/Weights/best_moex1_sr_plain_v6_x4_mri_rgb_act_gelu_krnl_16/models/27383_G.pth"
+        , "moex1_psnr_v6_x4" : "/mnt/e/Weights/best_moex1_sr_plain_v6_x4_mri_rgb_act_gelu_krnl_16/models/30000_G.pth"
         ,"moex1_gan_v8_x4" : "/mnt/e/Weights/moex1_sr_gan_v8_x4_mri_rgb_act_gelu/models/168994_G.pth"
         ,"moex3_psnr_v1_x4_32" : "/mnt/e/Weights/moex3_sr_medium_plain_v1_x4_medical_krnl_32/models/40000_G.pth"
+        , "rev_moex3_v1_x4_16" : "/mnt/e/Weights/rev_moex3_gan_v2_x4_krnl_16/models/14497_G.pth"
         ,"moex3_x4" : null
         ,"moex3_x4_32": null
       }

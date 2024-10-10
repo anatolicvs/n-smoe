@@ -29,11 +29,11 @@ from utils_n.vis import (
     visualize_with_segmentation,
 )
 
-torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
-if torch.cuda.get_device_properties(0).major >= 8:
-    # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
+# torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
+# if torch.cuda.get_device_properties(0).major >= 8:
+#     # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
+#     torch.backends.cuda.matmul.allow_tf32 = True
+#     torch.backends.cudnn.allow_tf32 = True
 
 from utils_n.calc_metrics import calc_metrics
 from utils_n.gen_latex_table import gen_latex_table
@@ -100,14 +100,28 @@ def main(**kwargs):
     if task == "sr_x4":
         from models.network_dpsr import MSRResNet_prior as dpsr
         from models.network_rrdb import RRDB as rrdb
-        from models.network_unetmoex1 import Autoencoder as ae1
-        from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
-        from models.network_unetmoex1 import EncoderConfig as enc1_cfg
-        from models.network_unetmoex1 import MoEConfig as moe1_cfg
-        from models.network_unetmoex3 import Autoencoder as ae2
-        from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
-        from models.network_unetmoex3 import EncoderConfig as enc2_cfg
-        from models.network_unetmoex3 import MoEConfig as moe2_cfg
+
+        from models.network_unetmoex1 import (
+            Autoencoder as ae1,
+            AutoencoderConfig as ae1_cfg,
+            EncoderConfig as enc1_cfg,
+            MoEConfig as moe1_cfg,
+        )
+
+        from models.network_unetmoex3 import (
+            Autoencoder as ae2,
+            AutoencoderConfig as ae2_cfg,
+            EncoderConfig as enc2_cfg,
+            MoEConfig as moe2_cfg,
+        )
+
+        from models.moex.network_unetmoex3 import (
+            Autoencoder as ae3,
+            AutoencoderConfig as ae3_cfg,
+            EncoderConfig as enc3_cfg,
+            MoEConfig as moe3_cfg,
+        )
+
         from models.network_swinir import SwinIR as swinir
 
         # json_moex3 = """
@@ -315,9 +329,56 @@ def main(**kwargs):
         }
         """
 
+        json_rev_moex3_v1_x4_16 = """
+        {
+            "netG": {
+                "net_type": "unet_moex3_rev",
+                "kernel": 16,
+                "sharpening_factor": 1.0,
+                "model_channels": 64,
+                "num_res_blocks": 8,
+                "attention_resolutions": [
+                64,
+                32,
+                16,
+                8,
+                4
+                ],
+                "dropout": 0.0,
+                "num_groups": 16,
+                "num_heads": 32,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": false,
+                "channel_mult": [
+                1,
+                2,
+                4,
+                8,
+                16
+                ],
+                "conv_resample": false,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "LeakyReLU",
+                "rope_theta": 10000.0,
+                "resizer_num_layers": 2,
+                "resizer_avg_pool": false,
+                "init_type": "default",
+                "init_bn_type": "constant",
+                "init_gain": 1.0,
+                "scale": 4,
+                "n_channels": 1
+                }
+            }
+        """
+
         netG_moex1 = json.loads(json_moex1_psnr_v6_x4)["netG"]
 
         netG_moex3_v1_x4_32 = json.loads(json_moex3_v1_x4_32)["netG"]
+
+        netG_rev_moex3_v1_x4_16 = json.loads(json_rev_moex3_v1_x4_16)["netG"]
 
         encoder_cfg1 = enc1_cfg(
             model_channels=netG_moex1["model_channels"],
@@ -412,6 +473,58 @@ def main(**kwargs):
             moex3_v1_x4_32_conf,
             sharpening_factor=netG_moex3_v1_x4_32["sharpening_factor"],
             weights_path=opt["pretrained_models"]["moex3_psnr_v1_x4_32"],
+            device=device,
+        )
+
+        encoder_cfg3_rev_v1_x4_16 = enc3_cfg(
+            model_channels=netG_rev_moex3_v1_x4_16["model_channels"],  # 32,
+            num_res_blocks=netG_rev_moex3_v1_x4_16["num_res_blocks"],  # 4,
+            attention_resolutions=netG_rev_moex3_v1_x4_16[
+                "attention_resolutions"
+            ],  # [16, 8],
+            dropout=netG_rev_moex3_v1_x4_16["dropout"],  # 0.2,
+            channel_mult=netG_rev_moex3_v1_x4_16["channel_mult"],  # (2, 4, 8),
+            conv_resample=netG_rev_moex3_v1_x4_16["conv_resample"],  # False,
+            dims=2,
+            use_checkpoint=netG_rev_moex3_v1_x4_16["use_checkpoint"],  # True,
+            use_fp16=netG_rev_moex3_v1_x4_16["use_fp16"],  # False,
+            num_heads=netG_rev_moex3_v1_x4_16["num_heads"],  # 4,
+            # num_head_channels=netG_rev_moex3_v1_x4_16["num_head_channels"],  # 8,
+            resblock_updown=netG_rev_moex3_v1_x4_16["resblock_updown"],  # False,
+            num_groups=netG_rev_moex3_v1_x4_16["num_groups"],  # 32,
+            resample_2d=netG_rev_moex3_v1_x4_16["resample_2d"],  # True,
+            scale_factor=netG_rev_moex3_v1_x4_16["scale"],
+            resizer_num_layers=netG_rev_moex3_v1_x4_16["resizer_num_layers"],  # 4,
+            resizer_avg_pool=netG_rev_moex3_v1_x4_16["resizer_avg_pool"],  # False,
+            activation=netG_rev_moex3_v1_x4_16["activation"],
+            rope_theta=netG_rev_moex3_v1_x4_16["rope_theta"],  # 10000.0,
+            attention_type=netG_rev_moex3_v1_x4_16[
+                "attention_type"
+            ],  # "cross_attention",  # "attention" or "cross_attention"
+        )
+
+        moex3_rev_rev_v1_x4_16 = ModelConfig(
+            encoder_config=encoder_cfg3_rev_v1_x4_16,
+            moe_cfg_class=moe3_cfg,
+            ae_cfg_class=ae3_cfg,
+            ae_class=ae3,
+            model_params={
+                "kernel": netG_rev_moex3_v1_x4_16["kernel"],
+                "sharpening_factor": netG_rev_moex3_v1_x4_16["sharpening_factor"],
+                "n_channels": opt["n_channels"],
+                "z": int(
+                    2 * netG_rev_moex3_v1_x4_16["kernel"]
+                    + 4 * netG_rev_moex3_v1_x4_16["kernel"]
+                    + netG_rev_moex3_v1_x4_16["kernel"]
+                ),
+            },
+            opt=opt,
+        )
+
+        model_rev_v1_x4_16 = load_model(
+            moex3_rev_rev_v1_x4_16,
+            sharpening_factor=netG_rev_moex3_v1_x4_16["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["rev_moex3_v1_x4_16"],
             device=device,
         )
 
@@ -726,6 +839,7 @@ def main(**kwargs):
         models = {
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
             # "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
+            "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE
             "N-SMoE-III": model_moex3_v1_x4_32,  # k = 32 | attn=RoPE
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
@@ -855,6 +969,10 @@ def main(**kwargs):
                         "E_SMoE_img": {
                             "image": results["N-SMoE"]["e_img"],
                             "title": "N-SMoE",
+                        },
+                        "E_SMoE_II_img": {
+                            "image": results["N-SMoE-II"]["e_img"],
+                            "title": "N-SMoE-II",
                         },
                         "E_SMoE_III_img": {
                             "image": results["N-SMoE-III"]["e_img"],
