@@ -5,7 +5,7 @@ import json
 import logging
 import os.path
 import random
-from typing import Dict, List
+from typing import Dict
 
 import click
 import numpy as np
@@ -97,20 +97,30 @@ def main(**kwargs):
     task = opt.get("task", "sr_x2")
 
     if task == "sr_x2":
-        from models.moex.network_unetmoex3 import Autoencoder as ae23
-        from models.moex.network_unetmoex3 import AutoencoderConfig as ae3_cfg
-        from models.moex.network_unetmoex3 import EncoderConfig as enc3_cfg
         from models.network_dpsr import MSRResNet_prior as dpsr
         from models.network_rrdb import RRDB as rrdb
         from models.network_swinir import SwinIR as swinir
-        from models.network_unetmoex1 import Autoencoder as ae1
-        from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
-        from models.network_unetmoex1 import EncoderConfig as enc1_cfg
-        from models.network_unetmoex1 import MoEConfig as moe1_cfg
-        from models.network_unetmoex3 import Autoencoder as ae2
-        from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
-        from models.network_unetmoex3 import EncoderConfig as enc2_cfg
-        from models.network_unetmoex3 import MoEConfig as moe2_cfg
+
+        from models.moex.network_unetmoex3 import (
+            Autoencoder as ae23,
+            AutoencoderConfig as ae3_cfg,
+            EncoderConfig as enc3_cfg,
+            MoEConfig as moe3_cfg,
+        )
+
+        from models.network_unetmoex1 import (
+            Autoencoder as ae1,
+            AutoencoderConfig as ae1_cfg,
+            EncoderConfig as enc1_cfg,
+            MoEConfig as moe1_cfg,
+        )
+
+        from models.network_unetmoex3 import (
+            Autoencoder as ae2,
+            AutoencoderConfig as ae2_cfg,
+            EncoderConfig as enc2_cfg,
+            MoEConfig as moe2_cfg,
+        )
 
         json_moex3_32_rev = """
         {       
@@ -417,7 +427,7 @@ def main(**kwargs):
 
         moex3_conf_32_rev_conf = ModelConfig(
             encoder_config=encoder_cfg3_32_rev,
-            moe_cfg_class=moe2_cfg,
+            moe_cfg_class=moe3_cfg,
             ae_cfg_class=ae3_cfg,
             ae_class=ae23,
             model_params={
