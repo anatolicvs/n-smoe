@@ -106,7 +106,7 @@
          , "init_gain": 1.0
       }
 
-      , "netG": {
+      , "netG_v1": {
         "net_type": "unet_moex3_rev",
         "kernel": 16,
         "sharpening_factor": 1.0,
@@ -135,6 +135,35 @@
        , "init_gain": 1.0
       }
 
+      , "netG": {
+        "net_type": "unet_moex3_rev",
+        "kernel": 16,
+        "sharpening_factor": 1.0,
+        "model_channels": 64,
+        "num_res_blocks": 4,
+        "attention_resolutions": [32, 16 ,8 ,4],
+        "dropout": 0.0,
+        "num_groups": 16,
+        "num_heads": 16,
+        "use_new_attention_order": true,
+        "use_checkpoint": true,
+        "use_fp16": false,
+        "resblock_updown": true,
+        "channel_mult": [1, 2, 4, 8, 16],
+        "conv_resample": false,
+        "resample_2d": false,
+        "attention_type": "cross_attention",
+        "activation": "GELU", // "Mish" | "ReLU" | "LeakyReLU" | "GELU" | "SELU" | "CELU" | "Sigmoid" | "Tanh" | "Softplus" | "Softshrink" | "Softsign" | "Hardshrink" | "Hardtanh" | "Hardswish" | "ELU" | "PReLU" | "Swish" | "LogSigmoid" | "Softmax" | "Softmin" | "Softmax2d" | "LogSoftmax" | "Tanhshrink" | "Threshold" | "Threshold2d" | "RReLU" | "GLU" | "LogSoftmax
+        "rope_theta": 10000.0,
+        "resizer_num_layers": 2,
+        "resizer_avg_pool": false,
+        "init_type": "default"
+
+        // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+        , "init_bn_type": "constant"      // "uniform" | "constant"
+       , "init_gain": 1.0
+      }
+
       , "netD": {
         "net_type": "discriminator_unet" // "discriminator_patchgan" | "discriminator_unet"
         , "in_nc": 1
@@ -148,7 +177,7 @@
     
       , "train": {
         "is_moe": true
-      , "G_lossfn_type": "l2"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
+      , "G_lossfn_type": "l1"    // "l1" | "l2" | "l2sum" | "l1c" | "ssim"
       , "G_lossfn_weight": 1
   
       , "F_lossfn_type": "ssim"  // "l1" | "l2"

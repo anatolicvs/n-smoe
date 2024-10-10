@@ -81,37 +81,36 @@
         "init_type": "default"
     },
       
-      "netG": {
-          "net_type": "unet_moex3_rev",
-          "kernel": 32,
-          "sharpening_factor": 1.0,
-          "model_channels": 64,
-          "num_res_blocks": 12,
-          "attention_resolutions": [64, 32, 16],
-          "dropout": 0.0,
-          "num_groups": 16,
-          "num_heads": 16,
-          "use_new_attention_order": true,
-          "use_checkpoint": true,
-          "use_fp16": false,
-          "resblock_updown": true,
-          "channel_mult": [1, 2, 4, 8, 16],
-          "conv_resample": true,
-          "resample_2d": false,
-          "attention_type": "cross_attention",
-          "activation": "GELU",
-          "rope_theta": 960000.0,
-          "resizer_num_layers": 3,
-          "resizer_avg_pool": true
-          // "init_type": "default"
+    "netG": {
+      "net_type": "unet_moex3_rev",
+      "kernel": 16,
+      "sharpening_factor": 1.0,
+      "model_channels": 64,
+      "num_res_blocks": 4,
+      "attention_resolutions": [32, 16 ,8 ,4],
+      "dropout": 0.0,
+      "num_groups": 16,
+      "num_heads": 16,
+      "use_new_attention_order": true,
+      "use_checkpoint": true,
+      "use_fp16": false,
+      "resblock_updown": true,
+      "channel_mult": [1, 2, 4, 8, 16],
+      "conv_resample": false,
+      "resample_2d": false,
+      "attention_type": "cross_attention",
+      "activation": "GELU", // "Mish" | "ReLU" | "LeakyReLU" | "GELU" | "SELU" | "CELU" | "Sigmoid" | "Tanh" | "Softplus" | "Softshrink" | "Softsign" | "Hardshrink" | "Hardtanh" | "Hardswish" | "ELU" | "PReLU" | "Swish" | "LogSigmoid" | "Softmax" | "Softmin" | "Softmax2d" | "LogSoftmax" | "Tanhshrink" | "Threshold" | "Threshold2d" | "RReLU" | "GLU" | "LogSoftmax
+      "rope_theta": 10000.0,
+      "resizer_num_layers": 2,
+      "resizer_avg_pool": false,
+      "init_type": "default"
 
-
-          , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
-          , "init_bn_type": "constant"      // "uniform" | "constant"
-         , "init_gain": 1.0
-      },
+      // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
+      , "init_bn_type": "constant"      // "uniform" | "constant"
+     , "init_gain": 1.0
+  }
   
-      "netG_base": {
+     , "netG_base": {
         "net_type": "unet_moex3",
         "kernel": 16,
         "sharpening_factor": 1,
@@ -145,16 +144,20 @@
         , "G_optimizer_lr": 1e-5            // learning rate
         , "G_optimizer_clipgrad": null      // unused
     
-        , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
-        , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
-        , "G_scheduler_gamma": 0.5
+        // , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
+        // , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
+        // , "G_scheduler_gamma": 0.5
+        
+        , "G_scheduler_type": "CosineAnnealingLR"
+        , "G_scheduler_t_max": 500000
+        , "G_scheduler_eta_min": 1e-7
     
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 10           // for testing
-        , "checkpoint_save": 10           // for saving model
-        , "checkpoint_print": 5           // for print
+        , "checkpoint_test": 100           // for testing
+        , "checkpoint_save": 100           // for saving model
+        , "checkpoint_print": 10           // for print
       }
   }
   
