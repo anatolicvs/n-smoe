@@ -22,9 +22,14 @@
 [submodule "gmflow"]
         path = models/gmflow
         url = https://github.com/haofeixu/gmflow.git
+		
 [submodule "cvpr/SinSR"]
         path = cvpr/SinSR
         url = https://github.com/wyf0912/SinSR.git
+
+[submodule "models/pykan"]
+        path = models/pykan
+        url =  https://github.com/KindXiaoming/pykan.git
 
 # [submodule "cvpr/GPEMSR"]
 #         path = cvpr/GPEMSR
