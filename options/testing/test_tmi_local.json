@@ -28,9 +28,9 @@
         
         
 
-        ,"dpsr_x4" : "/mnt/e/Weights/dpsr_v1_x4/models/1365000_G.pth"
-        ,"esrgan_x4": "/mnt/e/Weights/rrdb_v1_x4/models/405000_G.pth"
-        ,"swinir_x4": "/mnt/e/Weights/swinir_sr_realworld_x4_medical_mix_psnr/models/1000_G.pth"
+        ,"dpsr_x4" : "/mnt/e/Weights/dpsr_v1_x4/models/355000_G.pth"
+        ,"esrgan_x4": "/mnt/e/Weights/rrdb_v1_x4/models/355000_G.pth"
+        ,"swinir_x4": "/mnt/e/Weights/swinir_sr_realworld_x4_medical_mix_psnr/models/3000_G.pth"
         // ,"moex1_x4" : "/mnt/e/Weights/moex1_sr_gan_v6_x4_mri_rgb_act_gelu/models/10000_G.pth"
         // , "moex1_x4" : "/mnt/e/Weights/moex1_sr_gan_v8_x4_mri_rgb_act_gelu/models/30000_G.pth"
         // , "moex1_x4" : "/mnt/e/Weights/superresolution/moex1_sr_plain_v11_x4_mri_rgb_act_gelu/models/70000_G.pth"
@@ -38,32 +38,71 @@
         ,"moex1_gan_x4" : "/mnt/e/Weights/moex1_sr_gan_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
         
         //,"moex1_psnr_x4" : "/mnt/e/Weights/superresolution/unet_unet_moex1_sr_plain_v6_x4_mri_rgb_act_gelu/models/50000_G.pth"
-        , "moex1_psnr_v6_x4" : "/mnt/e/Weights/best_moex1_sr_plain_v6_x4_mri_rgb_act_gelu_krnl_16/models/40269_G.pth"
-        ,"moex1_gan_v8_x4" : "/mnt/e/Weights/moex1_sr_gan_v8_x4_mri_rgb_act_gelu/models/168994_G.pth"
+        ,"moex1_psnr_v6_x4" : "/mnt/e/Weights/best_moex1_sr_plain_v6_x4_mri_rgb_act_gelu_krnl_16/models/40269_G.pth"
+        ,"moex1_gan_v8_x4" : "/mnt/e/Weights/moex1_sr_gan_v8_x4_mri_rgb_act_gelu/models/197988_G.pth"
+        ,"moex3_psnr_v1_x4_16" : "/mnt/e/Weights/moex3_sr_medium_plain_v1_x4_medical_krnl_16_batch_16/models/90000_G.pth"
         ,"moex3_psnr_v1_x4_32" : "/mnt/e/Weights/moex3_sr_medium_plain_v1_x4_medical_krnl_32/models/40000_G.pth"
         , "rev_moex3_v1_x4_16" : "/mnt/e/Weights/rev_moex3_gan_v2_x4_krnl_16/models/14497_G.pth"
         ,"moex3_x4" : null
         ,"moex3_x4_32": null
       }
       ,"datasets": {
-        "EM": {
-          "name": "EM" //Cremi
-        , "scale": 2  
-        , "dataset_type": "medical_sr"            
-        , "lq_patchsize": 96 // 96
-        , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-        , "exclude_dirs": []
-        , "length" : 50
-        , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
-        , "dataroot_H": ["/mnt/e/Medical/cremi"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
-        , "dataroot_L": null              // path of L testing dataset
-        , "use_dataset_cache": true
-        , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_cremi_50.pkl"
-        , "H_size": 384                   // patch size 40 | 64 | 96 | 128 | 192
-        , "dataloader_num_workers": 16
-        , "dataloader_batch_size": 1 
-        , "use_imgH": true
+        "MRI": {
+          "name": "MRI",
+          "dataset_type": "medical_sr",
+          "lq_patchsize": 64,
+          "degradation_type": "bsrgan_plus",
+          "exclude_dirs": [],
+          "length": 50,
+          "degradation_methods": ["bsrgan_plus"],
+          "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/braints"],
+          "dataroot_L": null,
+          "use_dataset_cache": true,
+          "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_braints_50.pkl",
+          "H_size": 256,
+          "dataloader_num_workers": 16,
+          "dataloader_batch_size": 1,
+          "use_imgH": true
         },
+        "CT": {
+        "name": "CT",
+        "dataset_type": "medical_sr",
+        "lq_patchsize": 64,
+        "degradation_type": "bsrgan_plus",
+        "exclude_dirs": [],
+        "length": 50,
+        "degradation_methods": ["bsrgan_plus"],
+        "dataroot_H": ["/mnt/d/dataset/FLARE22/npy"],
+        "dataroot_L": null,
+        "use_dataset_cache": true,
+        "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_FLARE22_50.pkl",
+        "H_size": 256,
+        "dataloader_num_workers": 16,
+        "dataloader_batch_size": 1,
+        "use_imgH": true
+        }
+    }  
+}
+
+
+   // "EM": {
+        //   "name": "EM" //Cremi
+        // , "scale": 2  
+        // , "dataset_type": "medical_sr"            
+        // , "lq_patchsize": 96 // 96
+        // , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+        // , "exclude_dirs": []
+        // , "length" : 50
+        // , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
+        // , "dataroot_H": ["/mnt/e/Medical/cremi"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+        // , "dataroot_L": null              // path of L testing dataset
+        // , "use_dataset_cache": true
+        // , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_cremi_50.pkl"
+        // , "H_size": 384                   // patch size 40 | 64 | 96 | 128 | 192
+        // , "dataloader_num_workers": 16
+        // , "dataloader_batch_size": 1 
+        // , "use_imgH": true
+        // }
       // "EM": {
       //     "name": "EM" //Temca
       //   , "dataset_type": "medical_sr"            
@@ -81,26 +120,6 @@
       //   , "dataloader_batch_size": 1 
       //   , "use_imgH": true
       // }, 
-        "MRI": {
-        "name": "MRI",
-        "dataset_type": "medical_sr",
-        "lq_patchsize": 32,
-        "degradation_type": "bsrgan_plus",
-        "exclude_dirs": [],
-        "length": 50,
-        "degradation_methods": ["bsrgan_plus"],
-        "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/braints"],
-        "dataroot_L": null,
-        "use_dataset_cache": true,
-        "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_braints_50.pkl",
-        "H_size": 128,
-        "dataloader_num_workers": 16,
-        "dataloader_batch_size": 1,
-        "use_imgH": true
-        }   
-  }  
-}
-
 // "CT": {
       //   "name": "CT",
       //   "scale": 2,

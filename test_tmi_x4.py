@@ -55,7 +55,7 @@ def default_resizer(inputs, target_size):
 @click.option("--launcher", default="pytorch", help="job launcher")
 @click.option("--local_rank", type=int, default=0)
 @click.option("--dist", is_flag=True, default=False)
-@click.option("--visualize", is_flag=True, default=True)
+@click.option("--visualize", is_flag=True, default=False)
 @click.option("--backend", default="TkAgg")
 def main(**kwargs):
 
@@ -374,11 +374,59 @@ def main(**kwargs):
             }
         """
 
-        netG_moex1 = json.loads(json_moex1_psnr_v6_x4)["netG"]
+        json_moex3_moex3_psnr_v1_x4_16 = """
+        {
+             "netG": {
+                "net_type": "unet_moex3",
+                "kernel": 16,
+                "sharpening_factor": 1.0,
+                "model_channels": 64,
+                "num_res_blocks": 12,
+                "attention_resolutions": [
+                64,
+                32,
+                16
+                ],
+                "dropout": 0.0,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [
+                1,
+                2,
+                4,
+                8,
+                16
+                ],
+                "conv_resample": true,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 960000.0,
+                "resizer_num_layers": 3,
+                "resizer_avg_pool": true,
+                "init_type": "orthogonal",
+                "init_bn_type": "constant",
+                "init_gain": 1.0,
+                "scale": 4,
+                "n_channels": 1
+            }
+        }    
+        """
+
+        # netG_moex1 = json.loads(json_moex1_psnr_v6_x4)["netG"]
+        netG_moex1 = json.loads(json_moex1_gan_v8_x4)["netG"]
 
         netG_moex3_v1_x4_32 = json.loads(json_moex3_v1_x4_32)["netG"]
 
         netG_rev_moex3_v1_x4_16 = json.loads(json_rev_moex3_v1_x4_16)["netG"]
+
+        netG_moex3_moex3_psnr_v1_x4_16 = json.loads(json_moex3_moex3_psnr_v1_x4_16)[
+            "netG"
+        ]
 
         encoder_cfg1 = enc1_cfg(
             model_channels=netG_moex1["model_channels"],
@@ -419,8 +467,8 @@ def main(**kwargs):
         model_moex1 = load_model(
             moex1_conf,
             sharpening_factor=netG_moex1["sharpening_factor"],
-            # weights_path=opt["pretrained_models"]["moex1_gan_v8_x4"],
-            weights_path=opt["pretrained_models"]["moex1_psnr_v6_x4"],
+            weights_path=opt["pretrained_models"]["moex1_gan_v8_x4"],
+            # weights_path=opt["pretrained_models"]["moex1_psnr_v6_x4"],
             device=device,
         )
 
@@ -525,6 +573,64 @@ def main(**kwargs):
             moex3_rev_rev_v1_x4_16,
             sharpening_factor=netG_rev_moex3_v1_x4_16["sharpening_factor"],
             weights_path=opt["pretrained_models"]["rev_moex3_v1_x4_16"],
+            device=device,
+        )
+
+        encoder_cfg3_moex3_psnr_v1_x4_16 = enc2_cfg(
+            model_channels=netG_moex3_moex3_psnr_v1_x4_16["model_channels"],  # 32,
+            num_res_blocks=netG_moex3_moex3_psnr_v1_x4_16["num_res_blocks"],  # 4,
+            attention_resolutions=netG_moex3_moex3_psnr_v1_x4_16[
+                "attention_resolutions"
+            ],  # [16, 8],
+            dropout=netG_moex3_moex3_psnr_v1_x4_16["dropout"],  # 0.2,
+            channel_mult=netG_moex3_moex3_psnr_v1_x4_16["channel_mult"],  # (2, 4, 8),
+            conv_resample=netG_moex3_moex3_psnr_v1_x4_16["conv_resample"],  # False,
+            dims=2,
+            use_checkpoint=netG_moex3_moex3_psnr_v1_x4_16["use_checkpoint"],  # True,
+            use_fp16=netG_moex3_moex3_psnr_v1_x4_16["use_fp16"],  # False,
+            num_heads=netG_moex3_moex3_psnr_v1_x4_16["num_heads"],  # 4,
+            # num_head_channels=netG_moex3_moex3_psnr_v1_x4_16["num_head_channels"],  # 8,
+            resblock_updown=netG_moex3_moex3_psnr_v1_x4_16["resblock_updown"],  # False,
+            num_groups=netG_moex3_moex3_psnr_v1_x4_16["num_groups"],  # 32,
+            resample_2d=netG_moex3_moex3_psnr_v1_x4_16["resample_2d"],  # True,
+            scale_factor=netG_moex3_moex3_psnr_v1_x4_16["scale"],
+            resizer_num_layers=netG_moex3_moex3_psnr_v1_x4_16[
+                "resizer_num_layers"
+            ],  # 4,
+            resizer_avg_pool=netG_moex3_moex3_psnr_v1_x4_16[
+                "resizer_avg_pool"
+            ],  # False,
+            activation=netG_moex3_moex3_psnr_v1_x4_16["activation"],
+            rope_theta=netG_moex3_moex3_psnr_v1_x4_16["rope_theta"],  # 10000.0,
+            attention_type=netG_moex3_moex3_psnr_v1_x4_16[
+                "attention_type"
+            ],  # "cross_attention",  # "attention" or "cross_attention"
+        )
+
+        moex3_moex3_psnr_v1_x4_16 = ModelConfig(
+            encoder_config=encoder_cfg3_moex3_psnr_v1_x4_16,
+            moe_cfg_class=moe2_cfg,
+            ae_cfg_class=ae2_cfg,
+            ae_class=ae2,
+            model_params={
+                "kernel": netG_moex3_moex3_psnr_v1_x4_16["kernel"],
+                "sharpening_factor": netG_moex3_moex3_psnr_v1_x4_16[
+                    "sharpening_factor"
+                ],
+                "n_channels": opt["n_channels"],
+                "z": int(
+                    2 * netG_moex3_moex3_psnr_v1_x4_16["kernel"]
+                    + 4 * netG_moex3_moex3_psnr_v1_x4_16["kernel"]
+                    + netG_moex3_moex3_psnr_v1_x4_16["kernel"]
+                ),
+            },
+            opt=opt,
+        )
+
+        model_moex3_moex3_psnr_v1_x4_16 = load_model(
+            moex3_moex3_psnr_v1_x4_16,
+            sharpening_factor=netG_moex3_moex3_psnr_v1_x4_16["sharpening_factor"],
+            weights_path=opt["pretrained_models"]["moex3_psnr_v1_x4_16"],
             device=device,
         )
 
@@ -839,7 +945,8 @@ def main(**kwargs):
         models = {
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
             # "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
-            "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE
+            "N-SMoE-II": model_moex3_moex3_psnr_v1_x4_16,  # k = 16 | attn=RoPE
+            # "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE
             "N-SMoE-III": model_moex3_v1_x4_32,  # k = 32 | attn=RoPE
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
