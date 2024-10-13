@@ -88,8 +88,8 @@ PARTITION="c23g"
 #     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
 #     sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 # }
-
-EXCLUDE_NODES="r23g0002,r23g0001"
+# r23g0002,r23g0001
+EXCLUDE_NODES="n23g0009,n23g0017"
 
 get_idle_node() {
     sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
@@ -147,6 +147,7 @@ nvidia-smi
 echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
 # export TORCH_DISTRIBUTED_DEBUG=INFO
+export CUDA_LAUNCH_BLOCKING=1
 export TORCH_NCCL_BLOCKING_WAIT=1
 export TORCH_USE_CUDA_DSA=1
 export NCCL_BLOCKING_WAIT=1
