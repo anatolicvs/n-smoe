@@ -329,7 +329,7 @@ def main(**kwargs):
         }
         """
 
-        json_rev_moex3_v1_x4_16 = """
+        json_rev_moex3_v1_x4_16_ = """
         {
             "netG": {
                 "net_type": "unet_moex3_rev",
@@ -372,6 +372,53 @@ def main(**kwargs):
                 "n_channels": 1
                 }
             }
+        """
+
+        json_rev_moex3_v1_x4_16 = """
+        {
+            "netG": {
+                "net_type": "unet_moex3_rev",
+                "kernel": 16,
+                "sharpening_factor": 1.0,
+                "model_channels": 64,
+                "num_res_blocks": 4,
+                "attention_resolutions": [
+                32,
+                16,
+                8,
+                4
+                ],
+                "dropout": 0.2,
+                "num_groups": 16,
+                "num_heads": 16,
+                "use_new_attention_order": true,
+                "use_checkpoint": true,
+                "use_fp16": false,
+                "resblock_updown": true,
+                "channel_mult": [
+                1,
+                2,
+                4,
+                8,
+                16
+                ],
+                "conv_resample": false,
+                "resample_2d": false,
+                "attention_type": "cross_attention",
+                "activation": "GELU",
+                "rope_theta": 10000.0,
+                "resizer_num_layers": 2,
+                "resizer_avg_pool": false,
+                "init_type": "default",
+                "init_bn_type": "constant",
+                "init_gain": 1.0,
+                "scale": 4,
+                "n_channels": 1,
+                "ang_res": 5,
+                "phw": 16,
+                "overlap": 14
+            }
+        }
         """
 
         json_moex3_moex3_psnr_v1_x4_16 = """
@@ -946,7 +993,7 @@ def main(**kwargs):
             "N-SMoE": model_moex1,  # k = 16 | attn=attn
             # "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
             "N-SMoE-II": model_moex3_moex3_psnr_v1_x4_16,  # k = 16 | attn=RoPE
-            # "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE
+            # "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE | new
             "N-SMoE-III": model_moex3_v1_x4_32,  # k = 32 | attn=RoPE
             "DPSR": model_dpsr,
             "ESRGAN": model_esrgan,
