@@ -17,14 +17,24 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     cmake \
     libglfw3-dev \
     libglew-dev \
-    libboost-all-dev \
-    ninja-build \
-    vim \
-    nano \
-    tmux \
-    zsh \
-    gdb \
-    strace && \
+    libboost-program-options-dev \
+    libboost-filesystem-dev \
+    libboost-graph-dev \
+    libboost-system-dev \
+    libeigen3-dev \
+    libflann-dev \
+    libfreeimage-dev \
+    libmetis-dev \
+    libgoogle-glog-dev \
+    libgtest-dev \
+    libgmock-dev \
+    libsqlite3-dev \
+    qtbase5-dev \
+    libqt5opengl5-dev \
+    libcgal-dev \
+    libceres-dev \
+    imagemagick \
+    ninja-build && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -47,9 +57,12 @@ RUN pip install torch torchvision torchaudio --index-url https://download.pytorc
 
 RUN conda install -n venv -y jupyterlab
 
-RUN git clone https://gitlab.inria.fr/bkerbl/simple-knn.git /usr/src/submodules/simple-knn && \
-    git clone https://github.com/graphdeco-inria/diff-gaussian-rasterization.git /usr/src/submodules/diff-gaussian-rasterization && \
-    git clone https://github.com/graphdeco-inria/gaussian-splatting.git --recursive /usr/src/gaussian-splatting
+RUN git clone https://github.com/graphdeco-inria/gaussian-splatting.git --recursive /usr/src/gaussian-splatting && \
+    git clone https://github.com/colmap/colmap.git /usr/src/colmap
+    # cd /usr/src/colmap && mkdir build && cd build && \
+    # cmake .. -GNinja && ninja && ninja install
+
+RUN pip install --no-cache-dir numpy scipy cython numba matplotlib seaborn opencv-python pyyaml imageio imageio-ffmpeg scikit-image beartype colorama moviepy dacite tabulate svg.py h5py einops lpips colorspacious tqdm pandas wandb scikit-learn timm "lightning[extra]" tensorboard monailabel pytorch-metric-learning pytorch-ignite pytorchvideo torchmetrics torch_optimizer torchsampler torchgeometry torchio piq torchdiffeq hydra-core fvcore "flax[all]" jaxtyping tensorflow nibabel dicom2nifti hdf5storage pydicom "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html segmentation-models-pytorch ruamel.yaml nerfview viser icecream vector-quantize-pytorch datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d "diffusers[torch]"
 
 RUN echo "alias ll='ls -la'" >> ~/.bashrc && \
     echo "export PS1='\u@\h:\w\$ '" >> ~/.bashrc && \
@@ -57,6 +70,5 @@ RUN echo "alias ll='ls -la'" >> ~/.bashrc && \
 
 RUN git config --global user.name "Aytac Ozkan" && \
     git config --global user.email "aytac@linux.com"
-
 
 ENTRYPOINT ["/bin/bash"]
