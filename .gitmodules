@@ -22,17 +22,23 @@
 [submodule "gmflow"]
         path = models/gmflow
         url = https://github.com/haofeixu/gmflow.git
+		
 [submodule "cvpr/SinSR"]
         path = cvpr/SinSR
         url = https://github.com/wyf0912/SinSR.git
+
+[submodule "models/pykan"]
+        path = models/pykan
+        url =  https://github.com/KindXiaoming/pykan.git
+
 # [submodule "cvpr/GPEMSR"]
 #         path = cvpr/GPEMSR
 #         url =  https://github.com/jtshou/GPEMSR.git
 
 [submodule "cvpr/3d-gaussian-splatting"]
-	path = cvpr/3d-gaussian-splatting
-	url = https://github.com/WangFeng18/3d-gaussian-splatting.git
+		path = cvpr/3d-gaussian-splatting
+		url = https://github.com/WangFeng18/3d-gaussian-splatting.git
 
 [submodule "cvpr/gsgen"]
-	path = cvpr/gsgen
-	url = https://github.com/gsgen3d/gsgen.git
+		path = cvpr/gsgen
+		url = https://github.com/gsgen3d/gsgen.git

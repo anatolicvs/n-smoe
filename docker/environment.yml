@@ -1,4 +1,4 @@
-name: venv
+name: venv-gs
 channels:
   - rapidsai
   - conda-forge
@@ -6,6 +6,6 @@ channels:
   - pytorch
   - defaults
 dependencies:
-  - python=3.11
+  - python=3.10
   - pip:
-      - "-r requirements-macos.txt"
+      - "-r /home/ozkan/works/n-smoe/cvpr/gsgen/requirements.txt"

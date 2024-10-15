@@ -311,7 +311,7 @@ def visualize_with_error_map(
     lrcrop_image = images[lrcrop_key]["image"]
     lrcrop_title = images[lrcrop_key]["title"]
 
-    ref_image = images[ref_key]["image"]
+    ref_img = images[ref_key]["image"]
     ref_title = images[ref_key]["title"]
 
     recon_items = {
@@ -354,7 +354,7 @@ def visualize_with_error_map(
     ax_lrcrop.set_title(lrcrop_title, fontweight="bold")
 
     ax_ref = fig.add_subplot(gs[0, 2])
-    ax_ref.imshow(ref_image, cmap=cmap)
+    ax_ref.imshow(ref_img, cmap=cmap)
     ax_ref.axis("off")
     ax_ref.set_title(ref_title, fontweight="bold")
 
@@ -364,9 +364,9 @@ def visualize_with_error_map(
         else hr_image.copy()
     )
     gray_ref = (
-        cv2.cvtColor(ref_image, cv2.COLOR_RGB2GRAY)
-        if len(ref_image.shape) == 3 and ref_image.shape[2] == 3
-        else ref_image.copy()
+        cv2.cvtColor(ref_img, cv2.COLOR_RGB2GRAY)
+        if len(ref_img.shape) == 3 and ref_img.shape[2] == 3
+        else ref_img.copy()
     )
 
     res = cv2.matchTemplate(gray_hr, gray_ref, cv2.TM_CCOEFF_NORMED)
@@ -384,15 +384,17 @@ def visualize_with_error_map(
     mse_values = {}
 
     for idx, (key, item) in enumerate(recon_items.items(), start=3):
-        recon_image = item["image"]
+        recon_img = item["image"]
         recon_title = item["title"]
 
         ax_recon = fig.add_subplot(gs[0, idx])
-        ax_recon.imshow(recon_image, cmap=cmap)
+        ax_recon.imshow(
+            recon_img, cmap=cmap, vmax=recon_img.max(), vmin=recon_img.min()
+        )
         ax_recon.axis("off")
         ax_recon.set_title(recon_title, fontweight="bold")
 
-        error_map = calculate_error_map(ref_image, recon_image)
+        error_map = calculate_error_map(ref_img, recon_img)
         error_map_normalized = (error_map - error_map.min()) / (
             error_map.max() - error_map.min()
             if error_map.max() - error_map.min() != 0
@@ -407,21 +409,24 @@ def visualize_with_error_map(
         ax_error.axis("off")
 
         try:
-            if ref_image.shape != recon_image.shape:
+            if ref_img.shape != recon_img.shape:
                 raise ValueError(
-                    f"Shape mismatch between reference image '{ref_key}' {ref_image.shape} "
-                    f"and reconstructed image '{key}' {recon_image.shape}."
+                    f"Shape mismatch between reference image '{ref_key}' {ref_img.shape} "
+                    f"and reconstructed image '{key}' {recon_img.shape}."
                 )
-            current_psnr = psnr(
-                ref_image, recon_image, data_range=ref_image.max() - ref_image.min()
-            )
+
+            data_min: float = min(ref_img.min().item(), recon_img.min().item())
+            data_max: float = max(ref_img.max().item(), recon_img.max().item())
+            data_range: float = data_max - data_min
+
+            current_psnr = psnr(ref_img, recon_img, data_range=data_range)
             current_ssim = ssim(
-                ref_image,
-                recon_image,
-                data_range=ref_image.max() - ref_image.min(),
+                ref_img,
+                recon_img,
+                data_range=data_range,
                 multichannel=True,
             )
-            current_mse = mse(ref_image, recon_image)
+            current_mse = mse(ref_img, recon_img)
 
             psnr_values[recon_title] = current_psnr
             ssim_values[recon_title] = current_ssim
@@ -547,11 +552,16 @@ def visualize_data(
         ax_img.set_title(title, fontweight="bold")
 
         if key not in [ref_key, lrcrop_key]:
-            current_psnr = psnr(ref_img, img, data_range=ref_img.max() - ref_img.min())
+
+            data_min: float = min(ref_img.min().item(), img.min().item())
+            data_max: float = max(ref_img.max().item(), img.max().item())
+            data_range: float = data_max - data_min
+
+            current_psnr = psnr(ref_img, img, data_range=data_range)
             current_ssim = ssim(
                 ref_img,
                 img,
-                data_range=ref_img.max() - ref_img.min(),
+                data_range=data_range,
                 multichannel=True,
             )
             psnr_values[title] = current_psnr
@@ -624,6 +634,7 @@ def visualize_data(
         plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
+
 
 def visualize_sharpening_results(
     img_L: np.ndarray,
