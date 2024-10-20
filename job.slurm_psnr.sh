@@ -64,7 +64,7 @@ NODES=1
 NTASKS=1
 CPUS_PER_TASK=16
 MEMORY="32G"
-TIME="24:00:00"
+TIME="48:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -84,35 +84,49 @@ mkdir -p "/home/p0021791/tmp" || { echo "Failed to create /home/p0021791/tmp dir
 PARTITION="c23g"
 
 
-# get_idle_node() {
-#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-#     sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
-# }
-# r23g0002,r23g0001
-EXCLUDE_NODES="n23g0009,n23g0017"
-
 get_idle_node() {
-    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
-    $2 == "idle" {
-        split(exclude_nodes, excl_nodes, ",");
-        for (node in excl_nodes) {
-            if ($1 == excl_nodes[node]) {
-                next;  # Skip the excluded nodes
-            }
-        }
-        split($3, gpu_info, ":");
-        if (gpu_info[2] >= gpus) {
-            print $1;
-            exit;
-        }
-    }'
+    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+    sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 }
+
+get_max_time_for_node() {
+    local partition=$1
+    sinfo -h -N -p "$partition" -o "%l" | head -n 1
+}
+
+# r23g0002,r23g0001
+# EXCLUDE_NODES="n23g0009"
+
+# get_idle_node() {
+#     sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
+#     $2 == "idle" {
+#         split(exclude_nodes, excl_nodes, ",");
+#         for (node in excl_nodes) {
+#             if ($1 == excl_nodes[node]) {
+#                 next;  # Skip the excluded nodes
+#             }
+#         }
+#         split($3, gpu_info, ":");
+#         if (gpu_info[2] >= gpus) {
+#             print $1;
+#             exit;
+#         }
+#     }'
+# }
 
 IDLE_NODE=$(get_idle_node)
 if [ -z "$IDLE_NODE" ]; then
     echo "Error: No idle nodes found in partition $PARTITION" >&2
     exit 1
 fi
+
+# MAX_TIME=$(get_max_time_for_node "$PARTITION")
+# if [ -z "$MAX_TIME" ]; then
+#     echo "Error: Could not determine maximum available time for partition $PARTITION" >&2
+#     exit 1
+# fi
+
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
