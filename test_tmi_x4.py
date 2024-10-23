@@ -1158,14 +1158,14 @@ def main(**kwargs):
                         images,
                         cmap="gray",
                         save_path=error_map_figure_path,
-                        visualize=opt["visualize"],
+                        visualize=False,
                     )
 
                     visualize_data(
                         images,
                         cmap="gray",
                         save_path=figure_path,
-                        visualize=opt["visualize"],
+                        visualize=False,
                     )
 
                 # region: save images to .mat file

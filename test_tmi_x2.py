@@ -917,6 +917,7 @@ def main(**kwargs):
         # from models.network_unetmoex1 import AutoencoderConfig as ae1_cfg
         # from models.network_unetmoex1 import EncoderConfig as enc1_cfg
         # from models.network_unetmoex1 import MoEConfig as moe1_cfg
+
         from models.network_unetmoex3 import Autoencoder as ae2
         from models.network_unetmoex3 import AutoencoderConfig as ae2_cfg
         from models.network_unetmoex3 import EncoderConfig as enc2_cfg
@@ -1188,7 +1189,9 @@ def main(**kwargs):
                             device=device,
                         )
 
-                        E_img = model(img_L_p, img_L.size()).clamp(0, 1).to(torch.float)
+                        E_img = model(
+                            img_L_p, img_L.size()
+                        )  # .clamp(0, 1).to(torch.float)
 
                         E_swinir = matlab_imsharpen(
                             model_swinir(img_L).clamp(0, 1).to(torch.float), 1, factor

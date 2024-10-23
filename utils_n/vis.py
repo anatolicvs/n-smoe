@@ -74,7 +74,8 @@ plt.rcParams.update(
         "ps.fonttype": 42,  # Embed fonts as TrueType in PS
         # --- Miscellaneous ---
         "legend.frameon": False,  # Remove legend frame for a cleaner look
-        "text.usetex": True,  # Disable LaTeX for text rendering (optional)
+        "text.usetex": False,
+        "pgf.texsystem": "pdflatex",
         # "style.use": "seaborn-v0_8-paper",
     }
 )
