@@ -12,7 +12,7 @@ def calc_metrics(data, models, metrics, device) -> dict[Any, Any]:
     results = {}
     for method, model in models.items():
         with torch.no_grad():
-            if method in ["N-SMoE", "N-SMoE-II", "N-SMoE-III"]:
+            if method in ["N-SMoE-I", "N-SMoE-II", "N-SMoE-III"]:
                 E_img: torch.Tensor = model(data["L_p"].to(device), data["L"].size())
             elif method == "Bicubic":
                 E_img: torch.Tensor = model(data["L"], data["H"].size()[2:])

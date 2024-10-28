@@ -44,18 +44,18 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 RUN git clone https://github.com/facebookresearch/segment-anything-2.git && \
     cd segment-anything-2 && pip install -e .
 
-RUN pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
-    --extra-index-url=https://pypi.nvidia.com \
-    "cudf-cu12==24.8.2" \
-    "dask-cudf-cu12==24.8.2" \
-    "cuml-cu12==24.8.0" \
-    "cugraph-cu12==24.8.0" \
-    "cuspatial-cu12==24.8.0" \
-    "cuproj-cu12==24.8.0" \
-    "cuxfilter-cu12==24.8.0" \
-    "cucim-cu12==24.8.0" \
-    "pylibraft-cu12==24.8.1" \
-    "raft-dask-cu12==24.8.1" \
-    "cuvs-cu12==24.8.0"
+# RUN pip install --no-cache-dir --extra-index-url=https://pypi.anaconda.org/rapidsai-wheels-nightly/simple \
+#     --extra-index-url=https://pypi.nvidia.com \
+#     "cudf-cu12==24.8.2" \
+#     "dask-cudf-cu12==24.8.2" \
+#     "cuml-cu12==24.8.0" \
+#     "cugraph-cu12==24.8.0" \
+#     "cuspatial-cu12==24.8.0" \
+#     "cuproj-cu12==24.8.0" \
+#     "cuxfilter-cu12==24.8.0" \
+#     "cucim-cu12==24.8.0" \
+#     "pylibraft-cu12==24.8.1" \
+#     "raft-dask-cu12==24.8.1" \
+#     "cuvs-cu12==24.8.0"
 
 ENTRYPOINT ["python"]

@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: cpp_interpolation
+Version: 0.0.1
+Summary: A cpp extension for custom interpolation operations in PyTorch
+Author: Aytac Ozkan
+Author-email: aytac@linux.com
+Requires-Dist: torch>=1.8.0
+Requires-Dist: numpy

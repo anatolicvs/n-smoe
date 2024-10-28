@@ -1268,7 +1268,7 @@ def main(**kwargs):
 
         eng.addpath(matlab_func_dir, nargout=0)
 
-        def calculate_sharpness_index(image):
+        def calculate_sharpness_index(image: torch.Tensor) -> float:
             image_np = image.squeeze().cpu().numpy()
             image_matlab = matlab.double(image_np.tolist())
 
@@ -1360,6 +1360,7 @@ def main(**kwargs):
             metrics = {}
 
             img_H = img_H.clamp(0, 1).to(torch.float).to(device)
+            si_H = calculate_sharpness_index(img_H)
 
             for factor in sharpening_factors:
 
@@ -1426,6 +1427,7 @@ def main(**kwargs):
             visualize_sharpening_results(
                 img_L.cpu().numpy().squeeze(),
                 img_H.cpu().numpy().squeeze(),
+                si_H,
                 sharpened_images,
                 metrics,
                 save_path=si_figure_path,

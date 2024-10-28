@@ -637,11 +637,13 @@ def visualize_data(
         plt.show()
 
 
-def visualize_sharpening_results(
+def visualize_sharpening_results_(
     img_L: np.ndarray,
     img_H: np.ndarray,
-    sharpened_images: Dict[float, np.ndarray],
-    metrics: Dict[float, Dict[str, float]],
+    si_H: float,
+    si_L: float,
+    sharpened_images: dict,
+    metrics: dict,
     save_path: str = None,
     visualize: bool = True,
 ):
@@ -649,33 +651,36 @@ def visualize_sharpening_results(
     num_models = len(sharpened_images)
 
     total_rows = 1 + num_models
-    total_cols = 1 + num_factors + 3
-    fig = plt.figure(figsize=(3 * total_cols, 2.5 * total_rows))
+    total_cols = 1 + num_factors + 4
+
+    golden_ratio = 1.8
+    fig_width = 3.0 * total_cols
+    fig_height = fig_width / golden_ratio
+    fig = plt.figure(figsize=(fig_width, fig_height))
 
     gs = GridSpec(
         total_rows + 1,
         total_cols,
         figure=fig,
-        height_ratios=[1] + [0.5] + [1] * num_models,
-        width_ratios=[0.2] + [1] * num_factors + [1.5, 1.6, 1.6],
+        height_ratios=[1] + [1] * num_models + [0.4],
+        width_ratios=[0.3] + [1] * num_factors + [1.2] * 4,
     )
-    gs.update(wspace=0.2, hspace=0.1)
+    gs.update(wspace=0.3, hspace=0.5)
 
     ax_L = fig.add_subplot(gs[0, 1])
     ax_L.imshow(img_L, cmap="gray")
-    ax_L.set_title("Low Resolution", fontweight="bold")
-    ax_L.yaxis.set_tick_params(rotation=45, pad=0.01)
-    ax_L.xaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_L.set_title("Low Resolution (LR)", fontweight="bold")
+    ax_L.set_xlabel(f"SI: {si_L:.4f}")
     ax_L.axis("on")
 
     ax_H = fig.add_subplot(gs[0, 2])
     ax_H.imshow(img_H, cmap="gray")
-    ax_H.set_title("High Resolution", fontweight="bold")
-    ax_H.yaxis.set_tick_params(rotation=45, pad=0.01)
-    ax_H.xaxis.set_tick_params(rotation=45, pad=0.01)
+    ax_H.set_title("High Resolution (HR)", fontweight="bold")
+    ax_H.set_xlabel(f"SI: {si_H:.4f}")
     ax_H.axis("on")
 
     metrics_start_col = 3
+
     ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
     for model_name in metrics.keys():
         psnr_values = [
@@ -685,8 +690,7 @@ def visualize_sharpening_results(
             sorted(metrics[model_name].keys()), psnr_values, label=f"{model_name}"
         )
     ax_psnr.set_title("PSNR (dB)", fontweight="bold")
-    ax_psnr.set_xlabel(r"Sharpening Factor (SF)")
-    ax_psnr.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_psnr.set_xlabel("Sharpening Factor (SF)")
     ax_psnr.grid(True)
     ax_psnr.legend(loc="best")
 
@@ -697,8 +701,7 @@ def visualize_sharpening_results(
         ]
         ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
     ax_ssim.set_title("SSIM", fontweight="bold")
-    ax_ssim.set_xlabel(r"SF")
-    ax_ssim.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_ssim.set_xlabel("SF")
     ax_ssim.grid(True)
 
     ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
@@ -707,15 +710,24 @@ def visualize_sharpening_results(
             metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
         ]
         ax_si.plot(sorted(metrics[model_name].keys()), si_values)
-    ax_si.set_title("Sharpness Index", fontweight="bold")
-    ax_si.set_xlabel(r"SF")
-    ax_si.yaxis.set_tick_params(rotation=90, pad=0.01)
+    ax_si.set_title("Sharpness Index (SI)", fontweight="bold")
+    ax_si.set_xlabel("SF")
     ax_si.grid(True)
 
-    factors = sorted(next(iter(metrics.values())).keys())
-    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
-        row = 2 + model_index
+    ax_lpips = fig.add_subplot(gs[0, metrics_start_col + 3])
+    for model_name in metrics.keys():
+        lpips_values = [
+            metrics[model_name][f]["LPIPS"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_lpips.plot(sorted(metrics[model_name].keys()), lpips_values)
+    ax_lpips.set_title("LPIPS", fontweight="bold")
+    ax_lpips.set_xlabel("SF")
+    ax_lpips.grid(True)
 
+    factors = sorted(next(iter(metrics.values())).keys())
+
+    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
+        row = 1 + model_index
         ax_model_name = fig.add_subplot(gs[row, 0])
         ax_model_name.text(
             1.5,
@@ -732,18 +744,43 @@ def visualize_sharpening_results(
             col = 1 + i
             ax_model = fig.add_subplot(gs[row, col])
             ax_model.imshow(model_images[factor], cmap="gray")
-            ax_model.axis("off")
 
-            if model_index == num_models - 1:
-                ax_model.text(
-                    0.5,
-                    -0.1,
-                    r"$\alpha = %.2f$" % factor,
-                    ha="center",
-                    va="top",
-                    transform=ax_model.transAxes,
-                    fontsize=12,
-                )
+            ax_model.set_xlabel(
+                f"PSNR: {metrics[model_name][factor]['PSNR']:.2f} dB | "
+                f"SSIM: {metrics[model_name][factor]['SSIM']:.2f}\n"
+                f"SI: {metrics[model_name][factor]['SI']:.2f} | "
+                f"LPIPS: {metrics[model_name][factor]['LPIPS']:.4f}",
+                fontsize=8,
+                labelpad=10,
+            )
+
+            ax_model.tick_params(
+                axis="both",
+                which="both",
+                bottom=False,
+                top=False,
+                left=False,
+                right=False,
+                labelbottom=False,
+                labelleft=False,
+            )
+
+    for i, factor in enumerate(factors):
+        col = 1 + i
+        ax_alpha = fig.add_subplot(gs[-1, col])
+        ax_alpha.text(
+            0.5,
+            0.5,
+            f"$\\alpha = {factor:.2f}$",
+            ha="center",
+            va="center",
+            fontsize=10,
+            fontweight="bold",
+            transform=ax_alpha.transAxes,
+        )
+        ax_alpha.axis("off")
+
+    plt.tight_layout(pad=3.0)
 
     if save_path:
         plt.savefig(
@@ -751,7 +788,163 @@ def visualize_sharpening_results(
             format="pdf",
             bbox_inches="tight",
             dpi=600,
-            pad_inches=0,
+            transparent=True,
+        )
+    if visualize:
+        plt.show()
+    plt.close()
+
+
+def visualize_sharpening_results(
+    img_L: np.ndarray,
+    img_H: np.ndarray,
+    si_H: float,
+    si_L: float,
+    sharpened_images: dict,
+    metrics: dict,
+    save_path: str = None,
+    visualize: bool = True,
+):
+    num_factors = len(next(iter(sharpened_images.values())))
+    num_models = len(sharpened_images)
+
+    total_rows = 1 + num_models
+    total_cols = 1 + num_factors + 4
+
+    golden_ratio = 1.8
+    fig_width = 3.0 * total_cols
+    fig_height = fig_width / golden_ratio
+    fig = plt.figure(figsize=(fig_width, fig_height))
+
+    gs = GridSpec(
+        total_rows + 1,
+        total_cols,
+        figure=fig,
+        height_ratios=[1] + [1] * num_models + [0.4],
+        width_ratios=[0.3] + [1] * num_factors + [1.2] * 4,
+    )
+    gs.update(wspace=0.3, hspace=0.5)
+
+    ax_L = fig.add_subplot(gs[0, 1])
+    ax_L.imshow(img_L, cmap="gray")
+    ax_L.set_title("Low Resolution (LR)", fontweight="bold")
+    ax_L.set_xlabel(f"SI: {si_L:.4f}")
+    ax_L.axis("on")
+
+    ax_H = fig.add_subplot(gs[0, 2])
+    ax_H.imshow(img_H, cmap="gray")
+    ax_H.set_title("High Resolution (HR)", fontweight="bold")
+    ax_H.set_xlabel(f"SI: {si_H:.4f}")
+    ax_H.axis("on")
+
+    metrics_start_col = 3
+
+    ax_psnr = fig.add_subplot(gs[0, metrics_start_col])
+    for model_name in metrics.keys():
+        psnr_values = [
+            metrics[model_name][f]["PSNR"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_psnr.plot(
+            sorted(metrics[model_name].keys()), psnr_values, label=f"{model_name}"
+        )
+    ax_psnr.set_title(r"PSNR (dB) $\uparrow$", fontweight="bold")
+    ax_psnr.set_xlabel("Sharpening Factor (SF)")
+    ax_psnr.grid(True)
+    ax_psnr.legend(loc="best")
+
+    ax_ssim = fig.add_subplot(gs[0, metrics_start_col + 1])
+    for model_name in metrics.keys():
+        ssim_values = [
+            metrics[model_name][f]["SSIM"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_ssim.plot(sorted(metrics[model_name].keys()), ssim_values)
+    ax_ssim.set_title(r"SSIM $\uparrow$", fontweight="bold")
+    ax_ssim.set_xlabel("SF")
+    ax_ssim.grid(True)
+
+    ax_si = fig.add_subplot(gs[0, metrics_start_col + 2])
+    for model_name in metrics.keys():
+        si_values = [
+            metrics[model_name][f]["SI"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_si.plot(sorted(metrics[model_name].keys()), si_values)
+    ax_si.set_title(r"Sharpness Index (SI) $\uparrow$", fontweight="bold")
+    ax_si.set_xlabel("SF")
+    ax_si.grid(True)
+
+    ax_lpips = fig.add_subplot(gs[0, metrics_start_col + 3])
+    for model_name in metrics.keys():
+        lpips_values = [
+            metrics[model_name][f]["LPIPS"] for f in sorted(metrics[model_name].keys())
+        ]
+        ax_lpips.plot(sorted(metrics[model_name].keys()), lpips_values)
+    ax_lpips.set_title(r"LPIPS $\downarrow$", fontweight="bold")
+    ax_lpips.set_xlabel("SF")
+    ax_lpips.grid(True)
+
+    factors = sorted(next(iter(metrics.values())).keys())
+
+    for model_index, (model_name, model_images) in enumerate(sharpened_images.items()):
+        row = 1 + model_index
+        ax_model_name = fig.add_subplot(gs[row, 0])
+        ax_model_name.text(
+            1.5,
+            0.5,
+            model_name,
+            ha="right",
+            va="center",
+            rotation=90,
+            fontweight="bold",
+        )
+        ax_model_name.axis("off")
+
+        for i, factor in enumerate(factors):
+            col = 1 + i
+            ax_model = fig.add_subplot(gs[row, col])
+            ax_model.imshow(model_images[factor], cmap="gray")
+
+            ax_model.set_xlabel(
+                f"PSNR: {metrics[model_name][factor]['PSNR']:.2f} dB | "
+                f"SSIM: {metrics[model_name][factor]['SSIM']:.2f}\n"
+                f"SI: {metrics[model_name][factor]['SI']:.2f} | "
+                f"LPIPS: {metrics[model_name][factor]['LPIPS']:.4f}",
+                labelpad=10,
+            )
+
+            ax_model.tick_params(
+                axis="both",
+                which="both",
+                bottom=False,
+                top=False,
+                left=False,
+                right=False,
+                labelbottom=False,
+                labelleft=False,
+            )
+
+    for i, factor in enumerate(factors):
+        col = 1 + i
+        ax_alpha = fig.add_subplot(gs[-1, col])
+        ax_alpha.text(
+            0.5,
+            0.5,
+            f"$\\alpha = {factor:.2f}$",
+            ha="center",
+            va="center",
+            fontsize=10,
+            fontweight="bold",
+            transform=ax_alpha.transAxes,
+        )
+        ax_alpha.axis("off")
+
+    plt.tight_layout(pad=3.0)
+
+    if save_path:
+        plt.savefig(
+            save_path,
+            format="pdf",
+            bbox_inches="tight",
+            dpi=600,
             transparent=True,
         )
     if visualize:
