@@ -112,6 +112,7 @@ def visualize_with_segmentation(
     visualize: bool = False,
     error_map: bool = False,
 ):
+    plt.rcParams.update({"text.usetex": True})
 
     def calculate_metrics(gt_mask, pred_mask):
         gt_seg = gt_mask[0]["segmentation"]
@@ -212,15 +213,20 @@ def visualize_with_segmentation(
     are_scores = {}
 
     for idx, key in enumerate(ordered_keys[1:], start=2):
+
+        recon_img = images[key]["image"]
+        recon_title = images[key]["title"]
+
         ax_img = fig.add_subplot(gs[0, idx])
-        ax_img.imshow(images[key]["image"], cmap=cmap)
+        ax_img.imshow(recon_img, cmap=cmap, vmax=recon_img.max(), vmin=recon_img.min())
         ax_img.axis("off")
+        ax_img.set_title(recon_title, fontweight="bold")
 
         mask = mask_generator.generate(
             np.repeat(images[key]["image"][:, :, np.newaxis], 3, axis=-1)
         )
         ax_seg = fig.add_subplot(gs[1, idx])
-        ax_seg.imshow(images[key]["image"], cmap=cmap)
+        ax_seg.imshow(recon_img, cmap=cmap, vmax=recon_img.max(), vmin=recon_img.min())
         show_anns(mask)
         ax_seg.axis("off")
 
@@ -254,7 +260,8 @@ def visualize_with_segmentation(
             elif key == sorted_are[1][0]:
                 are_text = r"\underline{ARE: %.4f}" % are_score
 
-            display_title = f"{images[key]['title']}\n{vi_text}\n{are_text}"
+            # display_title = f"{images[key]['title']}\n{vi_text}\n{are_text}"
+            display_title = f"{vi_text}\n{are_text}"
             ax_title.text(
                 0.5,
                 0.0,
@@ -264,16 +271,17 @@ def visualize_with_segmentation(
                 transform=ax_title.transAxes,
             )
         else:
-            display_title = images[key]["title"]
-            ax_title.text(
-                0.5,
-                0.2,
-                display_title,
-                weight="bold",
-                va="center",
-                ha="center",
-                transform=ax_title.transAxes,
-            )
+            pass
+            # display_title = images[key]["title"]
+            # ax_title.text(
+            #     0.5,
+            #     0.2,
+            #     display_title,
+            #     weight="bold",
+            #     va="center",
+            #     ha="center",
+            #     transform=ax_title.transAxes,
+            # )
         ax_title.axis("off")
 
     plt.tight_layout(pad=0.1, h_pad=0, w_pad=0)
@@ -296,6 +304,8 @@ def visualize_with_error_map(
     save_path: str = None,
     visualize: bool = True,
 ) -> None:
+
+    plt.rcParams.update({"text.usetex": True})
 
     def create_error_cmap() -> LinearSegmentedColormap:
         colors = ["navy", "blue", "cyan", "limegreen", "yellow", "red"]
@@ -382,7 +392,7 @@ def visualize_with_error_map(
 
     psnr_values = {}
     ssim_values = {}
-    mse_values = {}
+    # mse_values = {}
 
     for idx, (key, item) in enumerate(recon_items.items(), start=3):
         recon_img = item["image"]
@@ -427,11 +437,11 @@ def visualize_with_error_map(
                 data_range=data_range,
                 multichannel=True,
             )
-            current_mse = mse(ref_img, recon_img)
+            # current_mse = mse(ref_img, recon_img)
 
             psnr_values[recon_title] = current_psnr
             ssim_values[recon_title] = current_ssim
-            mse_values[recon_title] = current_mse
+            # mse_values[recon_title] = current_mse
         except Exception as e:
             print(f"Error calculating PSNR/SSIM/MSE for '{recon_title}': {str(e)}")
 
@@ -445,27 +455,30 @@ def visualize_with_error_map(
     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_psnr = sorted(psnr_values.items(), key=lambda x: x[1], reverse=True)
     sorted_ssim = sorted(ssim_values.items(), key=lambda x: x[1], reverse=True)
-    sorted_mse = sorted(mse_values.items(), key=lambda x: x[1])
+    # sorted_mse = sorted(mse_values.items(), key=lambda x: x[1])
 
     for idx, (key, item) in enumerate(recon_items.items(), start=3):
         recon_title = item["title"]
         ax_title = fig.add_subplot(gs[2, idx])
         ax_title.axis("off")
 
-        if (
-            recon_title in psnr_values
-            and recon_title in ssim_values
-            and recon_title in mse_values
-        ):
+        # if (
+        #     recon_title in psnr_values
+        #     and recon_title in ssim_values
+        #     and recon_title in mse_values
+        # ): # removed upon for Sikora's request.
+
+        if recon_title in psnr_values and recon_title in ssim_values:
             psnr_val = psnr_values[recon_title]
             ssim_val = ssim_values[recon_title]
-            mse_val = mse_values[recon_title]
+            # mse_val = mse_values[recon_title]
 
             psnr_display = format_metric(recon_title, sorted_psnr, psnr_val, "PSNR")
             ssim_display = format_metric(recon_title, sorted_ssim, ssim_val, "SSIM")
-            mse_display = format_metric(recon_title, sorted_mse, mse_val, "MSE")
+            # mse_display = format_metric(recon_title, sorted_mse, mse_val, "MSE")
 
-            display_title = f"${psnr_display}$\n${ssim_display}$\n${mse_display}$"
+            # display_title = f"${psnr_display}$\n${ssim_display}$\n${mse_display}$" # removed upon for Sikora's request.
+            display_title = f"${psnr_display}$\n${ssim_display}$"
 
             ax_title.text(
                 0.5,
@@ -507,6 +520,8 @@ def visualize_data(
     visualize: bool = True,
 ) -> None:
 
+    plt.rcParams.update({"text.usetex": True})
+
     ordered_keys = [k for k in images.keys() if k != hr_key]
 
     num_images = len(ordered_keys)
@@ -543,7 +558,7 @@ def visualize_data(
         ax_img_list.append(ax_img)
 
         if img is not None and img.size > 0:
-            ax_img.imshow(img, cmap=cmap, aspect="auto")
+            ax_img.imshow(img, cmap=cmap, vmax=img.max(), vmin=img.min(), aspect="auto")
         else:
             print(f"Warning: Invalid image data for {title}")
         ax_img.axis("on")

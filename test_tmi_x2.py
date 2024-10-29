@@ -785,9 +785,9 @@ def main(**kwargs):
                             "image": results["Bicubic"]["e_img"],
                             "title": "Bicubic",
                         },
-                        "E_SMoE_img": {
+                        "E_SMoE_I_img": {
                             "image": results["N-SMoE-I"]["e_img"],
-                            "title": "N-SMoE",
+                            "title": "N-SMoE-I",
                         },
                         "E_SMoE_II_img": {
                             "image": results["N-SMoE-II"]["e_img"],
@@ -864,8 +864,8 @@ def main(**kwargs):
                     "SSIM",
                     "LPIPS",
                     "DISTS",
-                    "Diff_PSNR",
-                    "Diff_SSIM",
+                    # "Diff_PSNR",
+                    # "Diff_SSIM",
                 ]
             )
 
@@ -878,10 +878,11 @@ def main(**kwargs):
                         avg_ssim = average_metric_data["ssim"][method][dataset][scale]
                         avg_lpips = average_metric_data["lpips"][method][dataset][scale]
                         avg_dists = average_metric_data["dists"][method][dataset][scale]
-                        ref_psnr = average_metric_data["psnr"]["N-SMoE"][dataset][scale]
-                        ref_ssim = average_metric_data["ssim"]["N-SMoE"][dataset][scale]
-                        diff_psnr = ref_psnr - avg_psnr
-                        diff_ssim = ref_ssim - avg_ssim
+
+                        # ref_psnr = average_metric_data["psnr"]["N-SMoE"][dataset][scale]
+                        # ref_ssim = average_metric_data["ssim"]["N-SMoE"][dataset][scale]
+                        # diff_psnr = ref_psnr - avg_psnr
+                        # diff_ssim = ref_ssim - avg_ssim
 
                         csvwriter.writerow(
                             [
@@ -894,8 +895,8 @@ def main(**kwargs):
                                 f"{avg_ssim:.4f}",
                                 f"{avg_lpips:.4f}",
                                 f"{avg_dists:.4f}",
-                                f"{diff_psnr:.4f}",
-                                f"{diff_ssim:.4f}",
+                                # f"{diff_psnr:.4f}",
+                                # f"{diff_ssim:.4f}",
                             ]
                         )
 

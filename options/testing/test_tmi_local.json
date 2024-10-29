@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/mnt/d/tmi_test_superresolution"
+      "root": "/mnt/d/tmi_test_superresolution_1"
       }
       , "pretrained_models":{
          "dpsr_x2" : "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"   // rgb | grayscale
@@ -145,7 +145,7 @@
           "name": "EM" //Cremi
         , "scale": 2  
         , "dataset_type": "medical_sr"            
-        , "lq_patchsize": 128 // 96
+        , "lq_patchsize": 64 // 96
         , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         , "exclude_dirs": []
         , "length" : 50
