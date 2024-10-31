@@ -288,11 +288,11 @@ def visualize_with_segmentation(
     plt.subplots_adjust(
         left=0.12, bottom=0.12, right=0.89, top=0.89, wspace=0, hspace=0
     )
-
-    if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
+        plt.close(fig)
 
 
 def visualize_with_error_map(
@@ -503,11 +503,11 @@ def visualize_with_error_map(
     #     left=0.12, bottom=0.12, right=0.88, top=0.88, wspace=0, hspace=0
     # )
     plt.subplots_adjust(right=0.9)
-
-    if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
+        plt.close(fig)
 
 
 def visualize_data(
@@ -645,11 +645,11 @@ def visualize_data(
             )
 
     # plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
     if visualize:
         plt.show()
+    if save_path:
+        plt.savefig(save_path, format="pdf", bbox_inches="tight", pad_inches=0, dpi=600)
+        plt.close(fig)
 
 
 def visualize_sharpening_results_(

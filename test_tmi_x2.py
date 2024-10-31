@@ -226,7 +226,7 @@ def main(**kwargs):
             "netG": {
                 "net_type": "unet_moex1",
                 "kernel": 16,
-                "sharpening_factor": 1.1,
+                "sharpening_factor": 1,
                 "model_channels": 64,
                 "num_res_blocks": 8,
                 "attention_resolutions": [16,8,4],
@@ -621,39 +621,39 @@ def main(**kwargs):
 
         # sam2 = BFloat16SAM2(sam2)
 
-        # mask_generator = SAM2AutomaticMaskGenerator(
-        #     model=sam2,
-        #     points_per_side=256,  # Very high density for the finest details
-        #     points_per_batch=128,  # More points per batch for thorough segmentation
-        #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
-        #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
-        #     stability_score_offset=1.0,
-        #     mask_threshold=0.0,
-        #     box_nms_thresh=0.7,
-        #     crop_n_layers=4,  # More layers for multi-level cropping
-        #     crop_nms_thresh=0.7,
-        #     crop_overlap_ratio=512 / 1500,
-        #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
-        #     min_mask_region_area=20,  # Small region processing to remove artifacts
-        #     output_mode="binary_mask",
-        #     use_m2m=True,  # Enable M2M refinement
-        #     multimask_output=True,
-        # )
-
         mask_generator = SAM2AutomaticMaskGenerator(
             model=sam2,
-            # points_per_side=128,
-            # points_per_batch=128,
-            # pred_iou_thresh=0.7,
-            # stability_score_thresh=0.92,
-            # stability_score_offset=0.7,
-            # crop_n_layers=4,
-            # crop_overlap_ratio=512 / 1500,
+            # points_per_side=64,  # Very high density for the finest details
+            points_per_batch=128,  # More points per batch for thorough segmentation
+            # pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
+            stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
+            # stability_score_offset=1.0,
+            # mask_threshold=0.0,
             # box_nms_thresh=0.7,
-            # crop_n_points_downscale_factor=2,
-            # min_mask_region_area=25.0,
-            # use_m2m=True,
+            # crop_n_layers=4,  # More layers for multi-level cropping
+            # crop_nms_thresh=0.7,
+            # crop_overlap_ratio=512 / 1500,
+            # crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
+            # min_mask_region_area=25.0,  # Small region processing to remove artifacts
+            # output_mode="binary_mask",
+            use_m2m=True,  # Enable M2M refinement
+            multimask_output=True,
         )
+
+        # mask_generator = SAM2AutomaticMaskGenerator(
+        #     model=sam2,
+        #     points_per_side=128,
+        #     points_per_batch=128,
+        #     pred_iou_thresh=0.7,
+        #     stability_score_thresh=0.92,
+        #     stability_score_offset=0.7,
+        #     crop_n_layers=4,
+        #     crop_overlap_ratio=512 / 1500,
+        #     box_nms_thresh=0.7,
+        #     crop_n_points_downscale_factor=2,
+        #     min_mask_region_area=25.0,
+        #     use_m2m=True,
+        # )
 
         # mask_generator = BFloat16SAM2AutomaticMaskGenerator(mask_generator)
 
@@ -816,21 +816,18 @@ def main(**kwargs):
                         mask_generator,
                         cmap="gray",
                         save_path=seg_figure_path,
-                        visualize=opt["visualize"],
+                        visualize=False,
                     )
 
                     visualize_with_error_map(
                         images,
                         cmap="gray",
                         save_path=error_map_figure_path,
-                        visualize=opt["visualize"],
+                        visualize=False,
                     )
 
                     visualize_data(
-                        images,
-                        cmap="gray",
-                        save_path=figure_path,
-                        visualize=opt["visualize"],
+                        images, cmap="gray", save_path=figure_path, visualize=False
                     )
 
         for metric in metrics:

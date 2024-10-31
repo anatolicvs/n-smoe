@@ -30,10 +30,10 @@ from utils_n.vis import (
 )
 
 # torch.autocast(device_type="cuda", dtype=torch.bfloat16).__enter__()
-# if torch.cuda.get_device_properties(0).major >= 8:
-#     # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
-#     torch.backends.cuda.matmul.allow_tf32 = True
-#     torch.backends.cudnn.allow_tf32 = True
+if torch.cuda.get_device_properties(0).major >= 8:
+    # turn on tfloat32 for Ampere GPUs (https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices)
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
 from utils_n.calc_metrics import calc_metrics
 from utils_n.gen_latex_table import gen_latex_table
@@ -256,7 +256,7 @@ def main(**kwargs):
             "netG": {
                 "net_type": "unet_moex1",
                 "kernel": 16,
-                "sharpening_factor": 1.1,
+                "sharpening_factor": 1,
                 "model_channels": 64,
                 "num_res_blocks": 8,
                 "attention_resolutions": [
@@ -292,7 +292,7 @@ def main(**kwargs):
             "netG": {
                 "net_type": "unet_moex3",
                 "kernel": 32,
-                "sharpening_factor": 1.0,
+                "sharpening_factor": 1,
                 "model_channels": 64,
                 "num_res_blocks": 12,
                 "attention_resolutions": [
@@ -421,12 +421,12 @@ def main(**kwargs):
         }
         """
 
-        json_moex3_moex3_psnr_v1_x4_16 = """
+        json_moex3_psnr_v1_x4_16 = """
         {
              "netG": {
                 "net_type": "unet_moex3",
                 "kernel": 16,
-                "sharpening_factor": 1.0,
+                "sharpening_factor": 1,
                 "model_channels": 64,
                 "num_res_blocks": 12,
                 "attention_resolutions": [
@@ -471,9 +471,7 @@ def main(**kwargs):
 
         netG_rev_moex3_v1_x4_16 = json.loads(json_rev_moex3_v1_x4_16)["netG"]
 
-        netG_moex3_moex3_psnr_v1_x4_16 = json.loads(json_moex3_moex3_psnr_v1_x4_16)[
-            "netG"
-        ]
+        netG_moex3_psnr_v1_x4_16 = json.loads(json_moex3_psnr_v1_x4_16)["netG"]
 
         encoder_cfg1 = enc1_cfg(
             model_channels=netG_moex1["model_channels"],
@@ -624,59 +622,53 @@ def main(**kwargs):
         )
 
         encoder_cfg3_moex3_psnr_v1_x4_16 = enc2_cfg(
-            model_channels=netG_moex3_moex3_psnr_v1_x4_16["model_channels"],  # 32,
-            num_res_blocks=netG_moex3_moex3_psnr_v1_x4_16["num_res_blocks"],  # 4,
-            attention_resolutions=netG_moex3_moex3_psnr_v1_x4_16[
+            model_channels=netG_moex3_psnr_v1_x4_16["model_channels"],  # 32,
+            num_res_blocks=netG_moex3_psnr_v1_x4_16["num_res_blocks"],  # 4,
+            attention_resolutions=netG_moex3_psnr_v1_x4_16[
                 "attention_resolutions"
             ],  # [16, 8],
-            dropout=netG_moex3_moex3_psnr_v1_x4_16["dropout"],  # 0.2,
-            channel_mult=netG_moex3_moex3_psnr_v1_x4_16["channel_mult"],  # (2, 4, 8),
-            conv_resample=netG_moex3_moex3_psnr_v1_x4_16["conv_resample"],  # False,
+            dropout=netG_moex3_psnr_v1_x4_16["dropout"],  # 0.2,
+            channel_mult=netG_moex3_psnr_v1_x4_16["channel_mult"],  # (2, 4, 8),
+            conv_resample=netG_moex3_psnr_v1_x4_16["conv_resample"],  # False,
             dims=2,
-            use_checkpoint=netG_moex3_moex3_psnr_v1_x4_16["use_checkpoint"],  # True,
-            use_fp16=netG_moex3_moex3_psnr_v1_x4_16["use_fp16"],  # False,
-            num_heads=netG_moex3_moex3_psnr_v1_x4_16["num_heads"],  # 4,
-            # num_head_channels=netG_moex3_moex3_psnr_v1_x4_16["num_head_channels"],  # 8,
-            resblock_updown=netG_moex3_moex3_psnr_v1_x4_16["resblock_updown"],  # False,
-            num_groups=netG_moex3_moex3_psnr_v1_x4_16["num_groups"],  # 32,
-            resample_2d=netG_moex3_moex3_psnr_v1_x4_16["resample_2d"],  # True,
-            scale_factor=netG_moex3_moex3_psnr_v1_x4_16["scale"],
-            resizer_num_layers=netG_moex3_moex3_psnr_v1_x4_16[
-                "resizer_num_layers"
-            ],  # 4,
-            resizer_avg_pool=netG_moex3_moex3_psnr_v1_x4_16[
-                "resizer_avg_pool"
-            ],  # False,
-            activation=netG_moex3_moex3_psnr_v1_x4_16["activation"],
-            rope_theta=netG_moex3_moex3_psnr_v1_x4_16["rope_theta"],  # 10000.0,
-            attention_type=netG_moex3_moex3_psnr_v1_x4_16[
+            use_checkpoint=netG_moex3_psnr_v1_x4_16["use_checkpoint"],  # True,
+            use_fp16=netG_moex3_psnr_v1_x4_16["use_fp16"],  # False,
+            num_heads=netG_moex3_psnr_v1_x4_16["num_heads"],  # 4,
+            # num_head_channels=netG_moex3_psnr_v1_x4_16["num_head_channels"],  # 8,
+            resblock_updown=netG_moex3_psnr_v1_x4_16["resblock_updown"],  # False,
+            num_groups=netG_moex3_psnr_v1_x4_16["num_groups"],  # 32,
+            resample_2d=netG_moex3_psnr_v1_x4_16["resample_2d"],  # True,
+            scale_factor=netG_moex3_psnr_v1_x4_16["scale"],
+            resizer_num_layers=netG_moex3_psnr_v1_x4_16["resizer_num_layers"],  # 4,
+            resizer_avg_pool=netG_moex3_psnr_v1_x4_16["resizer_avg_pool"],  # False,
+            activation=netG_moex3_psnr_v1_x4_16["activation"],
+            rope_theta=netG_moex3_psnr_v1_x4_16["rope_theta"],  # 10000.0,
+            attention_type=netG_moex3_psnr_v1_x4_16[
                 "attention_type"
             ],  # "cross_attention",  # "attention" or "cross_attention"
         )
 
-        moex3_moex3_psnr_v1_x4_16 = ModelConfig(
+        moex3_psnr_v1_x4_16 = ModelConfig(
             encoder_config=encoder_cfg3_moex3_psnr_v1_x4_16,
             moe_cfg_class=moe2_cfg,
             ae_cfg_class=ae2_cfg,
             ae_class=ae2,
             model_params={
-                "kernel": netG_moex3_moex3_psnr_v1_x4_16["kernel"],
-                "sharpening_factor": netG_moex3_moex3_psnr_v1_x4_16[
-                    "sharpening_factor"
-                ],
+                "kernel": netG_moex3_psnr_v1_x4_16["kernel"],
+                "sharpening_factor": netG_moex3_psnr_v1_x4_16["sharpening_factor"],
                 "n_channels": opt["n_channels"],
                 "z": int(
-                    2 * netG_moex3_moex3_psnr_v1_x4_16["kernel"]
-                    + 4 * netG_moex3_moex3_psnr_v1_x4_16["kernel"]
-                    + netG_moex3_moex3_psnr_v1_x4_16["kernel"]
+                    2 * netG_moex3_psnr_v1_x4_16["kernel"]
+                    + 4 * netG_moex3_psnr_v1_x4_16["kernel"]
+                    + netG_moex3_psnr_v1_x4_16["kernel"]
                 ),
             },
             opt=opt,
         )
 
-        model_moex3_moex3_psnr_v1_x4_16 = load_model(
-            moex3_moex3_psnr_v1_x4_16,
-            sharpening_factor=netG_moex3_moex3_psnr_v1_x4_16["sharpening_factor"],
+        model_moex3_psnr_v1_x4_16 = load_model(
+            moex3_psnr_v1_x4_16,
+            sharpening_factor=netG_moex3_psnr_v1_x4_16["sharpening_factor"],
             weights_path=opt["pretrained_models"]["moex3_psnr_v1_x4_16"],
             device=device,
         )
@@ -955,44 +947,44 @@ def main(**kwargs):
             apply_postprocessing=False,
         )
 
-        # mask_generator = SAM2AutomaticMaskGenerator(
-        #     model=sam2,
-        #     points_per_side=256,  # Very high density for the finest details
-        #     points_per_batch=128,  # More points per batch for thorough segmentation
-        #     pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
-        #     stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
-        #     stability_score_offset=1.0,
-        #     mask_threshold=0.0,
-        #     box_nms_thresh=0.7,
-        #     crop_n_layers=4,  # More layers for multi-level cropping
-        #     crop_nms_thresh=0.7,
-        #     crop_overlap_ratio=512 / 1500,
-        #     crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
-        #     min_mask_region_area=20,  # Small region processing to remove artifacts
-        #     output_mode="binary_mask",
-        #     use_m2m=True,  # Enable M2M refinement
-        #     multimask_output=True,
-        # )
-
         mask_generator = SAM2AutomaticMaskGenerator(
             model=sam2,
-            # points_per_side=128,
-            # points_per_batch=128,
-            # pred_iou_thresh=0.7,
-            # stability_score_thresh=0.92,
-            # stability_score_offset=0.7,
-            # crop_n_layers=4,
-            # crop_overlap_ratio=512 / 1500,
+            # points_per_side=64,  # Very high density for the finest details
+            points_per_batch=128,  # More points per batch for thorough segmentation
+            # pred_iou_thresh=0.7,  # Balanced IoU threshold for quality masks
+            stability_score_thresh=0.95,  # High stability score threshold for the most stable masks
+            # stability_score_offset=1.0,
+            # mask_threshold=0.0,
             # box_nms_thresh=0.7,
-            # crop_n_points_downscale_factor=2,
-            # min_mask_region_area=25.0,
-            # use_m2m=True,
+            # crop_n_layers=4,  # More layers for multi-level cropping
+            # crop_nms_thresh=0.7,
+            # crop_overlap_ratio=512 / 1500,
+            # crop_n_points_downscale_factor=2,  # Adjusted for better point distribution
+            # min_mask_region_area=25.0,  # Small region processing to remove artifacts
+            # output_mode="binary_mask",
+            use_m2m=True,  # Enable M2M refinement
+            multimask_output=True,
         )
 
+        # mask_generator = SAM2AutomaticMaskGenerator(
+        #     model=sam2,
+        #     # points_per_side=128,
+        #     # points_per_batch=128,
+        #     # pred_iou_thresh=0.7,
+        #     # stability_score_thresh=0.92,
+        #     # stability_score_offset=0.7,
+        #     # crop_n_layers=4,
+        #     # crop_overlap_ratio=512 / 1500,
+        #     # box_nms_thresh=0.7,
+        #     # crop_n_points_downscale_factor=2,
+        #     # min_mask_region_area=25.0,
+        #     # use_m2m=True,
+        # )
+
         models = {
-            "N-SMoE": model_moex1,  # k = 16 | attn=attn
+            "N-SMoE-I": model_moex1,  # k = 16 | attn=attn
             # "N-SMoE-II": model_moex3,  # k = 16 | attn=RoPE
-            "N-SMoE-II": model_moex3_moex3_psnr_v1_x4_16,  # k = 16 | attn=RoPE
+            "N-SMoE-II": model_moex3_psnr_v1_x4_16,  # k = 16 | attn=RoPE
             # "N-SMoE-II": model_rev_v1_x4_16,  # k = 16 | attn=RoPE | new
             "N-SMoE-III": model_moex3_v1_x4_32,  # k = 32 | attn=RoPE
             "DPSR": model_dpsr,
@@ -1121,8 +1113,8 @@ def main(**kwargs):
                             "title": "Bicubic",
                         },
                         "E_SMoE_img": {
-                            "image": results["N-SMoE"]["e_img"],
-                            "title": "N-SMoE",
+                            "image": results["N-SMoE-I"]["e_img"],
+                            "title": "N-SMoE-I",
                         },
                         "E_SMoE_II_img": {
                             "image": results["N-SMoE-II"]["e_img"],
@@ -1151,7 +1143,7 @@ def main(**kwargs):
                     #     mask_generator,
                     #     cmap="gray",
                     #     save_path=seg_figure_path,
-                    #     visualize=opt["visualize"],
+                    #     visualize=False,
                     # )
 
                     visualize_with_error_map(
@@ -1215,8 +1207,8 @@ def main(**kwargs):
                     "SSIM",
                     "LPIPS",
                     "DISTS",
-                    "Diff_PSNR",
-                    "Diff_SSIM",
+                    # "Diff_PSNR",
+                    # "Diff_SSIM",
                 ]
             )
 
@@ -1229,10 +1221,10 @@ def main(**kwargs):
                         avg_ssim = average_metric_data["ssim"][method][dataset][scale]
                         avg_lpips = average_metric_data["lpips"][method][dataset][scale]
                         avg_dists = average_metric_data["dists"][method][dataset][scale]
-                        ref_psnr = average_metric_data["psnr"]["N-SMoE"][dataset][scale]
-                        ref_ssim = average_metric_data["ssim"]["N-SMoE"][dataset][scale]
-                        diff_psnr = ref_psnr - avg_psnr
-                        diff_ssim = ref_ssim - avg_ssim
+                        # ref_psnr = average_metric_data["psnr"]["N-SMoE"][dataset][scale]
+                        # ref_ssim = average_metric_data["ssim"]["N-SMoE"][dataset][scale]
+                        # diff_psnr = ref_psnr - avg_psnr
+                        # diff_ssim = ref_ssim - avg_ssim
 
                         csvwriter.writerow(
                             [
@@ -1245,8 +1237,8 @@ def main(**kwargs):
                                 f"{avg_ssim:.4f}",
                                 f"{avg_lpips:.4f}",
                                 f"{avg_dists:.4f}",
-                                f"{diff_psnr:.4f}",
-                                f"{diff_ssim:.4f}",
+                                # f"{diff_psnr:.4f}",
+                                # f"{diff_ssim:.4f}",
                             ]
                         )
 
@@ -1431,7 +1423,7 @@ def main(**kwargs):
                 sharpened_images,
                 metrics,
                 save_path=si_figure_path,
-                visualize=opt["visualize"],
+                visualize=False,
             )
         eng.quit()
 
