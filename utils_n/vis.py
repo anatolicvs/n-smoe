@@ -919,8 +919,8 @@ def visualize_sharpening_results(
             ax_model.imshow(model_images[factor], cmap="gray")
 
             ax_model.set_xlabel(
-                f"PSNR: {metrics[model_name][factor]['PSNR']:.2f} dB | "
-                f"SSIM: {metrics[model_name][factor]['SSIM']:.2f}\n"
+                # f"PSNR: {metrics[model_name][factor]['PSNR']:.2f} dB | "
+                # f"SSIM: {metrics[model_name][factor]['SSIM']:.2f}\n"
                 f"SI: {metrics[model_name][factor]['SI']:.2f} | "
                 f"LPIPS: {metrics[model_name][factor]['LPIPS']:.4f}",
                 labelpad=10,
