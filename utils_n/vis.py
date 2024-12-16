@@ -826,6 +826,13 @@ def visualize_sharpening_results(
     total_rows = 1 + num_models
     total_cols = 1 + num_factors + 4
 
+    plt.rcParams["font.size"] = 20
+    plt.rcParams["axes.labelsize"] = 20
+    plt.rcParams["axes.titlesize"] = 18
+    plt.rcParams["legend.fontsize"] = 20
+    plt.rcParams["xtick.labelsize"] = 12
+    plt.rcParams["ytick.labelsize"] = 12
+
     golden_ratio = 1.8
     fig_width = 3.0 * total_cols
     fig_height = fig_width / golden_ratio
@@ -921,8 +928,8 @@ def visualize_sharpening_results(
             ax_model.set_xlabel(
                 # f"PSNR: {metrics[model_name][factor]['PSNR']:.2f} dB | "
                 # f"SSIM: {metrics[model_name][factor]['SSIM']:.2f}\n"
-                f"SI: {metrics[model_name][factor]['SI']:.2f} | "
-                f"LPIPS: {metrics[model_name][factor]['LPIPS']:.4f}",
+                f"SI: {metrics[model_name][factor]['SI']:.2f}",
+                # f"LPIPS: {metrics[model_name][factor]['LPIPS']:.4f}",
                 labelpad=10,
             )
 
@@ -946,7 +953,6 @@ def visualize_sharpening_results(
             f"$\\alpha = {factor:.2f}$",
             ha="center",
             va="center",
-            fontsize=10,
             fontweight="bold",
             transform=ax_alpha.transAxes,
         )

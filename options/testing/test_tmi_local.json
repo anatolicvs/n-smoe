@@ -14,7 +14,7 @@
     , "merge_bn_startpoint": 400000  // merge BN after N iterations
         
     , "path": {
-      "root": "/mnt/d/tmi_test_superresolution_1"
+      "root": "/mnt/d/tmi_test_superresolution_2"
       }
       , "pretrained_models":{
          "dpsr_x2" : "/home/ozkan/works/n-smoe/superresolution/dpsr/models/10000_G.pth"   // rgb | grayscale
