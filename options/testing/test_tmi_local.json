@@ -1,12 +1,12 @@
 {
-    "task": "sharpening" //"sharpening" | sr_x2 | sr_x4
+    "task": "sr_x2" //"sharpening" | sr_x2 | sr_x4
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
     , "scale": 2       // broadcast to "netG" if SISR
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
-    , "overlap": 15
+    , "overlap": 12
     , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
@@ -50,24 +50,24 @@
         ,"moex3_x4_32": null
       }
       ,"datasets": {
-        "OCT": {
-        "name": "OCT"
-      , "scale": 2  
-      , "dataset_type": "medical_sr"            
-      , "lq_patchsize": 128
-      , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-      , "exclude_dirs": []
-      , "length" : 100
-      , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
-      , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/oct/DME"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
-      , "dataroot_L": null              // path of L testing dataset
-      , "use_dataset_cache": true
-      , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_oct_dme_100.pkl"
-      , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-      , "dataloader_num_workers": 16
-      , "dataloader_batch_size": 1 
-      , "use_imgH": true
-      }
+      //   "OCT": {
+      //   "name": "OCT"
+      // , "scale": 2  
+      // , "dataset_type": "medical_sr"            
+      // , "lq_patchsize": 128
+      // , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+      // , "exclude_dirs": []
+      // , "length" : 100
+      // , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
+      // , "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/oct/DME"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+      // , "dataroot_L": null              // path of L testing dataset
+      // , "use_dataset_cache": true
+      // , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_oct_dme_100.pkl"
+      // , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+      // , "dataloader_num_workers": 16
+      // , "dataloader_batch_size": 1 
+      // , "use_imgH": true
+      // }
         // "CT": {
         //   "name": "CT",
         //   "dataset_type": "medical_sr",
@@ -80,36 +80,36 @@
         //   "dataroot_L": null,
         //   "use_dataset_cache": true,
         //   "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_FLARE22_10.pkl",
-        //   "H_size": 512, // 128 | 256 | 512 (Max)
+        //   "H_size": 256, // 128 | 256 | 512 (Max)
         //   "dataloader_num_workers": 16,
         //   "dataloader_batch_size": 1,
         //   "use_imgH": true
         // }
         //, 
 
-        // "MRI": {
-        //   "name": "MRI",
-        //   "dataset_type": "medical_sr",
-        //   "lq_patchsize": 32,
-        //   "degradation_type": "bsrgan_plus",
-        //   "exclude_dirs": [],
-        //   "length": 50,
-        //   "degradation_methods": ["bsrgan_plus"],
-        //   "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/braints"],
-        //   "dataroot_L": null,
-        //   "use_dataset_cache": true,
-        //   "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_braints_50.pkl",
-        //   "H_size": 220,
-        //   "dataloader_num_workers": 16,
-        //   "dataloader_batch_size": 1,
-        //   "use_imgH": true
-        // }
+        "MRI": {
+          "name": "MRI",
+          "dataset_type": "medical_sr",
+          "lq_patchsize":110,
+          "degradation_type": "bsrgan_plus",
+          "exclude_dirs": [],
+          "length": 50,
+          "degradation_methods": ["bsrgan_plus"],
+          "dataroot_H": ["/mnt/e/Medical/mri/data_for_test/braints"],
+          "dataroot_L": null,
+          "use_dataset_cache": true,
+          "dataset_cache_file": "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_braints_50.pkl",
+          "H_size": 220,
+          "dataloader_num_workers": 16,
+          "dataloader_batch_size": 1,
+          "use_imgH": true
+        }
         
-        //  "EM": {
+        // "EM": {
         //   "name": "EM" //Cremi
         // , "scale": 2  
         // , "dataset_type": "medical_sr"            
-        // , "lq_patchsize": 64 // 96
+        // , "lq_patchsize": 128 // 96
         // , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
         // , "exclude_dirs": []
         // , "length" : 50
@@ -122,7 +122,7 @@
         // , "dataloader_num_workers": 16
         // , "dataloader_batch_size": 1 
         // , "use_imgH": true
-        // },
+        // }
 
         // "EM": {
         //   "name": "EM" //Cremi
@@ -160,27 +160,26 @@
       //   , "use_imgH": true
       // }, 
         
-      //   "EM": {
-      //     "name": "EM" //Cremi
-      //   , "scale": 2  
-      //   , "dataset_type": "medical_sr"            
-      //   , "lq_patchsize": 64 // 96
-      //   , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
-      //   , "exclude_dirs": []
-      //   , "length" : 50
-      //   , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
-      //   , "dataroot_H": ["/mnt/e/Medical/cremi"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
-      //   , "dataroot_L": null              // path of L testing dataset
-      //   , "use_dataset_cache": true
-      //   , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_cremi_50.pkl"
-      //   , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-      //   , "dataloader_num_workers": 16
-      //   , "dataloader_batch_size": 1 
-      //   , "use_imgH": true
-      // }, 
+      //   // ,"EM": {
+      //   //   "name": "EM" //Cremi
+      //   // , "scale": 2  
+      //   // , "dataset_type": "medical_sr"            
+      //   // , "lq_patchsize": 64 // 96
+      //   // , "degradation_type" : "bsrgan_plus" // "bsrgan" , "dpsr"
+      //   // , "exclude_dirs": []
+      //   // , "length" : 50
+      //   // , "degradation_methods" : ["bsrgan_plus"] // "dpsr" | "bsrgan_plus"
+      //   // , "dataroot_H": ["/mnt/e/Medical/cremi"] //["/mnt/d/dataset/FLARE22/npy"] // ["/mnt/e/Medical/mri/data_for_train/brain2/test/"]  // amd: /mnt/e/Medical/mri/data_for_train/amd | 
+      //   // , "dataroot_L": null              // path of L testing dataset
+      //   // , "use_dataset_cache": true
+      //   // , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_cremi_50.pkl"
+      //   // , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
+      //   // , "dataloader_num_workers": 16
+      //   // , "dataloader_batch_size": 1 
+      //   // , "use_imgH": true
+      // } 
     }  
-}
-
+  }
 
    // "EM": {
         //   "name": "EM" //Cremi

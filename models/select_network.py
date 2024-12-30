@@ -316,7 +316,10 @@ def define_G(opt):
             Autoencoder,
         )
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + opt_net["kernel"]
+        # Single type of kernel
+        # z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + opt_net["kernel"]
+
+        z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + 2 * opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             model_channels=opt_net["model_channels"],  # 32,

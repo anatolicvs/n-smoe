@@ -12,6 +12,8 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from utils_n.nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
+from torch.compiler import compile
+import torch_tensorrt as trt
 
 
 backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
@@ -852,335 +854,598 @@ class Gaussians:
     scale: Optional[torch.Tensor] = None
 
 
-class MoE(Backbone[MoEConfig]):
-    def __init__(self, cfg: MoEConfig) -> None:
-        super(MoE, self).__init__(cfg)
-        self.kernel: int = cfg.kernel
-        self.alpha: float = cfg.sharpening_factor
-
-    def grid(self, height, width) -> torch.Tensor:
-        xx: torch.Tensor = torch.linspace(0.0, 1.0, width)
-        yy: torch.Tensor = torch.linspace(0.0, 1.0, height)
-        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
-        grid: torch.Tensor = torch.stack((grid_x, grid_y), -1).float()
-        return grid
-
-    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
-        R: torch.Tensor = self.ang_to_rot_mat(theta)
-        S: torch.Tensor = torch.diag_embed(scale) + epsilon * torch.eye(
-            scale.size(-1), device=scale.device
-        )
-
-        RS: torch.Tensor = R @ S
-        Sigma: torch.Tensor = RS @ RS.transpose(-2, -1)
-        return Sigma
-
-    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
-        cos_theta: torch.Tensor = torch.cos(theta).unsqueeze(-1)
-        sin_theta: torch.Tensor = torch.sin(theta).unsqueeze(-1)
-        R: torch.Tensor = torch.cat(
-            [cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1
-        )
-        return R.view(*theta.shape, 2, 2)
-
-    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
-        # v2 - models after Oct 6 uses this version
-        mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
-        mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
-        mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
-
-        scale_idx: int = 3 * k
-        scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
-            -1, p.shape[1], k, 2
-        )
-
-        scale = F.softplus(scale) + 1e-8  # Ensure positive scales
-
-        rot_idx: int = scale_idx + 2 * k
-        theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
-        theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi  # Constrain to [-π, π]
-
-        cov_matrix: torch.Tensor = self.cov_mat_2d(scale, theta)
-        cov_matrix = torch.mul(cov_matrix, self.alpha)
-
-        w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
-
-        return Gaussians(mu, cov_matrix, w, theta, scale)
-
-    def extract_parameters_v1(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
-        # v2
-        mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
-        mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
-        mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
-
-        scale_idx: int = 3 * k
-        scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
-            -1, p.shape[1], k, 2
-        )
-
-        scale = F.softplus(scale) + 1e-6  # Ensure positive scales
-
-        rot_idx: int = scale_idx + 2 * k
-        theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
-        theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi  # Constrain to [-π, π]
-
-        w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
-
-        return Gaussians(mu, None, w, theta, scale)
-
-    def extract_parameters_v0(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
-        # v0, models before Oct 6 uses this version
-        mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
-        mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
-        mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
-
-        scale_idx: int = 3 * k
-        scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
-            -1, p.shape[1], k, 2
-        )
-
-        rot_idx: int = scale_idx + 2 * k
-        theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
-
-        cov_matrix: torch.Tensor = self.cov_mat_2d(scale, theta)
-        cov_matrix = torch.mul(cov_matrix, self.alpha)
-
-        w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
-
-        return Gaussians(mu, cov_matrix, w, theta, scale)
-
-    def forward_v0(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        batch_size, num_channels, _ = params.shape
-        gauss: Gaussians = self.extract_parameters(params, self.kernel, num_channels)
-
-        grid: torch.Tensor = self.grid(height, width).to(params.device)
-        grid_expanded: torch.Tensor = (
-            grid.unsqueeze(0)
-            .unsqueeze(0)
-            .unsqueeze(2)
-            .expand(batch_size, num_channels, self.kernel, height, width, 2)
-        )
-
-        mu_expanded: torch.Tensor = (
-            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
-        )
-        x_sub_mu: torch.Tensor = grid_expanded - mu_expanded
-
-        Sigma_expanded: torch.Tensor = (
-            gauss.sigma.unsqueeze(3)
-            .unsqueeze(4)
-            .expand(-1, -1, -1, height, width, -1, -1)
-        )
-
-        x_sub_mu_t: torch.Tensor = x_sub_mu.unsqueeze(-1)
-
-        exp_terms: torch.Tensor = -0.5 * torch.einsum(
-            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
-            x_sub_mu_t,
-            Sigma_expanded,
-            x_sub_mu_t,
-        ).squeeze(-1)
-
-        e: torch.Tensor = torch.exp(exp_terms)
-
-        max_e: torch.Tensor = torch.max(e, dim=2, keepdim=True)[0]
-        log_sum_exp_e: torch.Tensor = max_e + torch.log(
-            torch.sum(torch.exp(e - max_e), dim=2, keepdim=True)
-        )
-        e_norm: torch.Tensor = torch.exp(e - log_sum_exp_e)
-
-        y_hat: torch.Tensor = torch.sum(
-            e_norm * gauss.w.unsqueeze(-1).unsqueeze(-1), dim=2
-        )
-        y_hat = torch.clamp(y_hat, min=0, max=1)
-
-        return y_hat
-
-    def forward_v1(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        # Sigma_inv added.
-        batch_size, num_channels, _ = params.shape
-        gauss: Gaussians = self.extract_parameters(params, self.kernel, num_channels)
-
-        grid: torch.Tensor = self.grid(height, width).to(params.device)
-        grid_expanded: torch.Tensor = (
-            grid.unsqueeze(0)
-            .unsqueeze(0)
-            .unsqueeze(2)
-            .expand(batch_size, num_channels, self.kernel, height, width, 2)
-        )
-
-        mu_expanded: torch.Tensor = (
-            gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
-        )
-        x_sub_mu: torch.Tensor = grid_expanded - mu_expanded
-
-        S_inv = torch.diag_embed(1 / gauss.scale)  # [B, N, K, 2, 2]
-
-        R = self.ang_to_rot_mat(gauss.theta)  # [B, N, K, 2, 2]
-        R_T = R.transpose(-2, -1)
-
-        Sigma_inv = R @ S_inv @ R_T  # [B, N, K, 2, 2]
-        Sigma_inv_expanded = (
-            Sigma_inv.unsqueeze(3)
-            .unsqueeze(4)
-            .expand(-1, -1, -1, height, width, -1, -1)
-        )
-
-        x_sub_mu_t: torch.Tensor = x_sub_mu.unsqueeze(-1)
-
-        exp_terms: torch.Tensor = -0.5 * torch.einsum(
-            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
-            x_sub_mu_t,
-            Sigma_inv_expanded,  # Sigma_expanded,
-            x_sub_mu_t,
-        ).squeeze(-1)
-
-        e: torch.Tensor = torch.exp(exp_terms)
-
-        max_e: torch.Tensor = torch.max(e, dim=2, keepdim=True)[0]
-        log_sum_exp_e: torch.Tensor = max_e + torch.log(
-            torch.sum(torch.exp(e - max_e), dim=2, keepdim=True)
-        )
-        e_norm: torch.Tensor = torch.exp(e - log_sum_exp_e)
-
-        y_hat: torch.Tensor = torch.sum(
-            e_norm * gauss.w.unsqueeze(-1).unsqueeze(-1), dim=2
-        )
-        y_hat = torch.clamp(y_hat, min=0, max=1)
-
-        return y_hat
-
-    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        # v2 - models after Oct 6 uses this version 
-        batch_size, num_channels, _ = params.shape
-        gauss = self.extract_parameters(
-            params, self.kernel, num_channels
-        )  # Gaussians(mu, sigma, w, scale, theta)
-
-        grid = self.grid(height, width).to(params.device)  # [H, W, 2]
-        grid_expanded = (
-            grid.unsqueeze(0).unsqueeze(0).unsqueeze(2)
-        )  # [1, 1, 1, H, W, 2]
-        grid_expanded = grid_expanded.expand(
-            batch_size, num_channels, self.kernel, height, width, 2
-        )  # [B, N, K, H, W, 2]
-
-        mu_expanded = gauss.mu.unsqueeze(3).unsqueeze(4)  # [B, N, K, 1, 1, 2]
-        mu_expanded = mu_expanded.expand(
-            -1, -1, -1, height, width, -1
-        )  # [B, N, K, H, W, 2]
-
-        x_sub_mu = grid_expanded - mu_expanded  # [B, N, K, H, W, 2]
-        x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, N, K, H, W, 2, 1]
-
-        Sigma = gauss.sigma  # [B, N, K, 2, 2]
-        try:
-            Sigma_inv = torch.linalg.inv(Sigma)  # [B, N, K, 2, 2]
-        except RuntimeError as e:
-            epsilon = 1e-6
-            Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
-                0
-            ).unsqueeze(0)
-            Sigma_inv = torch.linalg.inv(Sigma)
-
-        Sigma_inv_expanded = Sigma_inv.unsqueeze(3).unsqueeze(
-            4
-        )  # [B, N, K, 1, 1, 2, 2]
-        Sigma_inv_expanded = Sigma_inv_expanded.expand(
-            -1, -1, -1, height, width, -1, -1
-        )  # [B, N, K, H, W, 2, 2]
-
-        exp_terms = -0.5 * torch.einsum(
-            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
-            x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
-            Sigma_inv_expanded,  # [B, N, K, H, W, 2, 2]
-            x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
-        ).squeeze(
-            -1
-        )  # [B, N, K, H, W]
-
-        max_exp_terms = torch.max(
-            exp_terms, dim=2, keepdim=True
-        ).values  # [B, N, 1, H, W]
-        exp_terms = exp_terms - max_exp_terms  # [B, N, K, H, W]
-        e = torch.exp(exp_terms)  # [B, N, K, H, W]
-
-        sum_e = torch.sum(e, dim=2, keepdim=True)  # [B, N, 1, H, W]
-        e_norm = e / (sum_e + 1e-8)  # [B, N, K, H, W]
-
-        w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, N, K, 1, 1]
-        y_hat = torch.sum(e_norm * w, dim=2)  # [B, N, H, W]
-
-        y_hat = torch.clamp(y_hat, min=0.0, max=1.0)  # [B, N, H, W]
-
-        return y_hat
-
-    def forward_v3(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        #v3 - models before Oct 6 uses this version
-        batch_size, num_channels, _ = params.shape
-        gauss = self.extract_parameters(
-            params, self.kernel, num_channels
-        )  # Gaussians(mu, sigma, w, scale, theta)
-
-        grid = self.grid(height, width).to(params.device)  # [H, W, 2]
-        grid_expanded = (
-            grid.unsqueeze(0).unsqueeze(0).unsqueeze(2)
-        )  # [1, 1, 1, H, W, 2]
-        grid_expanded = grid_expanded.expand(
-            batch_size, num_channels, self.kernel, height, width, 2
-        )  # [B, N, K, H, W, 2]
-
-        mu_expanded = gauss.mu.unsqueeze(3).unsqueeze(4)  # [B, N, K, 1, 1, 2]
-        mu_expanded = mu_expanded.expand(
-            -1, -1, -1, height, width, -1
-        )  # [B, N, K, H, W, 2]
-
-        x_sub_mu = grid_expanded - mu_expanded  # [B, N, K, H, W, 2]
-        x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, N, K, H, W, 2, 1]
-
-        Sigma = gauss.sigma  # [B, N, K, 2, 2]
-
-        try:
-            L = torch.linalg.cholesky(Sigma)  # [B, N, K, 2, 2]
-            Sigma_inv = torch.cholesky_inverse(L)  # [B, N, K, 2, 2]
-        except RuntimeError as e:
-            epsilon = 1e-6
-            Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
-                0
-            ).unsqueeze(0)
-            Sigma_inv = torch.linalg.inv(Sigma)
-
-        Sigma_inv_expanded = Sigma_inv.unsqueeze(3).unsqueeze(
-            4
-        )  # [B, N, K, 1, 1, 2, 2]
-        Sigma_inv_expanded = Sigma_inv_expanded.expand(
-            -1, -1, -1, height, width, -1, -1
-        )  # [B, N, K, H, W, 2, 2]
-
-        exp_terms = -0.5 * torch.einsum(
-            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
-            x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
-            Sigma_inv_expanded,  # [B, N, K, H, W, 2, 2]
-            x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
-        ).squeeze(
-            -1
-        )  # [B, N, K, H, W]
-
-        max_exp_terms = torch.max(
-            exp_terms, dim=2, keepdim=True
-        ).values  # [B, N, 1, H, W]
-        exp_terms = exp_terms - max_exp_terms  # [B, N, K, H, W]
-        e = torch.exp(exp_terms)  # [B, N, K, H, W]
-
-        sum_e = torch.sum(e, dim=2, keepdim=True)  # [B, N, 1, H, W]
-        e_norm = e / (sum_e + 1e-8)  # [B, N, K, H, W]
-
-        w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, N, K, 1, 1]
-        y_hat = torch.sum(e_norm * w, dim=2)  # [B, N, H, W]
-
-        y_hat = torch.clamp(y_hat, min=0.0, max=1.0)  # [B, N, H, W]
-
-        return y_hat
+# class MoE(Backbone[MoEConfig]):
+#     def __init__(self, cfg: MoEConfig) -> None:
+#         super(MoE, self).__init__(cfg)
+#         self.kernel: int = cfg.kernel
+#         self.alpha: float = cfg.sharpening_factor
+
+#     def grid(self, height, width) -> torch.Tensor:
+#         xx: torch.Tensor = torch.linspace(0.0, 1.0, width)
+#         yy: torch.Tensor = torch.linspace(0.0, 1.0, height)
+#         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+#         grid: torch.Tensor = torch.stack((grid_x, grid_y), -1).float()
+#         return grid
+
+#     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
+#         R: torch.Tensor = self.ang_to_rot_mat(theta)
+#         S: torch.Tensor = torch.diag_embed(scale) + epsilon * torch.eye(
+#             scale.size(-1), device=scale.device
+#         )
+
+#         RS: torch.Tensor = R @ S
+#         Sigma: torch.Tensor = RS @ RS.transpose(-2, -1)
+#         return Sigma
+
+#     def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+#         cos_theta: torch.Tensor = torch.cos(theta).unsqueeze(-1)
+#         sin_theta: torch.Tensor = torch.sin(theta).unsqueeze(-1)
+#         R: torch.Tensor = torch.cat(
+#             [cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1
+#         )
+#         return R.view(*theta.shape, 2, 2)
+
+#     def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+#         # v2 - models after Oct 6 uses this version
+#         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
+#         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+#         scale_idx: int = 3 * k
+#         scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
+#             -1, p.shape[1], k, 2
+#         )
+
+#         scale = F.softplus(scale) + 1e-8  # Ensure positive scales
+
+#         rot_idx: int = scale_idx + 2 * k
+#         theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+#         theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi  # Constrain to [-π, π]
+
+#         cov_matrix: torch.Tensor = self.cov_mat_2d(scale, theta)
+#         cov_matrix = torch.mul(cov_matrix, self.alpha)
+
+#         w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
+
+#         return Gaussians(mu, cov_matrix, w, theta, scale)
+
+#     def extract_parameters_v1(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+#         # v2
+#         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
+#         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+#         scale_idx: int = 3 * k
+#         scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
+#             -1, p.shape[1], k, 2
+#         )
+
+#         scale = F.softplus(scale) + 1e-6  # Ensure positive scales
+
+#         rot_idx: int = scale_idx + 2 * k
+#         theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+#         theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi  # Constrain to [-π, π]
+
+#         w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
+
+#         return Gaussians(mu, None, w, theta, scale)
+
+#     def extract_parameters_v0(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+#         # v0, models before Oct 6 uses this version
+#         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
+#         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+#         scale_idx: int = 3 * k
+#         scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
+#             -1, p.shape[1], k, 2
+#         )
+
+#         rot_idx: int = scale_idx + 2 * k
+#         theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+
+#         cov_matrix: torch.Tensor = self.cov_mat_2d(scale, theta)
+#         cov_matrix = torch.mul(cov_matrix, self.alpha)
+
+#         w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
+
+#         return Gaussians(mu, cov_matrix, w, theta, scale)
+
+#     def forward_v0(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#         batch_size, num_channels, _ = params.shape
+#         gauss: Gaussians = self.extract_parameters(params, self.kernel, num_channels)
+
+#         grid: torch.Tensor = self.grid(height, width).to(params.device)
+#         grid_expanded: torch.Tensor = (
+#             grid.unsqueeze(0)
+#             .unsqueeze(0)
+#             .unsqueeze(2)
+#             .expand(batch_size, num_channels, self.kernel, height, width, 2)
+#         )
+
+#         mu_expanded: torch.Tensor = (
+#             gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
+#         )
+#         x_sub_mu: torch.Tensor = grid_expanded - mu_expanded
+
+#         Sigma_expanded: torch.Tensor = (
+#             gauss.sigma.unsqueeze(3)
+#             .unsqueeze(4)
+#             .expand(-1, -1, -1, height, width, -1, -1)
+#         )
+
+#         x_sub_mu_t: torch.Tensor = x_sub_mu.unsqueeze(-1)
+
+#         exp_terms: torch.Tensor = -0.5 * torch.einsum(
+#             "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#             x_sub_mu_t,
+#             Sigma_expanded,
+#             x_sub_mu_t,
+#         ).squeeze(-1)
+
+#         e: torch.Tensor = torch.exp(exp_terms)
+
+#         max_e: torch.Tensor = torch.max(e, dim=2, keepdim=True)[0]
+#         log_sum_exp_e: torch.Tensor = max_e + torch.log(
+#             torch.sum(torch.exp(e - max_e), dim=2, keepdim=True)
+#         )
+#         e_norm: torch.Tensor = torch.exp(e - log_sum_exp_e)
+
+#         y_hat: torch.Tensor = torch.sum(
+#             e_norm * gauss.w.unsqueeze(-1).unsqueeze(-1), dim=2
+#         )
+#         y_hat = torch.clamp(y_hat, min=0, max=1)
+
+#         return y_hat
+
+#     def forward_v1(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#         # Sigma_inv added.
+#         batch_size, num_channels, _ = params.shape
+#         gauss: Gaussians = self.extract_parameters(params, self.kernel, num_channels)
+
+#         grid: torch.Tensor = self.grid(height, width).to(params.device)
+#         grid_expanded: torch.Tensor = (
+#             grid.unsqueeze(0)
+#             .unsqueeze(0)
+#             .unsqueeze(2)
+#             .expand(batch_size, num_channels, self.kernel, height, width, 2)
+#         )
+
+#         mu_expanded: torch.Tensor = (
+#             gauss.mu.unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, height, width, -1)
+#         )
+#         x_sub_mu: torch.Tensor = grid_expanded - mu_expanded
+
+#         S_inv = torch.diag_embed(1 / gauss.scale)  # [B, N, K, 2, 2]
+
+#         R = self.ang_to_rot_mat(gauss.theta)  # [B, N, K, 2, 2]
+#         R_T = R.transpose(-2, -1)
+
+#         Sigma_inv = R @ S_inv @ R_T  # [B, N, K, 2, 2]
+#         Sigma_inv_expanded = (
+#             Sigma_inv.unsqueeze(3)
+#             .unsqueeze(4)
+#             .expand(-1, -1, -1, height, width, -1, -1)
+#         )
+
+#         x_sub_mu_t: torch.Tensor = x_sub_mu.unsqueeze(-1)
+
+#         exp_terms: torch.Tensor = -0.5 * torch.einsum(
+#             "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#             x_sub_mu_t,
+#             Sigma_inv_expanded,  # Sigma_expanded,
+#             x_sub_mu_t,
+#         ).squeeze(-1)
+
+#         e: torch.Tensor = torch.exp(exp_terms)
+
+#         max_e: torch.Tensor = torch.max(e, dim=2, keepdim=True)[0]
+#         log_sum_exp_e: torch.Tensor = max_e + torch.log(
+#             torch.sum(torch.exp(e - max_e), dim=2, keepdim=True)
+#         )
+#         e_norm: torch.Tensor = torch.exp(e - log_sum_exp_e)
+
+#         y_hat: torch.Tensor = torch.sum(
+#             e_norm * gauss.w.unsqueeze(-1).unsqueeze(-1), dim=2
+#         )
+#         y_hat = torch.clamp(y_hat, min=0, max=1)
+
+#         return y_hat
+
+#     def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#         # v2 - models after Oct 6 uses this version
+#         batch_size, num_channels, _ = params.shape
+#         gauss = self.extract_parameters(
+#             params, self.kernel, num_channels
+#         )  # Gaussians(mu, sigma, w, scale, theta)
+
+#         grid = self.grid(height, width).to(params.device)  # [H, W, 2]
+#         grid_expanded = (
+#             grid.unsqueeze(0).unsqueeze(0).unsqueeze(2)
+#         )  # [1, 1, 1, H, W, 2]
+#         grid_expanded = grid_expanded.expand(
+#             batch_size, num_channels, self.kernel, height, width, 2
+#         )  # [B, N, K, H, W, 2]
+
+#         mu_expanded = gauss.mu.unsqueeze(3).unsqueeze(4)  # [B, N, K, 1, 1, 2]
+#         mu_expanded = mu_expanded.expand(
+#             -1, -1, -1, height, width, -1
+#         )  # [B, N, K, H, W, 2]
+
+#         x_sub_mu = grid_expanded - mu_expanded  # [B, N, K, H, W, 2]
+#         x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, N, K, H, W, 2, 1]
+
+#         Sigma = gauss.sigma  # [B, N, K, 2, 2]
+#         try:
+#             Sigma_inv = torch.linalg.inv(Sigma)  # [B, N, K, 2, 2]
+#         except RuntimeError as e:
+#             epsilon = 1e-6
+#             Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
+#                 0
+#             ).unsqueeze(0)
+#             Sigma_inv = torch.linalg.inv(Sigma)
+
+#         Sigma_inv_expanded = Sigma_inv.unsqueeze(3).unsqueeze(
+#             4
+#         )  # [B, N, K, 1, 1, 2, 2]
+#         Sigma_inv_expanded = Sigma_inv_expanded.expand(
+#             -1, -1, -1, height, width, -1, -1
+#         )  # [B, N, K, H, W, 2, 2]
+
+#         exp_terms = -0.5 * torch.einsum(
+#             "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#             x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#             Sigma_inv_expanded,  # [B, N, K, H, W, 2, 2]
+#             x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#         ).squeeze(
+#             -1
+#         )  # [B, N, K, H, W]
+
+#         max_exp_terms = torch.max(
+#             exp_terms, dim=2, keepdim=True
+#         ).values  # [B, N, 1, H, W]
+#         exp_terms = exp_terms - max_exp_terms  # [B, N, K, H, W]
+#         e = torch.exp(exp_terms)  # [B, N, K, H, W]
+
+#         sum_e = torch.sum(e, dim=2, keepdim=True)  # [B, N, 1, H, W]
+#         e_norm = e / (sum_e + 1e-8)  # [B, N, K, H, W]
+
+#         w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, N, K, 1, 1]
+#         y_hat = torch.sum(e_norm * w, dim=2)  # [B, N, H, W]
+
+#         y_hat = torch.clamp(y_hat, min=0.0, max=1.0)  # [B, N, H, W]
+
+#         return y_hat
+
+#     def forward_v3(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#         # v3 - models before Oct 6 uses this version
+#         batch_size, num_channels, _ = params.shape
+#         gauss = self.extract_parameters(
+#             params, self.kernel, num_channels
+#         )  # Gaussians(mu, sigma, w, scale, theta)
+
+#         grid = self.grid(height, width).to(params.device)  # [H, W, 2]
+#         grid_expanded = (
+#             grid.unsqueeze(0).unsqueeze(0).unsqueeze(2)
+#         )  # [1, 1, 1, H, W, 2]
+#         grid_expanded = grid_expanded.expand(
+#             batch_size, num_channels, self.kernel, height, width, 2
+#         )  # [B, N, K, H, W, 2]
+
+#         mu_expanded = gauss.mu.unsqueeze(3).unsqueeze(4)  # [B, N, K, 1, 1, 2]
+#         mu_expanded = mu_expanded.expand(
+#             -1, -1, -1, height, width, -1
+#         )  # [B, N, K, H, W, 2]
+
+#         x_sub_mu = grid_expanded - mu_expanded  # [B, N, K, H, W, 2]
+#         x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, N, K, H, W, 2, 1]
+
+#         Sigma = gauss.sigma  # [B, N, K, 2, 2]
+
+#         try:
+#             L = torch.linalg.cholesky(Sigma)  # [B, N, K, 2, 2]
+#             Sigma_inv = torch.cholesky_inverse(L)  # [B, N, K, 2, 2]
+#         except RuntimeError as e:
+#             epsilon = 1e-6
+#             Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
+#                 0
+#             ).unsqueeze(0)
+#             Sigma_inv = torch.linalg.inv(Sigma)
+
+#         Sigma_inv_expanded = Sigma_inv.unsqueeze(3).unsqueeze(
+#             4
+#         )  # [B, N, K, 1, 1, 2, 2]
+#         Sigma_inv_expanded = Sigma_inv_expanded.expand(
+#             -1, -1, -1, height, width, -1, -1
+#         )  # [B, N, K, H, W, 2, 2]
+
+#         exp_terms = -0.5 * torch.einsum(
+#             "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#             x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#             Sigma_inv_expanded,  # [B, N, K, H, W, 2, 2]
+#             x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#         ).squeeze(
+#             -1
+#         )  # [B, N, K, H, W]
+
+#         max_exp_terms = torch.max(
+#             exp_terms, dim=2, keepdim=True
+#         ).values  # [B, N, 1, H, W]
+#         exp_terms = exp_terms - max_exp_terms  # [B, N, K, H, W]
+#         e = torch.exp(exp_terms)  # [B, N, K, H, W]
+
+#         sum_e = torch.sum(e, dim=2, keepdim=True)  # [B, N, 1, H, W]
+#         e_norm = e / (sum_e + 1e-8)  # [B, N, K, H, W]
+
+#         w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, N, K, 1, 1]
+#         y_hat = torch.sum(e_norm * w, dim=2)  # [B, N, H, W]
+
+#         y_hat = torch.clamp(y_hat, min=0.0, max=1.0)  # [B, N, H, W]
+
+#         return y_hat
+
+
+# class MoE(Backbone[MoEConfig]):
+#     def __init__(self, cfg: MoEConfig) -> None:
+#         super(MoE, self).__init__(cfg)
+#         self.kernel: int = cfg.kernel
+#         self.sf: float = cfg.sharpening_factor
+
+#     def grid(self, height, width) -> torch.Tensor:
+#         xx: torch.Tensor = torch.linspace(0.0, 1.0, width)
+#         yy: torch.Tensor = torch.linspace(0.0, 1.0, height)
+#         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+#         grid: torch.Tensor = torch.stack((grid_x, grid_y), -1).float()
+#         return grid
+
+#     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
+#         R: torch.Tensor = self.ang_to_rot_mat(theta)
+#         S: torch.Tensor = torch.diag_embed(scale) + epsilon * torch.eye(
+#             scale.size(-1), device=scale.device
+#         )
+
+#         RS: torch.Tensor = R @ S
+#         Sigma: torch.Tensor = RS @ RS.transpose(-2, -1)
+#         return Sigma
+
+#     def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+#         cos_theta: torch.Tensor = torch.cos(theta).unsqueeze(-1)
+#         sin_theta: torch.Tensor = torch.sin(theta).unsqueeze(-1)
+#         R: torch.Tensor = torch.cat(
+#             [cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1
+#         )
+#         return R.view(*theta.shape, 2, 2)
+
+#     def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Gaussians:
+
+#         mu_x: torch.Tensor = p[:, :, :k].reshape(-1, ch, k, 1)
+#         mu_y: torch.Tensor = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#         mu: torch.Tensor = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+#         scale_idx: int = 3 * k
+#         scale: torch.Tensor = p[:, :, scale_idx : scale_idx + 2 * k].reshape(
+#             -1, p.shape[1], k, 2
+#         )
+
+#         scale = F.softplus(scale) + 1e-8  # Ensure positive scales
+
+#         rot_idx: int = scale_idx + 2 * k
+#         theta: torch.Tensor = p[:, :, rot_idx : rot_idx + k].reshape(-1, p.shape[1], k)
+#         theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi  # Constrain to [-π, π]
+
+#         cov_matrix: torch.Tensor = self.cov_mat_2d(scale, theta)
+#         cov_matrix = torch.mul(cov_matrix, self.sf)
+
+#         w: torch.Tensor = p[:, :, 2 * k : 3 * k].reshape(-1, ch, k)
+
+#         return Gaussians(mu, cov_matrix, w, theta, scale)
+
+# def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#     # v2 - models after Oct 6 uses this version
+#     batch_size, num_channels, _ = params.shape
+#     gauss = self.extract_parameters(
+#         params, self.kernel, num_channels
+#     )  # Gaussians(mu, sigma, w, scale, theta)
+
+#     grid = self.grid(height, width).to(params.device)  # [H, W, 2]
+#     grid_expanded = (
+#         grid.unsqueeze(0).unsqueeze(0).unsqueeze(2)
+#     )  # [1, 1, 1, H, W, 2]
+#     grid_expanded = grid_expanded.expand(
+#         batch_size, num_channels, self.kernel, height, width, 2
+#     )  # [B, N, K, H, W, 2]
+
+#     mu_expanded = gauss.mu.unsqueeze(3).unsqueeze(4)  # [B, N, K, 1, 1, 2]
+#     mu_expanded = mu_expanded.expand(
+#         -1, -1, -1, height, width, -1
+#     )  # [B, N, K, H, W, 2]
+
+#     x_sub_mu = grid_expanded - mu_expanded  # [B, N, K, H, W, 2]
+#     x_sub_mu_t = x_sub_mu.unsqueeze(-1)  # [B, N, K, H, W, 2, 1]
+
+#     Sigma = gauss.sigma  # [B, N, K, 2, 2]
+#     try:
+#         Sigma_inv = torch.linalg.inv(Sigma)  # [B, N, K, 2, 2]
+#     except RuntimeError as e:
+#         epsilon = 1e-6
+#         Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
+#             0
+#         ).unsqueeze(0)
+#         Sigma_inv = torch.linalg.inv(Sigma)
+
+#     Sigma_inv_expanded = Sigma_inv.unsqueeze(3).unsqueeze(
+#         4
+#     )  # [B, N, K, 1, 1, 2, 2]
+#     Sigma_inv_expanded = Sigma_inv_expanded.expand(
+#         -1, -1, -1, height, width, -1, -1
+#     )  # [B, N, K, H, W, 2, 2]
+
+#     exp_terms = -0.5 * torch.einsum(
+#         "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#         x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#         Sigma_inv_expanded,  # [B, N, K, H, W, 2, 2]
+#         x_sub_mu_t,  # [B, N, K, H, W, 2, 1]
+#     ).squeeze(
+#         -1
+#     )  # [B, N, K, H, W]
+
+#     max_exp_terms = torch.max(
+#         exp_terms, dim=2, keepdim=True
+#     ).values  # [B, N, 1, H, W]
+#     exp_terms = exp_terms - max_exp_terms  # [B, N, K, H, W]
+#     e = torch.exp(exp_terms)  # [B, N, K, H, W]
+
+#     sum_e = torch.sum(e, dim=2, keepdim=True)  # [B, N, 1, H, W]
+#     e_norm = e / (sum_e + 1e-8)  # [B, N, K, H, W]
+
+#     w = F.softmax(gauss.w, dim=2).unsqueeze(-1).unsqueeze(-1)  # [B, N, K, 1, 1]
+#     y_hat = torch.sum(e_norm * w, dim=2)  # [B, N, H, W]
+
+#     y_hat = torch.clamp(y_hat, min=0.0, max=1.0)  # [B, N, H, W]
+
+#     return y_hat
+
+
+# class MoE(Backbone[MoEConfig]):
+#     def __init__(self, cfg: MoEConfig):
+#         super(MoE, self).__init__(cfg)
+#         self.kernel = cfg.kernel
+#         self.sf = cfg.sharpening_factor
+
+#     def grid(self, height: int, width: int) -> torch.Tensor:
+#         xx = torch.linspace(0.0, 1.0, width)
+#         yy = torch.linspace(0.0, 1.0, height)
+#         grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+#         return torch.stack((grid_x, grid_y), -1).float()
+
+#     def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
+#         R = self.ang_to_rot_mat(theta)
+#         S = torch.diag_embed(scale) + epsilon * torch.eye(
+#             scale.size(-1), device=scale.device
+#         )
+#         RS = R @ S
+#         Sigma = RS @ RS.transpose(-2, -1)
+#         return Sigma
+
+#     def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+#         cos_theta = torch.cos(theta).unsqueeze(-1)
+#         sin_theta = torch.sin(theta).unsqueeze(-1)
+#         R = torch.cat([cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1)
+#         return R.view(*theta.shape, 2, 2)
+
+#     # def extract_parameters(self, p: torch.Tensor, k: int, ch: int):
+#     #     mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
+#     #     mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#     #     mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+#     #     scale_idx = 2 * k
+#     #     scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, ch, k, 2)
+#     #     scale = F.softplus(scale) + 1e-8
+#     #     rot_idx = scale_idx + 2 * k
+#     #     theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, ch, k)
+#     #     theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi
+#     #     cov_matrix = self.cov_mat_2d(scale, theta)
+#     #     cov_matrix = torch.mul(cov_matrix, self.sf)
+#     #     weight_idx = rot_idx + k
+#     #     w = F.softmax(p[:, :, weight_idx : weight_idx + k].reshape(-1, ch, k), dim=-1)
+#     #     alpha_idx = weight_idx + k
+#     #     alpha = (
+#     #         torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(-1, ch, k)) * 0.8
+#     #         + 0.1
+#     #     )
+#     #     c_idx = alpha_idx + k
+#     #     c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(-1, ch, k)) + 1.0
+#     #     return mu, cov_matrix, w, alpha, c
+
+#     def extract_parameters(self, p: torch.Tensor, k: int, ch: int):
+#         mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
+#         mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+#         mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+#         scale_idx = 2 * k
+#         scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, ch, k, 2)
+#         scale = F.softplus(scale)
+#         rot_idx = scale_idx + 2 * k
+#         theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, ch, k)
+#         theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi
+#         cov_matrix = self.cov_mat_2d(scale, theta)
+#         cov_matrix = torch.mul(cov_matrix, self.sf)
+#         weight_idx = rot_idx + k
+#         w = F.softmax(p[:, :, weight_idx : weight_idx + k].reshape(-1, ch, k), dim=-1)
+#         alpha_idx = weight_idx + k
+#         alpha = (
+#             torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(-1, ch, k)) * 0.6
+#             + 0.2
+#         )
+#         c_idx = alpha_idx + k
+#         c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(-1, ch, k)) + 1.0
+#         return mu, cov_matrix, w, alpha, c
+
+#     def gaussian_cauchy_kernel(self, x, mu, Sigma_inv, alpha, c):
+#         x_sub_mu = x - mu
+#         x_sub_mu_t = x_sub_mu.unsqueeze(-1)
+#         exp_terms = -0.5 * torch.einsum(
+#             "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+#             x_sub_mu_t,
+#             Sigma_inv,
+#             x_sub_mu_t,
+#         ).squeeze(-1)
+
+#         max_exp_terms = torch.max(exp_terms, dim=2, keepdim=True).values
+#         exp_terms = exp_terms - max_exp_terms
+#         G_sigma = torch.exp(exp_terms)
+
+#         norm_x = torch.linalg.norm(x_sub_mu, dim=-1)
+#         H, W = norm_x.shape[-2], norm_x.shape[-1]
+#         c_expanded = c.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, H, W)
+#         Sigma_diag = Sigma_inv[..., 0, 0]
+
+#         C_csigma = 1 / (1 + norm_x**2 / (c_expanded * Sigma_diag))
+#         alpha_expanded = alpha.unsqueeze(-1).unsqueeze(-1)
+
+#         blended_kernels = alpha_expanded * G_sigma + (1 - alpha_expanded) * C_csigma
+
+#         sum_kernels = torch.sum(blended_kernels, dim=2, keepdim=True)
+#         return blended_kernels / (sum_kernels + 1e-8)
+
+#     def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+#         batch_size, num_channels, _ = params.shape
+#         mu, cov_matrix, w, alpha, c = self.extract_parameters(
+#             params, self.kernel, num_channels
+#         )
+#         grid = self.grid(height, width).to(params.device)
+#         grid_expanded = (
+#             grid.unsqueeze(0)
+#             .unsqueeze(0)
+#             .unsqueeze(2)
+#             .expand(batch_size, num_channels, self.kernel, height, width, 2)
+#         )
+#         mu_expanded = (
+#             mu.unsqueeze(3)
+#             .unsqueeze(4)
+#             .expand(batch_size, num_channels, self.kernel, height, width, 2)
+#         )
+
+#         Sigma = cov_matrix
+#         try:
+#             Sigma_inv = torch.linalg.inv(Sigma)
+#         except RuntimeError:
+#             epsilon = 1e-6
+#             Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
+#                 0
+#             ).unsqueeze(0)
+#             Sigma_inv = torch.linalg.inv(Sigma)
+#         Sigma_inv_expanded = (
+#             Sigma_inv.unsqueeze(3)
+#             .unsqueeze(4)
+#             .expand(batch_size, num_channels, self.kernel, height, width, 2, 2)
+#         )
+
+#         kernels = self.gaussian_cauchy_kernel(
+#             grid_expanded, mu_expanded, Sigma_inv_expanded, alpha, c
+#         )
+#         kernels = kernels * w.unsqueeze(-1).unsqueeze(-1)
+#         kernels = kernels / (kernels.sum(dim=2, keepdim=True) + 1e-8)
+#         output = kernels.sum(dim=2)
+#         return torch.clamp(output, min=0.0, max=1.0)
 
 
 class MoE_v1(nn.Module):
@@ -1294,6 +1559,159 @@ class MoE_v1(nn.Module):
         return y_hat  # [B, C, H, W]
 
 
+class MoE(Backbone[MoEConfig]):
+    def __init__(self, cfg: MoEConfig):
+        super(MoE, self).__init__(cfg)
+        self.kernel = cfg.kernel
+        self.sf = cfg.sharpening_factor
+
+        # self.alpha_offset = nn.Parameter(torch.tensor(0.2), requires_grad=True)
+        # self.alpha_scale = nn.Parameter(torch.tensor(0.6), requires_grad=True)
+        # self.c_base = nn.Parameter(torch.tensor(1.0), requires_grad=True)
+
+    def grid(self, height: int, width: int) -> torch.Tensor:
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        grid_x, grid_y = torch.meshgrid(xx, yy, indexing="ij")
+        return torch.stack((grid_x, grid_y), -1).float()
+
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, epsilon=1e-4):
+        R = self.ang_to_rot_mat(theta)
+        S = torch.diag_embed(scale) + epsilon * torch.eye(
+            scale.size(-1), device=scale.device
+        )
+        RS = R @ S
+        Sigma = RS @ RS.transpose(-2, -1)
+        return Sigma
+
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+        cos_theta = torch.cos(theta).unsqueeze(-1)
+        sin_theta = torch.sin(theta).unsqueeze(-1)
+        R = torch.cat([cos_theta, -sin_theta, sin_theta, cos_theta], dim=-1)
+        return R.view(*theta.shape, 2, 2)
+
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int):
+        mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+        mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+        scale_idx = 2 * k
+        scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, ch, k, 2)
+        scale = F.softplus(scale)
+        rot_idx = scale_idx + 2 * k
+        theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, ch, k)
+        theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi
+        cov_matrix = self.cov_mat_2d(scale, theta)
+        cov_matrix = torch.mul(cov_matrix, self.sf)
+        weight_idx = rot_idx + k
+        w = F.softmax(p[:, :, weight_idx : weight_idx + k].reshape(-1, ch, k), dim=-1)
+        alpha_idx = weight_idx + k
+        alpha = torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(-1, ch, k))
+        c_idx = alpha_idx + k
+        c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(-1, ch, k))
+        return mu, cov_matrix, w, alpha, c
+
+    # def extract_parameters(self, p: torch.Tensor, k: int, ch: int):
+    #     mu_x = p[:, :, :k].reshape(-1, ch, k, 1)
+    #     mu_y = p[:, :, k : 2 * k].reshape(-1, ch, k, 1)
+    #     mu = torch.cat((mu_x, mu_y), dim=-1).view(-1, ch, k, 2)
+
+    #     scale_idx = 2 * k
+    #     scale = p[:, :, scale_idx : scale_idx + 2 * k].reshape(-1, ch, k, 2)
+    #     scale = F.softplus(scale)
+
+    #     rot_idx = scale_idx + 2 * k
+    #     theta = p[:, :, rot_idx : rot_idx + k].reshape(-1, ch, k)
+    #     theta = (theta + torch.pi) % (2 * torch.pi) - torch.pi
+
+    #     cov_matrix = self.cov_mat_2d(scale, theta)
+    #     cov_matrix = torch.mul(cov_matrix, self.sf)
+
+    #     weight_idx = rot_idx + k
+    #     w = F.softmax(p[:, :, weight_idx : weight_idx + k].reshape(-1, ch, k), dim=-1)
+
+    #     alpha_idx = weight_idx + k
+    #     alpha_scale = torch.sigmoid(self.alpha_scale)
+    #     alpha_offset = torch.sigmoid(self.alpha_offset)
+    #     alpha = (
+    #         torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(-1, ch, k))
+    #         * alpha_scale
+    #         + alpha_offset
+    #     )
+
+    #     c_idx = alpha_idx + k
+    #     c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(-1, ch, k)) + self.c_base
+
+    #     return mu, cov_matrix, w, alpha, c
+
+    def gaussian_cauchy_kernel(self, x, mu, Sigma_inv, alpha, c):
+        x_sub_mu = x - mu
+        x_sub_mu_t = x_sub_mu.unsqueeze(-1)
+        exp_terms = -0.5 * torch.einsum(
+            "bnkhwli,bnkhwlj,bnkhwmi->bnkhw",
+            x_sub_mu_t,
+            Sigma_inv,
+            x_sub_mu_t,
+        ).squeeze(-1)
+
+        max_exp_terms = torch.max(exp_terms, dim=2, keepdim=True).values
+        exp_terms = exp_terms - max_exp_terms
+        G_sigma = torch.exp(exp_terms)
+
+        norm_x = torch.linalg.norm(x_sub_mu, dim=-1)
+        H, W = norm_x.shape[-2], norm_x.shape[-1]
+        c_expanded = c.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, H, W)
+        Sigma_diag = Sigma_inv[..., 0, 0]
+
+        C_csigma = 1 / (1 + norm_x**2 / (c_expanded * Sigma_diag))
+        alpha_expanded = alpha.unsqueeze(-1).unsqueeze(-1)
+
+        blended_kernels = alpha_expanded * G_sigma + (1 - alpha_expanded) * C_csigma
+
+        sum_kernels = torch.sum(blended_kernels, dim=2, keepdim=True)
+        return blended_kernels / (sum_kernels + 1e-8)
+
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        batch_size, num_channels, _ = params.shape
+        mu, cov_matrix, w, alpha, c = self.extract_parameters(
+            params, self.kernel, num_channels
+        )
+        grid = self.grid(height, width).to(params.device)
+        grid_expanded = (
+            grid.unsqueeze(0)
+            .unsqueeze(0)
+            .unsqueeze(2)
+            .expand(batch_size, num_channels, self.kernel, height, width, 2)
+        )
+        mu_expanded = (
+            mu.unsqueeze(3)
+            .unsqueeze(4)
+            .expand(batch_size, num_channels, self.kernel, height, width, 2)
+        )
+
+        Sigma = cov_matrix
+        try:
+            Sigma_inv = torch.linalg.inv(Sigma)
+        except RuntimeError:
+            epsilon = 1e-6
+            Sigma += epsilon * torch.eye(2, device=Sigma.device).unsqueeze(0).unsqueeze(
+                0
+            ).unsqueeze(0)
+            Sigma_inv = torch.linalg.inv(Sigma)
+        Sigma_inv_expanded = (
+            Sigma_inv.unsqueeze(3)
+            .unsqueeze(4)
+            .expand(batch_size, num_channels, self.kernel, height, width, 2, 2)
+        )
+
+        kernels = self.gaussian_cauchy_kernel(
+            grid_expanded, mu_expanded, Sigma_inv_expanded, alpha, c
+        )
+        kernels = kernels * w.unsqueeze(-1).unsqueeze(-1)
+        kernels = kernels / (kernels.sum(dim=2, keepdim=True) + 1e-8)
+        output = kernels.sum(dim=2)
+        return torch.clamp(output, min=0.0, max=1.0)
+
+
 @dataclass
 class AutoencoderConfig:
     EncoderConfig: EncoderConfig
@@ -1309,13 +1727,17 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         super().__init__(cfg)
         self.phw: int = cfg.phw
         self.overlap: int = cfg.overlap
-        self.encoder = Encoder(
-            cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
-        )
-        self.decoder = MoE(cfg.DecoderConfig)
+
+        enc = Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out)
+        dec = MoE(cfg.DecoderConfig)
+
+        self.encoder = compile(enc, backend="inductor")
+        self.decoder = compile(dec, backend="inductor")
+
         self.scale_factor: int = 1
 
     @staticmethod
+    @compile(backend="inductor")
     def reconstruct(
         blocks: torch.Tensor,
         original_dims: Tuple[int, int, int, int],
@@ -1355,6 +1777,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return recon_images
 
     @staticmethod
+    @compile(backend="inductor")
     def mem_lim():
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
@@ -1403,3 +1826,16 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             self.overlap * self.encoder.scale_factor,
         )
         return y
+
+
+# self.encoder = Encoder(
+#     cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
+# )
+# self.decoder = MoE(cfg.DecoderConfig)
+
+#  alpha = (
+#             torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(-1, ch, k)) * 0.6
+#             + 0.2
+#         )
+#         c_idx = alpha_idx + k
+#         c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(-1, ch, k)) + 1.0

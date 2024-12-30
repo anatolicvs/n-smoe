@@ -15,14 +15,15 @@ from jax._src import core
 from jax._src import dtypes
 from jax._src.nn.initializers import _compute_fans
 
+
 def xavier_uniform_pytorchlike():
     def init(key, shape, dtype):
         dtype = dtypes.canonicalize_dtype(dtype)
-        named_shape = core.as_named_shape(shape)
-        if len(shape) == 2: # Dense, [in, out]
+        # named_shape = core.as_named_shape(shape)
+        if len(shape) == 2:  # Dense, [in, out]
             fan_in = shape[0]
             fan_out = shape[1]
-        elif len(shape) == 4: # Conv, [k, k, in, out]. Assumes patch-embed style conv.
+        elif len(shape) == 4:  # Conv, [k, k, in, out]. Assumes patch-embed style conv.
             fan_in = shape[0] * shape[1] * shape[2]
             fan_out = shape[3]
         else:
@@ -33,27 +34,32 @@ def xavier_uniform_pytorchlike():
         param = jax.random.uniform(key, shape, dtype, -1) * scale
 
         return param
+
     return init
 
 
 class TrainConfig:
     def __init__(self, dtype):
         self.dtype = dtype
-    def kern_init(self, name='default', zero=False):
-        if zero or 'bias' in name:
+
+    def kern_init(self, name="default", zero=False):
+        if zero or "bias" in name:
             return nn.initializers.constant(0)
         return xavier_uniform_pytorchlike()
+
     def default_config(self):
         return {
-            'kernel_init': self.kern_init(),
-            'bias_init': self.kern_init('bias', zero=True),
-            'dtype': self.dtype,
+            "kernel_init": self.kern_init(),
+            "bias_init": self.kern_init("bias", zero=True),
+            "dtype": self.dtype,
         }
+
 
 class TimestepEmbedder(nn.Module):
     """
     Embeds scalar timesteps into vector representations.
     """
+
     hidden_size: int
     tc: TrainConfig
     frequency_embedding_size: int = 256
@@ -61,13 +67,20 @@ class TimestepEmbedder(nn.Module):
     @nn.compact
     def __call__(self, t):
         x = self.timestep_embedding(t)
-        x = nn.Dense(self.hidden_size, kernel_init=nn.initializers.normal(0.02), 
-                     bias_init=self.tc.kern_init('time_bias'), dtype=self.tc.dtype)(x)
+        x = nn.Dense(
+            self.hidden_size,
+            kernel_init=nn.initializers.normal(0.02),
+            bias_init=self.tc.kern_init("time_bias"),
+            dtype=self.tc.dtype,
+        )(x)
         x = nn.silu(x)
-        x = nn.Dense(self.hidden_size, kernel_init=nn.initializers.normal(0.02), 
-                     bias_init=self.tc.kern_init('time_bias'))(x)
+        x = nn.Dense(
+            self.hidden_size,
+            kernel_init=nn.initializers.normal(0.02),
+            bias_init=self.tc.kern_init("time_bias"),
+        )(x)
         return x
-    
+
     # t is between [0, 1].
     def timestep_embedding(self, t, max_period=10000):
         """
@@ -83,29 +96,41 @@ class TimestepEmbedder(nn.Module):
         # t = t * max_period
         dim = self.frequency_embedding_size
         half = dim // 2
-        freqs = jnp.exp( -math.log(max_period) * jnp.arange(start=0, stop=half, dtype=jnp.float32) / half)
+        freqs = jnp.exp(
+            -math.log(max_period)
+            * jnp.arange(start=0, stop=half, dtype=jnp.float32)
+            / half
+        )
         args = t[:, None] * freqs[None]
         embedding = jnp.concatenate([jnp.cos(args), jnp.sin(args)], axis=-1)
         embedding = embedding.astype(self.tc.dtype)
         return embedding
-    
+
+
 class LabelEmbedder(nn.Module):
     """
     Embeds class labels into vector representations. Also handles label dropout for classifier-free guidance.
     """
+
     num_classes: int
     hidden_size: int
     tc: TrainConfig
 
     @nn.compact
     def __call__(self, labels):
-        embedding_table = nn.Embed(self.num_classes + 1, self.hidden_size, 
-                                   embedding_init=nn.initializers.normal(0.02), dtype=self.tc.dtype)
+        embedding_table = nn.Embed(
+            self.num_classes + 1,
+            self.hidden_size,
+            embedding_init=nn.initializers.normal(0.02),
+            dtype=self.tc.dtype,
+        )
         embeddings = embedding_table(labels)
         return embeddings
-    
+
+
 class PatchEmbed(nn.Module):
-    """ 2D Image to Patch Embedding """
+    """2D Image to Patch Embedding"""
+
     patch_size: int
     hidden_size: int
     tc: TrainConfig
@@ -115,15 +140,26 @@ class PatchEmbed(nn.Module):
     def __call__(self, x):
         B, H, W, C = x.shape
         patch_tuple = (self.patch_size, self.patch_size)
-        num_patches = (H // self.patch_size)
-        x = nn.Conv(self.hidden_size, patch_tuple, patch_tuple, use_bias=self.bias, padding="VALID",
-                     kernel_init=self.tc.kern_init('patch'), bias_init=self.tc.kern_init('patch_bias', zero=True),
-                     dtype=self.tc.dtype)(x) # (B, P, P, hidden_size)
-        x = rearrange(x, 'b h w c -> b (h w) c', h=num_patches, w=num_patches)
+        num_patches = H // self.patch_size
+        x = nn.Conv(
+            self.hidden_size,
+            patch_tuple,
+            patch_tuple,
+            use_bias=self.bias,
+            padding="VALID",
+            kernel_init=self.tc.kern_init("patch"),
+            bias_init=self.tc.kern_init("patch_bias", zero=True),
+            dtype=self.tc.dtype,
+        )(
+            x
+        )  # (B, P, P, hidden_size)
+        x = rearrange(x, "b h w c -> b (h w) c", h=num_patches, w=num_patches)
         return x
-    
+
+
 class MlpBlock(nn.Module):
     """Transformer MLP / feed-forward block."""
+
     mlp_dim: int
     tc: TrainConfig
     out_dim: Optional[int] = None
@@ -138,21 +174,27 @@ class MlpBlock(nn.Module):
         x = nn.gelu(x)
         x = nn.Dropout(rate=self.dropout_rate, deterministic=(not self.train))(x)
         output = nn.Dense(features=actual_out_dim, **self.tc.default_config())(x)
-        output = nn.Dropout(rate=self.dropout_rate, deterministic=(not self.train))(output)
+        output = nn.Dropout(rate=self.dropout_rate, deterministic=(not self.train))(
+            output
+        )
         return output
-    
+
+
 def modulate(x, shift, scale):
     # scale = jnp.clip(scale, -1, 1)
     return x * (1 + scale[:, None]) + shift[:, None]
-    
+
+
 ################################################################################
 #                                 Core DiT Model                                #
 #################################################################################
+
 
 class DiTBlock(nn.Module):
     """
     A DiT block with adaptive layer norm zero (adaLN-Zero) conditioning.
     """
+
     hidden_size: int
     num_heads: int
     tc: TrainConfig
@@ -166,8 +208,10 @@ class DiTBlock(nn.Module):
         # Calculate adaLn modulation parameters.
         c = nn.silu(c)
         c = nn.Dense(6 * self.hidden_size, **self.tc.default_config())(c)
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = jnp.split(c, 6, axis=-1)
-        
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = jnp.split(
+            c, 6, axis=-1
+        )
+
         # Attention Residual.
         x_norm = nn.LayerNorm(use_bias=False, use_scale=False, dtype=self.tc.dtype)(x)
         x_modulated = modulate(x_norm, shift_msa, scale_msa)
@@ -178,27 +222,33 @@ class DiTBlock(nn.Module):
         k = jnp.reshape(k, (k.shape[0], k.shape[1], self.num_heads, channels_per_head))
         q = jnp.reshape(q, (q.shape[0], q.shape[1], self.num_heads, channels_per_head))
         v = jnp.reshape(v, (v.shape[0], v.shape[1], self.num_heads, channels_per_head))
-        q = q / q.shape[3] # (1/d) scaling.
-        w = jnp.einsum('bqhc,bkhc->bhqk', q, k) # [B, HW, HW, num_heads]
+        q = q / q.shape[3]  # (1/d) scaling.
+        w = jnp.einsum("bqhc,bkhc->bhqk", q, k)  # [B, HW, HW, num_heads]
         w = w.astype(jnp.float32)
         w = nn.softmax(w, axis=-1)
-        y = jnp.einsum('bhqk,bkhc->bqhc', w, v) # [B, HW, num_heads, channels_per_head]
-        y = jnp.reshape(y, x.shape) # [B, H, W, C] (C = heads * channels_per_head)
+        y = jnp.einsum("bhqk,bkhc->bqhc", w, v)  # [B, HW, num_heads, channels_per_head]
+        y = jnp.reshape(y, x.shape)  # [B, H, W, C] (C = heads * channels_per_head)
         attn_x = nn.Dense(self.hidden_size, **self.tc.default_config())(y)
         x = x + (gate_msa[:, None] * attn_x)
 
         # MLP Residual.
         x_norm2 = nn.LayerNorm(use_bias=False, use_scale=False, dtype=self.tc.dtype)(x)
         x_modulated2 = modulate(x_norm2, shift_mlp, scale_mlp)
-        mlp_x = MlpBlock(mlp_dim=int(self.hidden_size * self.mlp_ratio), tc=self.tc, 
-                         dropout_rate=self.dropout, train=self.train)(x_modulated2)
+        mlp_x = MlpBlock(
+            mlp_dim=int(self.hidden_size * self.mlp_ratio),
+            tc=self.tc,
+            dropout_rate=self.dropout,
+            train=self.train,
+        )(x_modulated2)
         x = x + (gate_mlp[:, None] * mlp_x)
         return x
-    
+
+
 class FinalLayer(nn.Module):
     """
     The final layer of DiT.
     """
+
     patch_size: int
     out_channels: int
     hidden_size: int
@@ -207,20 +257,29 @@ class FinalLayer(nn.Module):
     @nn.compact
     def __call__(self, x, c):
         c = nn.silu(c)
-        c = nn.Dense(2 * self.hidden_size, kernel_init=self.tc.kern_init(zero=True), 
-                     bias_init=self.tc.kern_init('bias', zero=True), dtype=self.tc.dtype)(c)
+        c = nn.Dense(
+            2 * self.hidden_size,
+            kernel_init=self.tc.kern_init(zero=True),
+            bias_init=self.tc.kern_init("bias", zero=True),
+            dtype=self.tc.dtype,
+        )(c)
         shift, scale = jnp.split(c, 2, axis=-1)
         x = nn.LayerNorm(use_bias=False, use_scale=False, dtype=self.tc.dtype)(x)
         x = modulate(x, shift, scale)
-        x = nn.Dense(self.patch_size * self.patch_size * self.out_channels, 
-                     kernel_init=self.tc.kern_init('final', zero=True), 
-                     bias_init=self.tc.kern_init('final_bias', zero=True), dtype=self.tc.dtype)(x)
+        x = nn.Dense(
+            self.patch_size * self.patch_size * self.out_channels,
+            kernel_init=self.tc.kern_init("final", zero=True),
+            bias_init=self.tc.kern_init("final_bias", zero=True),
+            dtype=self.tc.dtype,
+        )(x)
         return x
+
 
 class DiT(nn.Module):
     """
     Diffusion model with a Transformer backbone.
     """
+
     patch_size: int
     hidden_size: int
     depth: int
@@ -248,44 +307,132 @@ class DiT(nn.Module):
 
         if self.ignore_dt:
             dt = jnp.zeros_like(t)
-        
+
         # pos_embed = self.param("pos_embed", get_2d_sincos_pos_embed, self.hidden_size, num_patches)
         # pos_embed = jax.lax.stop_gradient(pos_embed)
         pos_embed = get_2d_sincos_pos_embed(None, self.hidden_size, num_patches)
-        x = PatchEmbed(self.patch_size, self.hidden_size, tc=tc)(x) # (B, num_patches, hidden_size)
+        x = PatchEmbed(self.patch_size, self.hidden_size, tc=tc)(
+            x
+        )  # (B, num_patches, hidden_size)
         print("DiT: After patch embed, shape is", x.shape, "dtype", x.dtype)
-        activations['patch_embed'] = x
+        activations["patch_embed"] = x
 
         x = x + pos_embed
         x = x.astype(self.dtype)
-        te = TimestepEmbedder(self.hidden_size, tc=tc)(t) # (B, hidden_size)
-        dte = TimestepEmbedder(self.hidden_size, tc=tc)(dt) # (B, hidden_size)
-        ye = LabelEmbedder(self.num_classes, self.hidden_size, tc=tc)(y) # (B, hidden_size)
+        te = TimestepEmbedder(self.hidden_size, tc=tc)(t)  # (B, hidden_size)
+        dte = TimestepEmbedder(self.hidden_size, tc=tc)(dt)  # (B, hidden_size)
+        ye = LabelEmbedder(self.num_classes, self.hidden_size, tc=tc)(
+            y
+        )  # (B, hidden_size)
         c = te + ye + dte
-        
-        activations['pos_embed'] = pos_embed
-        activations['time_embed'] = te
-        activations['dt_embed'] = dte
-        activations['label_embed'] = ye
-        activations['conditioning'] = c
+
+        activations["pos_embed"] = pos_embed
+        activations["time_embed"] = te
+        activations["dt_embed"] = dte
+        activations["label_embed"] = ye
+        activations["conditioning"] = c
 
         print("DiT: Patch Embed of shape", x.shape, "dtype", x.dtype)
         print("DiT: Conditioning of shape", c.shape, "dtype", c.dtype)
         for i in range(self.depth):
-            x = DiTBlock(self.hidden_size, self.num_heads, tc, self.mlp_ratio, self.dropout, train)(x, c)
-            activations[f'dit_block_{i}'] = x
-        x = FinalLayer(self.patch_size, self.out_channels, self.hidden_size, tc)(x, c) # (B, num_patches, p*p*c)
-        activations['final_layer'] = x
+            x = DiTBlock(
+                self.hidden_size,
+                self.num_heads,
+                tc,
+                self.mlp_ratio,
+                self.dropout,
+                train,
+            )(x, c)
+            activations[f"dit_block_{i}"] = x
+        x = FinalLayer(self.patch_size, self.out_channels, self.hidden_size, tc)(
+            x, c
+        )  # (B, num_patches, p*p*c)
+        activations["final_layer"] = x
         # print("DiT: FinalLayer of shape", x.shape, "dtype", x.dtype)
-        x = jnp.reshape(x, (batch_size, num_patches_side, num_patches_side, 
-                            self.patch_size, self.patch_size, self.out_channels))
-        x = jnp.einsum('bhwpqc->bhpwqc', x)
-        x = rearrange(x, 'B H P W Q C -> B (H P) (W Q) C', H=int(num_patches_side), W=int(num_patches_side))
+        x = jnp.reshape(
+            x,
+            (
+                batch_size,
+                num_patches_side,
+                num_patches_side,
+                self.patch_size,
+                self.patch_size,
+                self.out_channels,
+            ),
+        )
+        x = jnp.einsum("bhwpqc->bhpwqc", x)
+        x = rearrange(
+            x,
+            "B H P W Q C -> B (H P) (W Q) C",
+            H=int(num_patches_side),
+            W=int(num_patches_side),
+        )
         assert x.shape == (batch_size, input_size, input_size, self.out_channels)
 
         t_discrete = jnp.floor(t * 256).astype(jnp.int32)
-        logvars = nn.Embed(256, 1, embedding_init=nn.initializers.constant(0))(t_discrete) * 100
+        logvars = (
+            nn.Embed(256, 1, embedding_init=nn.initializers.constant(0))(t_discrete)
+            * 100
+        )
 
         if return_activations:
             return x, logvars, activations
         return x
+
+
+if __name__ == "__main__":
+
+    patch_size = 16
+    hidden_size = 768
+    depth = 12
+    num_heads = 12
+    mlp_ratio = 4.0
+    out_channels = 3
+    class_dropout_prob = 0.1
+    num_classes = 1000
+    ignore_dt = False
+    dropout = 0.1
+    dtype = jnp.float32  # or jnp.bfloat16 as per your requirement
+
+    model = DiT(
+        patch_size=patch_size,
+        hidden_size=hidden_size,
+        depth=depth,
+        num_heads=num_heads,
+        mlp_ratio=mlp_ratio,
+        out_channels=out_channels,
+        class_dropout_prob=class_dropout_prob,
+        num_classes=num_classes,
+        ignore_dt=ignore_dt,
+        dropout=dropout,
+        dtype=dtype,
+    )
+
+    batch_size = 2
+    image_size = 224  # Must be divisible by patch_size
+    num_channels = 3
+
+    x = jnp.ones((batch_size, image_size, image_size, num_channels), dtype=dtype)
+
+    t = jnp.linspace(0.0, 1.0, batch_size, dtype=dtype)
+
+    dt = jnp.linspace(0.0, 1.0, batch_size, dtype=dtype)
+
+    y = jnp.array([0, 1], dtype=jnp.int32)  # Example class labels
+
+    rng = jax.random.PRNGKey(0)
+
+    variables = model.init(rng, x, t, dt, y, train=False)
+
+    params = variables["params"]
+
+    output, logvars, activations = model.apply(
+        variables, x, t, dt, y, train=False, return_activations=True
+    )
+
+    print("Output shape:", output.shape)  # Expected: (B, H, W, out_channels)
+    print("Logvars shape:", logvars.shape)  # Expected: (B, 1)
+    print("Activations keys:", activations.keys())  # Dictionary of activations
+
+    # for key, value in activations.items():
+    #     print(f"{key}: shape {value.shape}")

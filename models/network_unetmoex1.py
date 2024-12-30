@@ -7,7 +7,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
+import time
+from torch._dynamo import disable
 
+from torch.compiler import compile
+import torch_tensorrt as trt
 from utils_n.nn import avg_pool_nd, checkpoint, conv_nd, zero_module, GroupNorm32
 
 T = TypeVar("T")
@@ -438,97 +442,6 @@ class MullerResizer(nn.Module):
 
         return net
 
-
-# class MullerResizer(nn.Module):
-#     def __init__(
-#         self,
-#         d_in=3,
-#         base_resize_method="bilinear",
-#         kernel_size=5,
-#         stddev=1.0,
-#         num_layers=2,
-#         avg_pool=False,
-#         init_weights=None,
-#         dtype=torch.float32,
-#     ):
-#         super(MullerResizer, self).__init__()
-#         self.d_in: int = d_in
-#         self.kernel_size: int = kernel_size
-#         self.stddev: float = stddev
-#         self.num_layers: int = num_layers
-#         self.avg_pool: bool = avg_pool
-#         self.dtype: torch.dtype = dtype
-
-#         interpolation_methods: dict[str, str] = {
-#             "bilinear": "bilinear",
-#             "nearest": "nearest",
-#             "bicubic": "bicubic",
-#         }
-#         self.interpolation_method: str = interpolation_methods.get(
-#             base_resize_method, "bilinear"
-#         )
-
-#         self.weights = nn.ParameterList()
-#         self.biases = nn.ParameterList()
-#         if init_weights is not None:
-#             for i in range(num_layers):
-#                 weight = nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
-#                 bias = nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
-#                 self.weights.append(weight)
-#                 self.biases.append(bias)
-#         else:
-#             for _ in range(num_layers):
-#                 weight = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
-#                 bias = nn.Parameter(torch.empty((d_in, 1, 1), dtype=dtype))
-#                 nn.init.uniform_(weight, a=-0.1, b=0.1)
-#                 nn.init.zeros_(bias)
-#                 self.weights.append(weight)
-#                 self.biases.append(bias)
-
-#         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
-
-#     def create_gaussian_kernel(self, kernel_size, stddev) -> torch.Tensor:
-#         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
-#         gaussian_kernel: torch.Tensor = torch.exp(-t.pow(2) / (2 * stddev**2))
-#         gaussian_kernel /= gaussian_kernel.sum()
-#         gaussian_kernel = gaussian_kernel.view(
-#             1, 1, kernel_size, 1
-#         ) * gaussian_kernel.view(1, 1, 1, kernel_size)
-#         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
-#         return gaussian_kernel
-
-#     def _apply_gaussian_blur(self, input) -> torch.Tensor:
-#         padding: int = self.kernel_size // 2
-#         x: torch.Tensor = F.pad(
-#             input, (padding, padding, padding, padding), mode="reflect"
-#         )
-
-#         gaussian_kernel: torch.Tensor = self.gaussian_kernel.to(x.device)
-#         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
-
-#     def forward(self, input_tensor, target_size):
-#         x = input_tensor.to(dtype=self.dtype)
-#         if self.avg_pool:
-#             x = F.avg_pool2d(x, kernel_size=2, stride=2)
-#         net = F.interpolate(
-#             x, size=target_size, mode=self.interpolation_method, align_corners=False
-#         )
-
-#         for weight, bias in zip(self.weights, self.biases):
-#             blurred: torch.Tensor = self._apply_gaussian_blur(x)
-#             residual = blurred - x
-#             resized_residual = F.interpolate(
-#                 residual,
-#                 size=target_size,
-#                 mode=self.interpolation_method,
-#                 align_corners=False,
-#             )
-#             net = net + torch.tanh(weight * resized_residual + bias)
-#             x: torch.Tensor = blurred
-
-#         return net
-
-
 @dataclass
 class EncoderConfig:
     model_channels: int
@@ -893,14 +806,34 @@ class AutoencoderConfig:
 class Autoencoder(Backbone[AutoencoderConfig]):
     def __init__(self, cfg: AutoencoderConfig):
         super().__init__(cfg)
-        self.phw = cfg.phw
-        self.overlap = cfg.overlap
+        self.phw, self.overlap = cfg.phw, cfg.overlap
+
+        # dev = torch.cuda.current_device()
+        # torch.cuda.set_device(dev)
+
         self.encoder = Encoder(
             cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
         )
         self.decoder = MoE(cfg.DecoderConfig)
 
+        # self.encoder = torch.compile(enc.to(f"cuda:{dev}"), backend="inductor")
+        # self.decoder = torch.compile(dec.to(f"cuda:{dev}"), backend="inductor")
+
+        # self.encoder = torch.compile(
+        #     enc.to(f"cuda:{dev}"), backend="aot_eager", dynamic=True
+        # )
+        # self.decoder = torch.compile(
+        #     dec.to(f"cuda:{dev}"), backend="aot_eager", dynamic=True
+        # )
+
+        # with torch.no_grad():
+        #     warmup_input = torch.randn(1, cfg.d_in, 16, 16, device=f"cuda:{dev}")
+        #     warmup_enc_out = self.encoder(warmup_input)
+        #     self.decoder(16, 16, warmup_enc_out)
+
     @staticmethod
+    # @disable
+    # @compile(backend="aot_eager")
     def reconstruct(
         blocks: torch.Tensor,
         original_dims: Tuple[int, int, int, int],
@@ -940,6 +873,8 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return recon_images
 
     @staticmethod
+    # @disable
+    # @compile(backend="aot_eager")
     def mem_lim() -> int:
         dev = "cuda" if torch.cuda.is_available() else "cpu"
         if dev == "cuda":
@@ -973,7 +908,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         b = torch.split(x, cs)
 
         try:
+            time_start_enc = time.time()
             enc = torch.cat([self.encoder(bt) for bt in b], dim=0)
+            time_end_enc = time.time()
+            print(f"Time taken for encoding: {time_end_enc - time_start_enc}")
         except Exception as e:
             raise RuntimeError(f"Error during encoding: {e}")
 
@@ -981,19 +919,25 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         sp = self.phw * self.encoder.scale_factor
 
         try:
+            time_start_dec = time.time()
             dec = torch.cat(
                 [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
             )
+            time_end_dec = time.time()
+            print(f"Time taken for decoding: {time_end_dec - time_start_dec}")
         except Exception as e:
             raise RuntimeError(f"Error during decoding: {e}")
 
         try:
+            time_start_recon = time.time()
             y = self.reconstruct(
                 dec,
                 (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
                 sp,
                 self.overlap * self.encoder.scale_factor,
             )
+            time_end_recon = time.time()
+            print(f"Time taken for reconstruction: {time_end_recon - time_start_recon}")
         except Exception as e:
             raise RuntimeError(f"Error during reconstruction: {e}")
 

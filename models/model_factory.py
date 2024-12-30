@@ -36,12 +36,31 @@ class ModelFactory:
             overlap=config.opt["overlap"],
         )
         model = config.ae_class(cfg=auto_cfg)
-        model.load_state_dict(
-            torch.load(weights_path, map_location=device), strict=True
-        )
+
+        # model.load_state_dict(
+        #     torch.load(weights_path, map_location=device), strict=True
+        # )
+
+        if hasattr(model.encoder, "_orig_mod"):
+            state_dict = torch.load(weights_path, map_location=device)
+            adjusted_state_dict = {}
+            for k, v in state_dict.items():
+                if k.startswith("encoder."):
+                    new_key = k.replace("encoder.", "encoder._orig_mod.")
+                else:
+                    new_key = k
+                adjusted_state_dict[new_key] = v
+
+            model.load_state_dict(adjusted_state_dict, strict=True)
+        else:
+            state_dict = torch.load(weights_path, map_location=device)
+            model.load_state_dict(state_dict, strict=True)
+
         model.eval()
         for param in model.parameters():
             param.requires_grad = False
+
+        # model = torch.compile(model)
         return model.to(device)
 
 

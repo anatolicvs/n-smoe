@@ -1157,6 +1157,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from utils_n.nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
+import time
 
 
 backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
@@ -2276,19 +2277,29 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         b = torch.split(x, cs)
 
+        time_start_enc = time.time()
         enc: torch.Tensor = torch.cat([self.encoder(bt) for bt in b], dim=0)
+        time_end_enc = time.time()
+        print(f"Time taken for encoding: {time_end_enc - time_start_enc}")
 
         B, C, H, W = s
         sp: int = self.phw * self.encoder.scale_factor
 
+        time_start_dec = time.time()
         dec: torch.Tensor = torch.cat(
             [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
         )
+        time_end_dec = time.time()
+        print(f"Time taken for decoding: {time_end_dec - time_start_dec}")
 
+        time_start_recon = time.time()
         y: torch.Tensor = self.reconstruct(
             dec,
             (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
             sp,
             self.overlap * self.encoder.scale_factor,
         )
+        time_end_recon = time.time()
+        print(f"Time taken for reconstruction: {time_end_recon - time_start_recon}")
+
         return y
