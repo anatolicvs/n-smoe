@@ -689,7 +689,8 @@ class Encoder(Backbone[EncoderConfig]):
                             use_checkpoint=cfg.use_checkpoint,
                             num_groups=cfg.num_groups,
                             resample_2d=cfg.resample_2d,
-                        )
+                        ),
+                        activation=self.activation,
                     )
                 ]
                 ch = mult * cfg.model_channels
@@ -730,7 +731,8 @@ class Encoder(Backbone[EncoderConfig]):
                                 down=True,
                                 num_groups=cfg.num_groups,
                                 resample_2d=cfg.resample_2d,
-                            )
+                            ),
+                            activation=self.activation,
                         )
                         if cfg.resblock_updown
                         else Downsample(
@@ -837,21 +839,6 @@ class Encoder(Backbone[EncoderConfig]):
     @property
     def scale_factor(self) -> int:
         return self.cfg.scale_factor
-
-
-@dataclass
-class MoEConfig:
-    kernel: int = 4
-    sharpening_factor: float = 1.0
-
-
-@dataclass
-class Gaussians:
-    mu: Optional[torch.Tensor] = None
-    sigma: Optional[torch.Tensor] = None
-    w: Optional[torch.Tensor] = None
-    theta: Optional[torch.Tensor] = None
-    scale: Optional[torch.Tensor] = None
 
 
 # class MoE(Backbone[MoEConfig]):
@@ -1448,6 +1435,21 @@ class Gaussians:
 #         return torch.clamp(output, min=0.0, max=1.0)
 
 
+@dataclass
+class MoEConfig:
+    kernel: int = 4
+    sharpening_factor: float = 1.0
+
+
+@dataclass
+class Gaussians:
+    mu: Optional[torch.Tensor] = None
+    sigma: Optional[torch.Tensor] = None
+    w: Optional[torch.Tensor] = None
+    theta: Optional[torch.Tensor] = None
+    scale: Optional[torch.Tensor] = None
+
+
 class MoE_v1(nn.Module):
     def __init__(self, cfg: MoEConfig) -> None:
         super(MoE, self).__init__()
@@ -1559,7 +1561,7 @@ class MoE_v1(nn.Module):
         return y_hat  # [B, C, H, W]
 
 
-class MoE(Backbone[MoEConfig]):
+class MoE_(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
         super(MoE, self).__init__(cfg)
         self.kernel = cfg.kernel
@@ -1710,6 +1712,335 @@ class MoE(Backbone[MoEConfig]):
         kernels = kernels / (kernels.sum(dim=2, keepdim=True) + 1e-8)
         output = kernels.sum(dim=2)
         return torch.clamp(output, min=0.0, max=1.0)
+
+
+class MoE__(Backbone[MoEConfig]):
+    def __init__(self, cfg: MoEConfig):
+        super(MoE, self).__init__(cfg)
+        self.kernel = cfg.kernel
+        self.sf = cfg.sharpening_factor
+
+    def grid(self, height: int, width: int) -> torch.Tensor:
+        xx = torch.linspace(0.0, 1.0, width)
+        yy = torch.linspace(0.0, 1.0, height)
+        gx, gy = torch.meshgrid(xx, yy, indexing="ij")
+        return torch.stack((gx, gy), dim=-1).float()
+
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+        ct = torch.cos(theta).unsqueeze(-1)
+        st = torch.sin(theta).unsqueeze(-1)
+        R = torch.cat([ct, -st, st, ct], dim=-1)
+        return R.view(*theta.shape, 2, 2)
+
+    def cov_mat_2d(self, scale: torch.Tensor, theta: torch.Tensor, eps=1e-4):
+        R = self.ang_to_rot_mat(theta)
+        S = torch.diag_embed(scale) + eps * torch.eye(2, device=scale.device)
+        RS = R @ S
+        return RS @ RS.transpose(-2, -1)
+
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int):
+
+        # print(
+        #     f"estimated parameters: {p.shape}, kernel: {k}, color channels: {ch}, batch size: {p.shape[0]}"
+        # )
+
+        B = p.shape[0]
+        mu_x = p[:, :, :k].reshape(B, ch, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
+        mu = torch.cat([mu_x, mu_y], dim=-1)
+        scale_idx = 2 * k
+        scale_xy = F.softplus(
+            p[:, :, scale_idx : scale_idx + 2 * k].reshape(B, ch, k, 2)
+        )
+        rot_idx = scale_idx + 2 * k
+        theta_xy = (p[:, :, rot_idx : rot_idx + k].reshape(B, ch, k) + torch.pi) % (
+            2 * torch.pi
+        ) - torch.pi
+        cov_matrix = self.cov_mat_2d(scale_xy, theta_xy) * self.sf
+        w_idx = rot_idx + k
+        w = F.softmax(p[:, :, w_idx : w_idx + k].reshape(B, ch, k), dim=-1)
+        alpha_idx = w_idx + k
+        alpha = torch.sigmoid(p[:, :, alpha_idx : alpha_idx + k].reshape(B, ch, k))
+        c_idx = alpha_idx + k
+        c = F.softplus(p[:, :, c_idx : c_idx + k].reshape(B, ch, k))
+        return mu, cov_matrix, w, alpha, c
+
+    def gaussian_cauchy_kernel(self, x, mu, Sigma_inv, alpha, c):
+        d = x - mu
+        x1 = d.unsqueeze(-2)
+        x2 = torch.matmul(Sigma_inv, d.unsqueeze(-1))
+        e = -0.5 * torch.matmul(x1, x2).squeeze(-1).squeeze(-1)
+        mx = e.max(dim=2, keepdim=True).values
+        e = e - mx
+        G_sigma = torch.exp(e)
+        n = torch.linalg.norm(d, dim=-1)
+        c_e = c.unsqueeze(-1).unsqueeze(-1)
+        diag = Sigma_inv[..., 0, 0]
+        C_csigma = 1.0 / (1.0 + n**2 / (c_e * diag))
+        a_e = alpha.unsqueeze(-1).unsqueeze(-1)
+        blend = a_e * G_sigma + (1 - a_e) * C_csigma
+        s = blend.sum(dim=2, keepdim=True)
+        return blend / (s + 1e-8)
+
+    def forward_spatial(
+        self, height: int, width: int, params: torch.Tensor
+    ) -> torch.Tensor:
+        B, ch, _ = params.shape
+        k = self.kernel
+        mu, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+        try:
+            Sigma_inv = torch.linalg.inv(cov_matrix)
+        except RuntimeError:
+            eps = 1e-6
+            Sigma_inv = torch.linalg.inv(
+                cov_matrix
+                + eps * torch.eye(2, device=cov_matrix.device).view(1, 1, 1, 2, 2)
+            )
+        g = self.grid(height, width).to(params.device)
+        g = g.unsqueeze(0).unsqueeze(0).unsqueeze(0).expand(B, ch, k, height, width, 2)
+        m = mu.unsqueeze(3).unsqueeze(4).expand(B, ch, k, height, width, 2)
+        S = Sigma_inv.unsqueeze(3).unsqueeze(4).expand(B, ch, k, height, width, 2, 2)
+        ker = self.gaussian_cauchy_kernel(g, m, S, alpha, c)
+        ker *= w.unsqueeze(-1).unsqueeze(-1)
+        ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
+        out = ker.sum(dim=2)
+        return out.clamp(min=0, max=1)
+
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        return self.forward_spatial(height, width, params)
+
+    @property
+    def d_out(self) -> int:
+        return 1
+
+
+# def forward_spatial(self, height, width, params):
+#     B, ch, z = params.shape
+#     k = self.kernel
+#     mu, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+#     try:
+#         Sigma_inv = torch.linalg.inv(cov_matrix)
+#     except RuntimeError:
+#         eps = 1e-6
+#         d = cov_matrix.shape[-1]
+#         eye_d = torch.eye(d, device=cov_matrix.device).view(1, 1, 1, d, d)
+#         Sigma_inv = torch.linalg.inv(cov_matrix + eps * eye_d)
+#     device = params.device
+#     g = self.grid(height, width, device)
+#     if ch == 1:
+#         g_color = torch.zeros(height, width, 1, device=device)
+#     elif ch == 3:
+#         g_color = torch.zeros(height, width, 3, device=device)
+#     g_full = (
+#         torch.cat([g, g_color], dim=-1)
+#         .unsqueeze(0)
+#         .unsqueeze(0)
+#         .unsqueeze(0)
+#         .expand(B, ch, k, height, width, 2 + ch)
+#     )
+#     if ch == 1:
+#         mu_color = torch.zeros(B, ch, k, 1, device=device)
+#     elif ch == 3:
+#         mu_color = torch.zeros(B, ch, k, 3, device=device)
+#     mu_full = (
+#         torch.cat([mu, mu_color], dim=-1)
+#         .unsqueeze(3)
+#         .unsqueeze(4)
+#         .expand(B, ch, k, height, width, 2 + ch)
+#     )
+#     d = 3 if ch == 1 else 5
+#     S = Sigma_inv.unsqueeze(3).unsqueeze(4).expand(B, ch, k, height, width, d, d)
+#     ker = self.gaussian_cauchy_kernel(g_full, mu_full, S, alpha, c)
+#     ker *= w.unsqueeze(-1).unsqueeze(-1)
+#     ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
+#     out = ker.sum(dim=2)
+#     return out.clamp(min=0, max=1)
+
+
+# def cov_mat(self, scale, theta_xy, scale_color, rho_color, ch):
+#     R = self.ang_to_rot_mat(theta_xy)
+#     S = torch.diag_embed(scale)
+#     C_xy = R @ S @ S.transpose(-2, -1) @ R.transpose(-2, -1)
+#     if ch == 1:
+#         C_color = scale_color.squeeze(-1).squeeze(-1)
+#         C_full = torch.zeros(
+#             C_xy.size(0), C_xy.size(1), C_xy.size(2), 3, 3, device=scale.device
+#         )
+#         C_full[..., :2, :2] = C_xy
+#         C_full[..., 2, 2] = C_color
+#     elif ch == 3:
+#         rho = rho_color.squeeze(-1).unsqueeze(-1)
+#         C_rgb = torch.zeros(
+#             scale.size(0), scale.size(1), scale.size(2), 3, 3, device=scale.device
+#         )
+#         C_rgb[..., 0, 0] = scale_color[..., 0]
+#         C_rgb[..., 1, 1] = scale_color[..., 1]
+#         C_rgb[..., 2, 2] = scale_color[..., 2]
+#         C_rgb[..., 0, 1] = rho.squeeze(-1)
+#         C_rgb[..., 1, 0] = rho.squeeze(-1)
+#         C_rgb[..., 0, 2] = rho.squeeze(-1)
+#         C_rgb[..., 2, 0] = rho.squeeze(-1)
+#         C_rgb[..., 1, 2] = rho.squeeze(-1)
+#         C_rgb[..., 2, 1] = rho.squeeze(-1)
+#         C_full = torch.zeros(
+#             scale.size(0), scale.size(1), scale.size(2), 5, 5, device=scale.device
+#         )
+#         C_full[..., :2, :2] = C_xy
+#         C_full[..., 2:, 2:] = C_rgb
+#     else:
+#         raise ValueError(f"Unsupported number of channels: {ch}")
+#     return C_full
+
+
+# def forward_spatial(self, height, width, params):
+#     B, ch, z = params.shape
+#     k = self.kernel
+#     mu, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+#     try:
+#         Sigma_inv = torch.linalg.inv(cov_matrix)
+#     except RuntimeError:
+#         eps = 1e-6
+#         d = cov_matrix.shape[-1]
+#         eye_d = torch.eye(d, device=cov_matrix.device).view(1, 1, 1, d, d)
+#         Sigma_inv = torch.linalg.inv(cov_matrix + eps * eye_d)
+#     device = params.device
+#     g = self.grid(height, width, device)
+#     if ch == 1:
+#         g_color = torch.zeros(height, width, 1, device=device)
+#     elif ch == 3:
+#         g_color = torch.zeros(height, width, 3, device=device)
+#     g_full = (
+#         torch.cat([g, g_color], dim=-1)
+#         .unsqueeze(0)
+#         .unsqueeze(0)
+#         .unsqueeze(0)
+#         .expand(B, ch, k, height, width, 2 + ch)
+#     )
+#     if ch == 1:
+#         mu_color = torch.zeros(B, ch, k, 1, device=device)
+#     elif ch == 3:
+#         mu_color = torch.zeros(B, ch, k, 3, device=device)
+#     mu_full = (
+#         torch.cat([mu, mu_color], dim=-1)
+#         .unsqueeze(3)
+#         .unsqueeze(4)
+#         .expand(B, ch, k, height, width, 2 + ch)
+#     )
+#     d = 3 if ch == 1 else 5
+#     S = Sigma_inv.unsqueeze(3).unsqueeze(4).expand(B, ch, k, height, width, d, d)
+#     ker = self.gaussian_cauchy_kernel(g_full, mu_full, S, alpha, c)
+#     ker *= w.unsqueeze(-1).unsqueeze(-1)
+#     ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
+#     out = ker.sum(dim=2)
+#     return out.clamp(min=0, max=1)
+
+
+class MoE(Backbone[MoEConfig]):
+    def __init__(self, cfg: MoEConfig):
+        super(MoE, self).__init__(cfg)
+        self.kernel = cfg.kernel
+        self.sharpening_factor = cfg.sharpening_factor
+
+    def cov_mat(self, scale, theta_xy, scale_color, rho_color, ch):
+        R = self.ang_to_rot_mat(theta_xy)
+        S = torch.diag_embed(scale)
+        C_xy = R @ S @ S.transpose(-2, -1) @ R.transpose(-2, -1)
+        if ch == 1:
+            C_color = scale_color.squeeze(-1).squeeze(-1)
+            C_full = torch.zeros(*C_xy.shape[:-2], 3, 3, device=scale.device)
+            C_full[..., :2, :2] = C_xy
+            C_full[..., 2, 2] = C_color
+        elif ch == 3:
+            rho = rho_color.unsqueeze(-1)
+            C_rgb = torch.diag_embed(scale_color) + rho @ rho.transpose(-2, -1)
+            C_full = torch.zeros(*C_xy.shape[:-2], 5, 5, device=scale.device)
+            C_full[..., :2, :2] = C_xy
+            C_full[..., 2:, 2:] = C_rgb
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
+        return C_full
+
+    def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
+        xx = torch.linspace(0.0, 1.0, width, device=device)
+        yy = torch.linspace(0.0, 1.0, height, device=device)
+        gx, gy = torch.meshgrid(xx, yy, indexing="ij")
+        return torch.stack((gx, gy), dim=-1).float()
+
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+        ct = torch.cos(theta).unsqueeze(-1)
+        st = torch.sin(theta).unsqueeze(-1)
+        R = torch.cat([ct, -st, st, ct], dim=-1)
+        return R.view(*theta.shape, 2, 2)
+
+    def extract_parameters(self, p, k, ch):
+        B, z = p.shape[0], p.shape[2]
+        expected_z = (7 * ch + 3) * k
+        assert z == expected_z, f"Expected z={expected_z}, but got z={z}"
+        mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
+        mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
+        scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
+        theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
+            2 * torch.pi
+        ) - torch.pi
+        w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
+        alpha = torch.sigmoid(p[:, :, 6 * k : 7 * k].reshape(B, ch, k))
+        c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
+        if ch == 1:
+            scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
+        elif ch == 3:
+            scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
+        rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
+        mu = torch.cat([mu_x, mu_y], dim=-1)
+        cov_matrix = (
+            self.cov_mat(scale_xy, theta_xy, scale_color, rho_color, ch)
+            * self.sharpening_factor
+        )
+        return mu, cov_matrix, w, alpha, c
+
+    def gaussian_cauchy_kernel(self, x, mu, Sigma_inv, alpha, c):
+        d = x - mu
+        x1 = d.unsqueeze(-2)
+        x2 = torch.matmul(Sigma_inv, d.unsqueeze(-1))
+        e = -0.5 * torch.matmul(x1, x2).squeeze(-1).squeeze(-1)
+        mx = e.max(dim=2, keepdim=True).values
+        e = e - mx
+        G_sigma = torch.exp(e)
+        n = torch.linalg.norm(d, dim=-1)
+        c_e = c.unsqueeze(-1).unsqueeze(-1)
+        diag = Sigma_inv[..., 0, 0]
+        C_csigma = 1.0 / (1.0 + n**2 / (c_e * diag))
+        a_e = alpha.unsqueeze(-1).unsqueeze(-1)
+        blend = a_e * G_sigma + (1 - a_e) * C_csigma
+        s = blend.sum(dim=2, keepdim=True)
+        return blend / (s + 1e-8)
+
+    def forward(self, height, width, params):
+        return self.forward_spatial(height, width, params)
+
+    @property
+    def d_out(self):
+        return 1
+
+    def forward_spatial(self, height, width, params):
+        B, ch, z = params.shape
+        k = self.kernel
+        mu, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+        eps = 1e-6
+        d = cov_matrix.shape[-1]
+        eye_d = torch.eye(d, device=cov_matrix.device).view(1, 1, 1, d, d)
+        Sigma_inv = torch.linalg.solve(cov_matrix + eps * eye_d, eye_d)
+        device = params.device
+        g = self.grid(height, width, device)
+        g_color = torch.zeros(height, width, ch, device=device)
+        g_full = torch.cat([g, g_color], dim=-1).view(1, 1, 1, height, width, -1)
+        mu_color = torch.zeros(B, ch, k, ch, device=device)
+        mu_full = torch.cat([mu, mu_color], dim=-1).view(B, ch, k, 1, 1, -1)
+        S = Sigma_inv.view(B, ch, k, 1, 1, d, d)
+        ker = self.gaussian_cauchy_kernel(g_full, mu_full, S, alpha, c)
+        ker *= w.view(B, ch, k, 1, 1)
+        ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
+        out = ker.sum(dim=2)
+        return out.clamp(min=0, max=1)
 
 
 @dataclass

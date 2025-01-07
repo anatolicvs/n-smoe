@@ -3,5 +3,6 @@
     "python.envFile": "${workspaceFolder}/.env",
     "terminal.integrated.env.windows": {
         "PYDEVD_WARN_SLOW_RESOLVE_TIMEOUT": "2.0"
-    }
+    },
+    "cmake.sourceDirectory": "/home/ozkan/works/n-smoe/gsplat/gsplat/cuda/csrc/third_party/glm/test/gtc"
 }

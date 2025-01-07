@@ -319,7 +319,61 @@ def define_G(opt):
         # Single type of kernel
         # z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + opt_net["kernel"]
 
-        z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + 2 * opt_net["kernel"]
+        # z = 2 * opt_net["kernel"] + 4 * opt_net["kernel"] + 2 * opt_net["kernel"]
+
+        z = (7 * opt_net["n_channels"] + 3) * opt_net["kernel"]
+
+        encoder_cfg = EncoderConfig(
+            model_channels=opt_net["model_channels"],  # 32,
+            num_res_blocks=opt_net["num_res_blocks"],  # 4,
+            attention_resolutions=opt_net["attention_resolutions"],  # [16, 8],
+            dropout=opt_net["dropout"],  # 0.2,
+            channel_mult=opt_net["channel_mult"],  # (2, 4, 8),
+            conv_resample=opt_net["conv_resample"],  # False,
+            dims=2,
+            use_checkpoint=opt_net["use_checkpoint"],  # True,
+            use_fp16=opt_net["use_fp16"],  # False,
+            num_heads=opt_net["num_heads"],  # 4,
+            # num_head_channels=opt_net["num_head_channels"],  # 8,
+            resblock_updown=opt_net["resblock_updown"],  # False,
+            num_groups=opt_net["num_groups"],  # 32,
+            resample_2d=opt_net["resample_2d"],  # True,
+            scale_factor=opt_net["scale"],
+            resizer_num_layers=opt_net["resizer_num_layers"],  # 4,
+            resizer_avg_pool=opt_net["resizer_avg_pool"],  # False,
+            activation=opt_net["activation"],
+            rope_theta=opt_net["rope_theta"],  # 10000.0,
+            attention_type=opt_net[
+                "attention_type"
+            ],  # "cross_attention",  # "attention" or "cross_attention"
+        )
+
+        decoder_cfg = MoEConfig(
+            kernel=opt_net["kernel"],
+            sharpening_factor=opt_net["sharpening_factor"],
+        )
+
+        autoenocer_cfg = AutoencoderConfig(
+            EncoderConfig=encoder_cfg,
+            DecoderConfig=decoder_cfg,
+            d_in=opt_net["n_channels"],
+            d_out=z,
+            phw=opt_net["phw"],
+            overlap=opt_net["overlap"],
+        )
+
+        netG = Autoencoder(cfg=autoenocer_cfg)
+
+    elif net_type == "network_moex":
+
+        from models.moex.network_moex import (
+            EncoderConfig,
+            MoEConfig,
+            AutoencoderConfig,
+            Autoencoder,
+        )
+
+        z = (7 * opt_net["n_channels"] + 3) * opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             model_channels=opt_net["model_channels"],  # 32,

@@ -18,6 +18,10 @@ from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
 
+# import torch._dynamo
+
+# torch._dynamo.config.cache_size_limit = 16
+
 
 def synchronize():
     if dist.is_initialized():

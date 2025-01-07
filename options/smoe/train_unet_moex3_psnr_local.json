@@ -1,5 +1,5 @@
 {
-    "task": "local_moex4_medium_sr_plain_v2_adam" 
+    "task": "network_moex" 
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
@@ -7,7 +7,7 @@
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 14
-    , "n_channels": 1  // broadcast to "datasets", 1 for grayscale, 3 for color
+    , "n_channels": 3  // broadcast to "datasets", 1 for grayscale, 3 for color
     , "sigma": [0, 50] // 15, 25, 50 for DnCNN | [0, 75] for FDnCNN and FFDNet
     , "sigma_test": 15  // 15, 25, 50 for DnCNN, FDnCNN and FFDNet, 0 for SR
     , "merge_bn": false              // if no BN exists, set false
@@ -19,8 +19,30 @@
       , "pretrained_netD": null 
       , "pretrained_netE": null 
       }
-  
       , "datasets": {
+        "train": {
+          "name": "train_dataset"           // just name
+          , "dataset_type": "sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "dataroot_H": "/mnt/d/RGB/open-images/test"// path of H training dataset
+          , "dataroot_L": null              // path of L training dataset
+          , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_shuffle": true
+          , "dataloader_num_workers": 32
+          , "dataloader_batch_size": 2     // batch size 1 | 16 | 32 | 48 | 64 | 128,
+          , "length" : 100
+        }
+        , "test": {
+          "name": "test_dataset"            // just name
+          , "dataset_type": "sr"            // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
+          , "dataroot_H": "/mnt/d/RGB/open-images/test"   // path of H testing dataset
+          , "dataroot_L": null              // path of L testing dataset
+          , "H_size": 128      
+          , "dataloader_num_workers": 32
+          , "dataloader_batch_size": 1
+          , "length" : 25
+        }
+      }
+      , "datasets_md": {
         "train": {
             "name": "train_dataset"          
           , "dataset_type": "medical_sr"          
@@ -33,9 +55,9 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_training_medical_echocardiography_v1_.pkl"
-          , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-          , "dataloader_num_workers": 1
-          , "dataloader_batch_size": 2 
+          , "H_size": 96                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 16
+          , "dataloader_batch_size": 1 
         } 
 
         ,"test": {
@@ -50,8 +72,8 @@
           , "dataroot_L": null              // path of L testing dataset
           , "use_dataset_cache": true
           , "dataset_cache_file" : "/mnt/d/tmi_test_superresolution/dataset_cache_testing_medical_echocardiography_v1_.pkl"
-          , "H_size": 256                   // patch size 40 | 64 | 96 | 128 | 192
-          , "dataloader_num_workers": 1
+          , "H_size": 96                   // patch size 40 | 64 | 96 | 128 | 192
+          , "dataloader_num_workers": 16
           , "dataloader_batch_size": 1 
         }
       }
@@ -79,15 +101,15 @@
         "resizer_num_layers": 4,
         "resizer_avg_pool": false,
         "init_type": "default"
-    },
+      },
       
       "netG": {
-          "net_type": "unet_moex3_rev",
-          "kernel": 32,
-          "sharpening_factor": 1.0,
+          "net_type": "network_moex",
+          "kernel": 16,
+          "sharpening_factor": 1,
           "model_channels": 64,
-          "num_res_blocks": 3,
-          "attention_resolutions": [16, 8],// [64, 32, 16]
+          "num_res_blocks": 1,
+          "attention_resolutions": [32, 16, 8],// [64, 32, 16]
           "dropout": 0.0,
           "num_groups": 16,
           "num_heads": 16,
@@ -95,17 +117,15 @@
           "use_checkpoint": true,
           "use_fp16": false,
           "resblock_updown": true,
-          "channel_mult": [1, 2, 4],
+          "channel_mult": [2, 4, 8],
           "conv_resample": true,
           "resample_2d": false,
           "attention_type": "cross_attention", // "cross_attention" | "attention"
-          "activation": "LeakyReLU",
+          "activation": "ReLU",
           "rope_theta": 10000.0, // 960000.0,
-          "resizer_num_layers": 2,
+          "resizer_num_layers": 3,
           "resizer_avg_pool": false,
           "init_type": "default"
-
-
           // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
           // , "init_bn_type": "constant"      // "uniform" | "constant"
          , "init_gain": 1.0
@@ -152,8 +172,8 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 100           // for testing
-        , "checkpoint_save": 100           // for saving model
+        , "checkpoint_test": 500           // for testing
+        , "checkpoint_save": 500           // for saving model
         , "checkpoint_print": 50           // for print
       }
   }
