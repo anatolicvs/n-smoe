@@ -107,8 +107,8 @@
           "net_type": "network_moex",
           "kernel": 16,
           "sharpening_factor": 1,
-          "model_channels": 64,
-          "num_res_blocks": 1,
+          "model_channels": 32,
+          "num_res_blocks": 2,
           "attention_resolutions": [32, 16, 8],// [64, 32, 16]
           "dropout": 0.0,
           "num_groups": 16,
@@ -118,9 +118,9 @@
           "use_fp16": false,
           "resblock_updown": true,
           "channel_mult": [2, 4, 8],
-          "conv_resample": true,
+          "conv_resample": false,
           "resample_2d": false,
-          "attention_type": "cross_attention", // "cross_attention" | "attention"
+          "attention_type": "attention", // "cross_attention" | "attention"
           "activation": "ReLU",
           "rope_theta": 10000.0, // 960000.0,
           "resizer_num_layers": 3,
@@ -158,7 +158,7 @@
   
     , "train": {
         "is_moe": true
-        , "G_lossfn_type": "l2"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
@@ -166,7 +166,7 @@
         , "G_optimizer_clipgrad": null      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
-        , "G_scheduler_milestones": [200000, 400000, 600000, 800000, 1000000, 2000000]
+        , "G_scheduler_milestones": [200, 400, 600, 800, 10000, 2000]
         , "G_scheduler_gamma": 0.5
     
         , "G_regularizer_orthstep": null    // unused

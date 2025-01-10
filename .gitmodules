@@ -50,3 +50,7 @@
 [submodule "neurips/PromptIR"]
 		path = neurips/PromptIR
 		url = https://github.com/va1shn9v/PromptIR.git
+
+[submodule "iclr/shortcut-models"]
+		path = iclr/shortcut-models
+		url =  https://github.com/kvfrans/shortcut-models.git
