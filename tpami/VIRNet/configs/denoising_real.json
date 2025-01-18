@@ -1,0 +1,36 @@
+{
+    # training settings
+    "im_chn": 3, 
+    "sigma_chn": 3, 
+    "batch_size": 16, 
+    "patch_size": 128, 
+    "epochs": 150,
+    "warmup_epochs": 10,   # epochs for warmup
+    "lr": 1e-4,  
+    "print_freq": 100,
+    "num_workers": 8, 
+    "prefetch_factor": 2, 
+    "save_dir": "./train_record",
+    "resume": "",
+    "port": 1234,            # port for distributed training
+
+    # network architecture
+    "dep_S": 8,
+    "n_resblocks": 3,
+    "n_feat": [96, 160, 224, 288], # number or feature for ResUNet
+    "noise_cond": "True",       # noise condition
+    "extra_mode": "Input",       #  Null Input or Both
+
+    # training and validation data path
+    "train_pch_dir":   "/mnt/sfs-common/zsyue/database/SIDD/patchs256/noisy",
+    "test_noisy_path": "/mnt/sfs-common/zsyue/database/SIDD/ValidationNoisyBlocksSrgb.mat",
+    "test_gt_path":    "/mnt/sfs-common/zsyue/database/SIDD/ValidationGtBlocksSrgb.mat", 
+
+    # cliping the gradient
+    "clip_grad_R": 5e2,  
+    "clip_grad_S": 1e2,
+
+    # hyper-parameters of our model
+    "var_window": 7,
+    "eps2": 1e-6
+}
