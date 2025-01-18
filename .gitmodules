@@ -43,10 +43,6 @@
 		path = cvpr/gsgen
 		url = https://github.com/gsgen3d/gsgen.git
 
-[submodule "tpami/VIRNet"]
-		path = tpami/VIRNet
-		url = https://github.com/zsyOAOA/VIRNet.git
-
 [submodule "neurips/PromptIR"]
 		path = neurips/PromptIR
 		url = https://github.com/va1shn9v/PromptIR.git
