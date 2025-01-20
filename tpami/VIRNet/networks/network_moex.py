@@ -637,13 +637,11 @@ class MullerResizer(nn.Module):
 
 @dataclass
 class EncoderConfig:
-    sigma_chn: int
-    kernel_chn: int
-    dep_S: int
-    dep_K: int
     noise_cond: bool
     kernel_cond: bool
     noise_avg: bool
+    sigma_chn: int
+    kernel_chn: int
     model_channels: int
     num_res_blocks: int
     attention_resolutions: Optional[list] = None
@@ -683,18 +681,6 @@ class Encoder(Backbone[EncoderConfig]):
         self.kernel_cond = cfg.kernel_cond
         self.sigma_chn = cfg.sigma_chn
         self.kernel_chn = cfg.kernel_chn
-        self.dep_S = cfg.dep_S
-        self.dep_K = cfg.dep_K
-
-        self.SNet = DnCNN(
-            in_channels=d_in,
-            out_channels=self.sigma_chn,
-            dep=self.dep_S,
-            noise_avg=self.noise_avg,
-        )
-        self.KNet = KernelNet(
-            in_nc=d_in, out_chn=self.kernel_chn, num_blocks=self.dep_K
-        )
 
         extra_chn = 0
         if self.kernel_cond:
@@ -861,11 +847,13 @@ class Encoder(Backbone[EncoderConfig]):
         return util_net.pad_input(x, 2 ** (self.depth - 1))
 
     def forward(
-        self, x: torch.Tensor
+        self,
+        x: torch.Tensor,
+        sigma_est: Optional[torch.Tensor] = None,
+        kinfo_est: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        sigma_est = self.SNet(x)
+
         sigma = torch.exp(torch.clamp(sigma_est, min=log_min, max=log_max))
-        kinfo_est = self.KNet(x)
 
         x_pad = self.pad_x(x)
         x_up = self._interpolate(x_pad, self.scale_factor)
@@ -1120,6 +1108,8 @@ class AutoencoderConfig:
     DecoderConfig: MoEConfig
     d_in: int
     d_out: int
+    dep_S: int
+    dep_K: int
     phw: int = 32
     overlap: int = 24
 
@@ -1641,8 +1631,28 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.phw: int = cfg.phw
         self.overlap: int = cfg.overlap
 
-        self.encoder = Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out)
+        self.encoder = Encoder(
+            cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=cfg.d_out
+        )
         self.decoder = compile(MoE(cfg.DecoderConfig), backend="inductor")
+
+        self.snet = compile(
+            DnCNN(
+                in_channels=cfg.d_in,
+                out_channels=cfg.EncoderConfig.sigma_chn,
+                dep=cfg.dep_S,
+                noise_avg=cfg.EncoderConfig.noise_avg,
+            ),
+            backend="inductor",
+        )
+        self.knet = compile(
+            KernelNet(
+                in_nc=cfg.d_in,
+                out_chn=cfg.EncoderConfig.kernel_chn,
+                num_blocks=cfg.dep_K,
+            ),
+            backend="inductor",
+        )
 
     @staticmethod
     @compile
@@ -1754,7 +1764,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         splits = torch.split(x_p, cs)
 
-        res = [self.encoder(chunk) for chunk in splits]
+        res = [
+            self.encoder(chunk, self.snet(chunk), self.knet(chunk)) for chunk in splits
+        ]
 
         gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
 
