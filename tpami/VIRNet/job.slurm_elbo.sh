@@ -132,6 +132,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
+SAVE_DIR="/home/pb035507/zoo/vir-smoe/"
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
@@ -183,11 +184,11 @@ if [ "$USE_APPTAINER" = true ]; then
       exit 1
   fi
   apptainer exec --nv --binRRRRRME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH $([ "$DISTRIBUTED_TRAINING" = true ] && echo "--dist")
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
 fi
 
 echo "Job completed at: \$(date)"

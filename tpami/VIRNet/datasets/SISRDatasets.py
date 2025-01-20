@@ -38,8 +38,12 @@ class GeneralTrainFloder(uData.Dataset):
         self.downsampler = downsampler
         self.length = length
 
-        # get the image path
-        self.hr_path_list = sorted([str(x) for x in Path(hr_dir).glob("*.png")])
+        supported_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.gif']        
+        self.hr_path_list = sorted([
+            str(x) for x in Path(hr_dir).iterdir()
+            if x.is_file() and x.suffix.lower() in supported_extensions
+        ])
+        
         self.num_images = len(self.hr_path_list)
 
         self.noise_types = [
@@ -166,13 +170,16 @@ class GeneralTest(uData.Dataset):
         self.downsampler = downsampler
         self.seed = seed
 
-        # get the image path
-        self.hr_path_list = sorted([str(x) for x in Path(hr_dir).glob("*.bmp")])
+        supported_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.gif']        
+        self.hr_path_list = sorted([
+            str(x) for x in Path(hr_dir).iterdir()
+            if x.is_file() and x.suffix.lower() in supported_extensions
+        ])
+
         self.num_images = len(self.hr_path_list)
 
         self.noise_type = noise_type
 
-        # generate fixed Gaussian noise
         self.fixed_noise = self.generate_noise()
 
     def __len__(self):
