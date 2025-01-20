@@ -248,7 +248,6 @@ def main():
             util_common.mkdir(log_dir, delete=True)
             util_common.mkdir(model_dir, delete=False)
 
-    # prepare training data
     train_dataset = GeneralTrainFloder(
         hr_dir=args["train_hr_patchs"],
         sf=args["sf"],
@@ -287,7 +286,6 @@ def main():
         sampler=train_sampler,
     )
 
-    # prepare tesing data
     test_datasets = {
         x: GeneralTest(
             args["val_hr_path"],
