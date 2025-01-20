@@ -105,8 +105,6 @@ def main():
     encoder_cfg = EncoderConfig(
         sigma_chn=args["sigma_chn"],
         kernel_chn=args["kernel_chn"],
-        dep_S=args["dep_S"],
-        dep_K=args["dep_K"],
         noise_cond=util_opts.str2bool(args["noise_cond"]),
         kernel_cond=util_opts.str2bool(args["kernel_cond"]),
         noise_avg=util_opts.str2bool(args["noise_avg"]),
@@ -148,6 +146,8 @@ def main():
         d_out=z,
         phw=args["phw"],
         overlap=args["overlap"],
+        dep_S=args["dep_S"],
+        dep_K=args["dep_K"],
     )
 
     net = Autoencoder(cfg=autoencoder_cfg).cuda()
@@ -155,7 +155,7 @@ def main():
     if rank == 0:
         print(
             "Number of parameters in SNet: {:.2f}M".format(
-                util_net.calculate_parameters(net.encoder.SNet) / (1000**2)
+                util_net.calculate_parameters(net.snet) / (1000**2)
             ),
             flush=True,
         )
@@ -168,7 +168,7 @@ def main():
         # )
         print(
             "Number of parameters in KNet: {:.2f}M".format(
-                util_net.calculate_parameters(net.encoder.KNet) / (1000**2)
+                util_net.calculate_parameters(net.knet) / (1000**2)
             ),
             flush=True,
         )
@@ -476,7 +476,8 @@ def main():
                 for ii, data in enumerate(test_dataloaders[noise_type]):
                     im_hr, im_lr, kinfo_gt = [x.cuda() for x in data]
                     with torch.set_grad_enabled(False):
-                        mu, kinfo_est, sigma_est = net(im_lr, args["sf"])
+                        # mu, kinfo_est, sigma_est = net(im_lr, args["sf"])
+                        mu, kinfo_est, sigma_est = net(im_lr)
                         im_hr_est = mu[0] if isinstance(mu, list) else mu
 
                     psnr_iter = util_image.batch_PSNR(
