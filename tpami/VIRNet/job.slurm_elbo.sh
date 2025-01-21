@@ -10,7 +10,7 @@
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Max runtime: 1 Hour
 
 USE_APPTAINER=true
-BUILT_VERSION="1.2"
+BUILT_VERSION="1.3"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 
@@ -132,7 +132,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/home/pb035507/zoo/vir-smoe/"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4"
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
