@@ -29,6 +29,7 @@ import torch.multiprocessing as mp
 import torchvision.utils as vutils
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
+import datetime, uuid
 
 from networks.network_moex import (
     EncoderConfig,
@@ -558,22 +559,29 @@ def main():
         scheduler.step()
         # save model
         if rank == 0:
-            save_path_model = str(model_dir / ("model_" + str(epoch + 1) + ".pth"))
-            torch.save(
-                {
-                    "epoch": epoch + 1,
-                    "step": step + 1,
-                    "step_img": {
-                        x: step_img[x]
-                        for x in [
-                            "train",
-                        ]
-                        + noise_types_list
+            timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+            unique_id = str(uuid.uuid4())[:8]
+            save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
+            with open(save_path_model, "wb") as f:
+                torch.save(
+                    {
+                        "metadata": {
+                            "time_created": datetime.datetime.now().isoformat(),
+                            "uuid_short": uuid.uuid4().hex[:8]
+                        },
+                        "epoch": epoch + 1,
+                        "step": step + 1,
+                        "step_img": {
+                            x: step_img[x]
+                            for x in [
+                                "train",
+                            ]
+                            + noise_types_list
+                        },
+                        "model_state_dict": net.state_dict()
                     },
-                    "model_state_dict": net.state_dict(),
-                },
-                save_path_model,
-            )
+                    f
+                )
             toc = time.time()
             print("This epoch take time {:.2f}".format(toc - tic))
 
