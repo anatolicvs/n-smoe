@@ -4,14 +4,14 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 192, 
-    "batch_size": 64, 
+    "batch_size": 96, 
     "epochs": 120,
     "lr": 2e-4,
     "lr_min": 1e-6, 
     "print_freq": 100,
     "num_workers": 32, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4", 
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/", 
     "resume": "",
 
 
@@ -21,8 +21,8 @@
     "num_res_blocks": 2,
     "attention_resolutions": [16, 8],
     "dropout": 0.0,
-    "channel_mult": [2, 4,8],
-    "conv_resample":"False",
+    "channel_mult": [2, 4, 8],
+    "conv_resample": "False",
     "dims": 2,
     "use_checkpoint": "True",
     "use_fp16": "False",
@@ -50,7 +50,8 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/hpcwork/p0021791/dataset/rgb/train_1", 
+    # /rwthfs/rz/cluster/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR
+    "train_hr_patchs": "/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR", 
     "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
     "add_jpeg": "False",
     "kernel_shift": "False",

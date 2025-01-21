@@ -132,7 +132,14 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/"
+
+if [ ! -d "$SAVE_DIR" ]; then
+  mkdir -p "$SAVE_DIR" || {
+    echo "Failed to create save directory at $SAVE_DIR" >&2
+    exit 1
+  }
+fi
 
 cat <<-EOT > "$JOB_SCRIPT"
 #!/usr/bin/zsh
@@ -152,6 +159,9 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --output=${OUTPUT_DIR}/o-%x.%j.%N.out
 #SBATCH --error=${ERROR_DIR}/e-%x.%j.%N.err
 #SBATCH --job-name=$JOB_NAME
+
+export CC=gcc
+export CXX=g++
 
 module load CUDA/12.6.1
 
@@ -183,7 +193,7 @@ if [ "$USE_APPTAINER" = true ]; then
       echo "Error: Required environment variables (HPCWORK, WORK, WORKDIR) are not set." >&2
       exit 1
   fi
-  apptainer exec --nv --binRRRRRME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
+  apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
     torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
 else
   module load Python/3.10.4
