@@ -50,7 +50,6 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    # /rwthfs/rz/cluster/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR
     "train_hr_patchs": "/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR", 
     "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
     "add_jpeg": "False",
