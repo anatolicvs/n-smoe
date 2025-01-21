@@ -97,7 +97,7 @@ get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 }
 
-# EXCLUDE_NODES="n23g0009"
+EXCLUDE_NODES="n23g0009"
 
 # get_idle_node() {
 #     sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
@@ -132,7 +132,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v1/"
 
 if [ ! -d "$SAVE_DIR" ]; then
   mkdir -p "$SAVE_DIR" || {

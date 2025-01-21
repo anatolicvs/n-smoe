@@ -6,12 +6,12 @@
     "hr_size": 192, 
     "batch_size": 96, 
     "epochs": 120,
-    "lr": 2e-4,
+    "lr": 2e-4, # 2e-4, 
     "lr_min": 1e-6, 
     "print_freq": 100,
     "num_workers": 32, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/", 
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v1/", 
     "resume": "",
 
 
@@ -33,10 +33,10 @@
     "resample_2d": "False",
     "resizer_num_layers": 2,
     "resizer_avg_pool": "False",
-    "activation": "LeakyReLU",
+    "activation": "ReLU",
     "rope_theta": 10000.0,
     "attention_type": "cross_attention",
-    "kernel": 16,
+    "kernel": 32, # 16 | 32
     "phw": 16,
     "overlap": 4,
 
