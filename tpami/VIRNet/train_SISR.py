@@ -1,14 +1,10 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-# Power by Zongsheng Yue 2019-01-10 22:41:49
-
 import argparse
 import os
 import commentjson as json
 import sys
 import time
 import math
-import shutil
+
 from pathlib import Path
 from collections import OrderedDict
 from loss.ELBO_simple import elbo_sisr
@@ -26,7 +22,7 @@ from utils import util_common
 import torch
 import torch.nn as nn
 import torch.optim as optim
-import torch.nn.functional as F
+
 import torch.distributed as dist
 import torch.utils.data as udata
 import torch.multiprocessing as mp
@@ -595,7 +591,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/sisr_x4.json",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x4.json",
         help="Path for the config file",
     )
     parser.add_argument(

@@ -72,3 +72,4 @@ jax[cuda12_local]
 cupy-cuda12x
 diffusers[torch]
 connected-components-3d
+commentjson

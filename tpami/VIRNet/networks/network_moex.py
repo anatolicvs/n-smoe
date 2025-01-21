@@ -16,8 +16,9 @@ from torch.compiler import compile
 from .DnCNN import DnCNN
 from .KNet import KernelNet
 from utils import util_net
-import torch_tensorrt as trt
-from typing import Tuple, List
+
+# import torch_tensorrt as trt
+# from typing import Tuple, List
 
 torch.set_float32_matmul_precision("high")
 

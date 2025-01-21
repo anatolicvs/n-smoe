@@ -1,17 +1,12 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-# Power by Zongsheng Yue 2021-11-24 16:54:19
-
 import sys
 import cv2
 import math
 import torch
-import lpips
 import random
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
-from skimage import img_as_ubyte, img_as_float32, img_as_float64
+from skimage import img_as_ubyte, img_as_float32
 
 
 # --------------------------Metrics----------------------------
@@ -252,23 +247,49 @@ def read_img_lmdb(env, key, size, dtype="uint8"):
 
 
 def imread(path, chn="rgb", dtype="float32"):
-    """
-    Read image.
-    out:
-        im: h x w x c, numpy tensor
-    """
-    im = cv2.imread(str(path), cv2.IMREAD_UNCHANGED)  # BGR, uint8
-    if chn.lower() == "rgb" and im.ndim == 3:
+    # Inputs: path, chn, dtype
+    # Outputs: im (H, W, 3) or (H, W, 1)
+
+    chn_lower = chn.lower()
+    if chn_lower == "rgb":
+        flag = cv2.IMREAD_COLOR
+    elif chn_lower in ["gray", "grayscale"]:
+        flag = cv2.IMREAD_GRAYSCALE
+    elif chn_lower == "bgr":
+        flag = cv2.IMREAD_COLOR
+    elif chn_lower == "ycbcr":
+        flag = cv2.IMREAD_COLOR
+    else:
+        sys.exit("Invalid chn")
+
+    im = cv2.imread(str(path), flag)
+
+    if im is None:
+        sys.exit("Image read failed")
+
+    if chn_lower == "rgb" and im.ndim == 3:
         im = bgr2rgb(im)
+    elif chn_lower == "ycbcr" and im.ndim == 3:
+        im = rgb2ycbcr(im, only_y=False)
+    elif chn_lower in ["gray", "grayscale"]:
+        im = im[..., np.newaxis]
 
     if dtype == "float32":
-        im = im.astype(np.float32) / 255.0
+        im = (
+            im.astype(np.float32) / 255.0
+            if im.dtype == np.uint8
+            else im.astype(np.float32)
+        )
     elif dtype == "float64":
-        im = im.astype(np.float64) / 255.0
+        im = (
+            im.astype(np.float64) / 255.0
+            if im.dtype == np.uint8
+            else im.astype(np.float64)
+        )
     elif dtype == "uint8":
         pass
     else:
-        sys.exit("Please input corrected dtype: float32, float64 or uint8!")
+        sys.exit("Invalid dtype")
 
     return im
 
