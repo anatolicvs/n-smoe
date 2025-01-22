@@ -50,3 +50,7 @@
 [submodule "iclr/shortcut-models"]
 		path = iclr/shortcut-models
 		url =  https://github.com/kvfrans/shortcut-models.git
+
+[submodule "eccv/GaussianImage"]
+		path = eccv/GaussianImage
+		url =  https://github.com/Xinjie-Q/GaussianImage.git
