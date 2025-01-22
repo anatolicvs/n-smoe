@@ -157,8 +157,8 @@
   }
   
     , "train": {
-        "is_moe": true
-        , "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
+          // "is_moe": true
+         "G_lossfn_type": "l1"               // "l1" preferred | "l2sum" | "l2" | "ssim" 
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
