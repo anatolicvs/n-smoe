@@ -28,8 +28,8 @@
           , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
           , "dataloader_num_workers": 32
-          , "dataloader_batch_size": 2     // batch size 1 | 16 | 32 | 48 | 64 | 128,
-          , "length" : 100
+          , "dataloader_batch_size": 8     // batch size 1 | 16 | 32 | 48 | 64 | 128,
+          , "length" : 10000
         }
         , "test": {
           "name": "test_dataset"            // just name
@@ -111,7 +111,7 @@
           "num_res_blocks": 2,
           "attention_resolutions": [32, 16, 8],// [64, 32, 16]
           "dropout": 0.0,
-          "num_groups": 16,
+          "num_groups": 32,
           "num_heads": 16,
           "use_new_attention_order": true,
           "use_checkpoint": true,
@@ -120,10 +120,10 @@
           "channel_mult": [2, 4, 8],
           "conv_resample": false,
           "resample_2d": false,
-          "attention_type": "attention", // "cross_attention" | "attention"
-          "activation": "ReLU",
-          "rope_theta": 10000.0, // 960000.0,
-          "resizer_num_layers": 3,
+          "attention_type": "cross_attention", // "cross_attention" | "attention"
+          "activation": "LeakyReLU",
+          "rope_theta": 960000.0, // 960000.0 | 10000.0
+          "resizer_num_layers": 2,
           "resizer_avg_pool": false,
           "init_type": "default"
           // , "init_type": "orthogonal"      // "orthogonal" | "normal" | "uniform" | "xavier_normal" | "xavier_uniform" | "kaiming_normal" | "kaiming_uniform"
@@ -162,8 +162,8 @@
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 1e-4            // learning rate
-        , "G_optimizer_clipgrad": null      // unused
+        , "G_optimizer_lr": 2e-04            // learning rate
+        , "G_optimizer_clipgrad": 1.0      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
         , "G_scheduler_milestones": [200, 400, 600, 800, 10000, 2000]
@@ -172,9 +172,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 500           // for testing
-        , "checkpoint_save": 500           // for saving model
-        , "checkpoint_print": 50           // for print
+        , "checkpoint_test": 1000           // for testing
+        , "checkpoint_save": 1000           // for saving model
+        , "checkpoint_print": 100           // for print
       }
   }
   
