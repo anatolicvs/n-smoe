@@ -557,22 +557,20 @@ class MullerResizer(nn.Module):
         dtype=torch.float32,
     ):
         super(MullerResizer, self).__init__()
-        self.d_in: int = d_in
-        self.kernel_size: int = kernel_size
-        self.stddev: float = stddev
-        self.num_layers: int = num_layers
-        self.avg_pool: bool = avg_pool
-        self.dtype: torch.dtype = dtype
-
-        interpolation_methods: dict[str, str] = {
+        self.d_in = d_in
+        self.kernel_size = kernel_size
+        self.stddev = stddev
+        self.num_layers = num_layers
+        self.avg_pool = avg_pool
+        self.dtype = dtype
+        interpolation_methods = {
             "bilinear": "bilinear",
             "nearest": "nearest",
             "bicubic": "bicubic",
         }
-        self.interpolation_method: str = interpolation_methods.get(
+        self.interpolation_method = interpolation_methods.get(
             base_resize_method, "bilinear"
         )
-
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         if init_weights is not None:
@@ -585,13 +583,12 @@ class MullerResizer(nn.Module):
                 )
         else:
             for _ in range(num_layers):
-                weight = nn.Parameter(torch.empty((), dtype=dtype))
-                bias = nn.Parameter(torch.empty((), dtype=dtype))
+                weight = nn.Parameter(torch.empty(1, dtype=dtype))
+                bias = nn.Parameter(torch.empty(1, dtype=dtype))
                 nn.init.uniform_(weight, a=-0.1, b=0.1)
                 nn.init.zeros_(bias)
                 self.weights.append(weight)
                 self.biases.append(bias)
-
         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
 
     def create_gaussian_kernel(self, kernel_size, stddev) -> torch.Tensor:
