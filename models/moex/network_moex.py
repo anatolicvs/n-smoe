@@ -535,96 +535,58 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         h = self.proj_out(h)
         return (x + h).reshape(b, c, *spatial)
 
-
 class MullerResizer(nn.Module):
-    def __init__(
-        self,
-        d_in=3,
-        base_resize_method="bilinear",
-        kernel_size=5,
-        stddev=1.0,
-        num_layers=2,
-        avg_pool=False,
-        init_weights=None,
-        dtype=torch.float32,
-    ):
+    def __init__(self, d_in=3, base_resize_method="bilinear", kernel_size=5, stddev=1.0, num_layers=2, avg_pool=False, init_weights=None, dtype=torch.float32):
         super(MullerResizer, self).__init__()
-        self.d_in: int = d_in
-        self.kernel_size: int = kernel_size
-        self.stddev: float = stddev
-        self.num_layers: int = num_layers
-        self.avg_pool: bool = avg_pool
-        self.dtype: torch.dtype = dtype
-
-        interpolation_methods: dict[str, str] = {
-            "bilinear": "bilinear",
-            "nearest": "nearest",
-            "bicubic": "bicubic",
-        }
-        self.interpolation_method: str = interpolation_methods.get(
-            base_resize_method, "bilinear"
-        )
-
+        self.d_in = d_in
+        self.kernel_size = kernel_size
+        self.stddev = stddev
+        self.num_layers = num_layers
+        self.avg_pool = avg_pool
+        self.dtype = dtype
+        interpolation_methods = {"bilinear": "bilinear", "nearest": "nearest", "bicubic": "bicubic"}
+        self.interpolation_method = interpolation_methods.get(base_resize_method, "bilinear")
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         if init_weights is not None:
             for i in range(num_layers):
-                self.weights.append(
-                    nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
-                )
-                self.biases.append(
-                    nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
-                )
+                self.weights.append(nn.Parameter(torch.tensor(init_weights[2*i], dtype=dtype)))
+                self.biases.append(nn.Parameter(torch.tensor(init_weights[2*i+1], dtype=dtype)))
         else:
             for _ in range(num_layers):
-                weight = nn.Parameter(torch.empty((), dtype=dtype))
-                bias = nn.Parameter(torch.empty((), dtype=dtype))
+                weight = nn.Parameter(torch.empty(1, dtype=dtype))
+                bias = nn.Parameter(torch.empty(1, dtype=dtype))
                 nn.init.uniform_(weight, a=-0.1, b=0.1)
                 nn.init.zeros_(bias)
                 self.weights.append(weight)
                 self.biases.append(bias)
-
         self.gaussian_kernel = self.create_gaussian_kernel(kernel_size, stddev)
 
-    def create_gaussian_kernel(self, kernel_size, stddev) -> torch.Tensor:
+    def create_gaussian_kernel(self, kernel_size, stddev):
         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
-        gaussian_kernel: torch.Tensor = torch.exp(-t.pow(2) / (2 * stddev**2))
+        gaussian_kernel = torch.exp(-t.pow(2) / (2*(stddev**2)))
         gaussian_kernel /= gaussian_kernel.sum()
-        gaussian_kernel = gaussian_kernel.view(
-            1, 1, kernel_size, 1
-        ) * gaussian_kernel.view(1, 1, 1, kernel_size)
+        gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, 1) * gaussian_kernel.view(1, 1, 1, kernel_size)
         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
         return gaussian_kernel
 
-    def _apply_gaussian_blur(self, input) -> torch.Tensor:
-        padding: int = self.kernel_size // 2
-        x: torch.Tensor = F.pad(
-            input, (padding, padding, padding, padding), mode="reflect"
-        )
-
-        gaussian_kernel: torch.Tensor = self.gaussian_kernel.to(x.device)
+    def _apply_gaussian_blur(self, input):
+        padding = self.kernel_size // 2
+        x = F.pad(input, (padding, padding, padding, padding), mode="reflect")
+        gaussian_kernel = self.gaussian_kernel.to(x.device)
         return F.conv2d(x, gaussian_kernel, groups=self.d_in)
 
     def forward(self, input_tensor, target_size):
         x = input_tensor.to(dtype=self.dtype)
         if self.avg_pool:
             x = F.avg_pool2d(x, kernel_size=2, stride=2)
-        net = F.interpolate(
-            x, size=target_size, mode=self.interpolation_method, align_corners=False
-        )
-
+        net = F.interpolate(x, size=target_size, mode=self.interpolation_method, align_corners=False)
         for weight, bias in zip(self.weights, self.biases):
-            blurred: torch.Tensor = self._apply_gaussian_blur(x)
+            blurred = self._apply_gaussian_blur(x)
             residual = blurred - x
-            resized_residual = F.interpolate(
-                residual,
-                size=target_size,
-                mode=self.interpolation_method,
-                align_corners=False,
-            )
+            resized_residual = F.interpolate(residual, size=target_size, mode=self.interpolation_method, align_corners=False)
             net = net + torch.tanh(weight * resized_residual + bias)
-            x: torch.Tensor = blurred
-
+            x = blurred
         return net
 
 
@@ -1062,95 +1024,133 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.encoder = compile(enc, backend="inductor")
         self.decoder = compile(dec, backend="inductor")
 
-        self.scale_factor: int = 1
-
     @staticmethod
     @compile(backend="inductor")
-    def reconstruct(
-        blocks: torch.Tensor,
-        original_dims: Tuple[int, int, int, int],
-        block_size: int,
-        overlap: int,
+    def hann_window(
+        block_size: int, C: int, step: int, device: torch.device
     ) -> torch.Tensor:
-        batch_size, num_channels, height, width = original_dims
-        step: int = block_size - overlap
-        device: torch.device = blocks.device
+        hann_1d = torch.hann_window(block_size, periodic=False, device=device)
+        hann_2d = hann_1d.unsqueeze(1) * hann_1d.unsqueeze(0)
+        window = hann_2d.view(1, 1, block_size * block_size)
+        window = window.repeat(C, 1, 1)
+        window = window.view(1, C * block_size * block_size, 1)
+        window = window * (
+            step / block_size
+        )  # Dynamic scaling based on step and block_size
+        return window
 
-        recon_images: torch.Tensor = torch.zeros(
-            batch_size, num_channels, height, width
-        ).to(device)
-        count_matrix: torch.Tensor = torch.zeros(
-            batch_size, num_channels, height, width
-        ).to(device)
+    @compile(backend="inductor")
+    def extract_blocks(
+        self, img_tensor: torch.Tensor, block_size: int, overlap: int
+    ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
+        B, C, H, W = img_tensor.shape
+        step = block_size - overlap
+        pad = (block_size - step) // 2 + step
+        img_padded = F.pad(img_tensor, (pad, pad, pad, pad), mode="reflect")
+        patches = F.unfold(img_padded, kernel_size=block_size, stride=step)
+        window = self.hann_window(block_size, C, step, img_tensor.device)
+        L = patches.shape[-1]
+        window = window.repeat(1, 1, L)
+        patches = patches * window
+        patches = (
+            patches.view(B, C, block_size, block_size, L)
+            .permute(0, 4, 1, 2, 3)
+            .contiguous()
+        )
+        return patches, (B, L, C, H, W, pad)
 
-        num_blocks_per_row: int = (width - block_size) // step + 1
-        num_blocks_per_column: int = (height - block_size) // step + 1
-        num_blocks_per_image: int = num_blocks_per_row * num_blocks_per_column
+    @compile(backend="inductor")
+    def reconstruct(
+        self,
+        decoded_patches: torch.Tensor,
+        dims: Tuple[int, int, int, int, int],
+        block_size_out: int,
+        overlap_out: int,
+    ) -> torch.Tensor:
+        B, C, H, W, pad_out = dims
+        step_out = block_size_out - overlap_out
 
-        for b in range(batch_size):
-            idx_start: int = b * num_blocks_per_image
-            current_blocks: torch.Tensor = blocks[
-                idx_start : idx_start + num_blocks_per_image
-            ]
-            idx = 0
-            for i in range(0, height - block_size + 1, step):
-                for j in range(0, width - block_size + 1, step):
-                    recon_images[
-                        b, :, i : i + block_size, j : j + block_size
-                    ] += current_blocks[idx]
-                    count_matrix[b, :, i : i + block_size, j : j + block_size] += 1
-                    idx += 1
+        L_h = (H + 2 * pad_out - block_size_out) // step_out + 1
+        L_w = (W + 2 * pad_out - block_size_out) // step_out + 1
+        L = L_h * L_w
 
-        recon_images /= count_matrix.clamp(min=1)
-        return recon_images
+        # Reshape decoded_patches from (B, L, C, K, K) to (B, C*K*K, L)
+        decoded_patches = (
+            decoded_patches.reshape(B, L, C * block_size_out * block_size_out)
+            .permute(0, 2, 1)
+            .contiguous()
+        )
+
+        recon_padded = F.fold(
+            decoded_patches,
+            output_size=(H + 2 * pad_out, W + 2 * pad_out),
+            kernel_size=block_size_out,
+            stride=step_out,
+        )
+
+        window = self.hann_window(block_size_out, C, step_out, decoded_patches.device)
+        window_sum = F.fold(
+            torch.ones_like(decoded_patches) * window,
+            output_size=(H + 2 * pad_out, W + 2 * pad_out),
+            kernel_size=block_size_out,
+            stride=step_out,
+        )
+        recon_padded = recon_padded / window_sum.clamp_min(1e-8)
+        recon = recon_padded[:, :, pad_out : pad_out + H, pad_out : pad_out + W]
+
+        return recon
 
     @staticmethod
     @compile(backend="inductor")
     def mem_lim():
-        dev = "cuda" if torch.cuda.is_available() else "cpu"
-        if dev == "cuda":
-            device: int = torch.cuda.current_device()
+        if torch.cuda.is_available():
+            device = torch.cuda.current_device()
             torch.cuda.set_device(device)
-            tot_mem = torch.cuda.get_device_properties(device).total_memory
-            used_mem: int = torch.cuda.memory_reserved(device)
-            free_mem = tot_mem - used_mem
-
-            thresholds: list[float] = [0.7, 0.5, 0.3, 0.1]
+            free_mem, tot_mem = torch.cuda.mem_get_info(device)
+            thresholds = [0.9, 0.8, 0.7]
             for percent in thresholds:
                 threshold = tot_mem * percent
                 if free_mem > threshold:
                     return threshold
-
             return max(1 * 2**30, tot_mem * 0.05)
-        else:
-            return 1 * 2**30
+        return 1 * 2**30
 
-    def forward(self, x: torch.Tensor, s: Tuple[int, int, int, int]) -> torch.Tensor:
-        if x.ndim == 5:
-            x = x.reshape(-1, *x.shape[2:])
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        
+        x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
 
-        es: int = x.element_size()
+        if x_p.ndim == 5:
+            x_p = x_p.reshape(-1, *x_p.shape[2:])
+
+        es: int = x_p.element_size()
         ml = self.mem_lim()
-        bm: int = x.shape[1:].numel() * es
+        bm: int = x_p.shape[1:].numel() * es
         mx_bs = ml // bm
-        n: int = max(1, min(x.shape[0] // 1024, mx_bs))
-        cs: int = (x.shape[0] + n - 1) // n
+        n: int = max(1, min(x_p.shape[0] // 1024, mx_bs))
+        cs: int = (x_p.shape[0] + n - 1) // n
 
-        b = torch.split(x, cs)
+        splits = torch.split(x_p, cs)
 
-        enc: torch.Tensor = torch.cat([self.encoder(bt) for bt in b], dim=0)
+        gaussians: torch.Tensor = torch.cat([self.encoder(chunk) for chunk in splits], dim=0)
 
-        B, C, H, W = s
+        B, L, C, H, W, pad = dims
         sp: int = self.phw * self.encoder.scale_factor
 
         dec: torch.Tensor = torch.cat(
-            [self.decoder(sp, sp, bt) for bt in torch.split(enc, cs)], dim=0
+            [self.decoder(sp, sp, bt) for bt in torch.split(gaussians, cs)], dim=0
         )
 
         y: torch.Tensor = self.reconstruct(
             dec,
-            (B, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
+            (
+                B,
+                C,
+                H * self.encoder.scale_factor,
+                W * self.encoder.scale_factor,
+                pad * self.encoder.scale_factor,
+            ),
             sp,
             self.overlap * self.encoder.scale_factor,
         )
+        
         return y
