@@ -3,7 +3,7 @@
     , "model": "plain" // "gan"
     , "gpu_ids": [0]
     
-    , "scale": 4       // broadcast to "netG" if SISR
+    , "scale": 4               // 2 | 3 | 4 | 8
     , "kernel_path" : "/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat" // local:/home/ozkan/works/n-smoe/kernels/kernels_bicubicx234.mat
     , "phw": 16  
     , "overlap": 8
@@ -23,7 +23,7 @@
         "train": {
           "name": "train_dataset"           // just name
           , "dataset_type": "sr"          // "dncnn" | "dnpatch" | "fdncnn" | "ffdnet" | "sr" | "srmd" | "dpsr" | "plain" | "plainpatch"
-          , "dataroot_H": "/mnt/d/RGB/open-images/test"// path of H training dataset
+          , "dataroot_H": "/mnt/e/dataset/Flickr2K/Flickr2K_HR"// path of H training dataset
           , "dataroot_L": null              // path of L training dataset
           , "H_size": 128                    // patch size 40 | 64 | 96 | 128 | 192
           , "dataloader_shuffle": true
@@ -39,7 +39,7 @@
           , "H_size": 128      
           , "dataloader_num_workers": 32
           , "dataloader_batch_size": 1
-          , "length" : 25
+          , "length" : 10
         }
       }
       , "datasets_md": {
@@ -108,9 +108,9 @@
           "kernel": 16,
           "sharpening_factor": 1,
           "model_channels": 32,
-          "num_res_blocks": 2,
+          "num_res_blocks": 3,
           "attention_resolutions": [32, 16, 8],// [64, 32, 16]
-          "dropout": 0.0,
+          "dropout": 0.05,
           "num_groups": 32,
           "num_heads": 16,
           "use_new_attention_order": true,
@@ -162,7 +162,7 @@
         , "G_lossfn_weight": 1.0            // default
     
         , "G_optimizer_type": "adam"        // fixed, adam is enough
-        , "G_optimizer_lr": 2e-04            // learning rate
+        , "G_optimizer_lr": 1e-04            // learning rate
         , "G_optimizer_clipgrad": 1.0      // unused
     
         , "G_scheduler_type": "MultiStepLR" // "MultiStepLR" is enough
