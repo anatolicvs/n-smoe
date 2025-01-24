@@ -371,9 +371,8 @@ def define_G(opt):
             MoEConfig,
             AutoencoderConfig,
             Autoencoder,
+            KernelType,
         )
-
-        z = (7 * opt_net["n_channels"] + 3) * opt_net["kernel"]
 
         encoder_cfg = EncoderConfig(
             model_channels=opt_net["model_channels"],  # 32,
@@ -403,13 +402,13 @@ def define_G(opt):
         decoder_cfg = MoEConfig(
             kernel=opt_net["kernel"],
             sharpening_factor=opt_net["sharpening_factor"],
+            kernel_type=KernelType(opt_net["kernel_type"]),
         )
 
         autoenocer_cfg = AutoencoderConfig(
             EncoderConfig=encoder_cfg,
             DecoderConfig=decoder_cfg,
             d_in=opt_net["n_channels"],
-            d_out=z,
             phw=opt_net["phw"],
             overlap=opt_net["overlap"],
         )

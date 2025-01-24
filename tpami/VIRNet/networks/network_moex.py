@@ -1285,7 +1285,7 @@ class MoE(Backbone[MoEConfig]):
         else:
             ker = self.gaussian_kernel(g_full, mu_full, S)
 
-        ker *= w.view(B, ch, k, 1, 1)
+        ker = ker * w.view(B, ch, k, 1, 1)
         ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
         out = ker.sum(dim=2)
         return out.clamp(min=0, max=1)

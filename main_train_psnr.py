@@ -5,6 +5,9 @@ import random
 import sys
 import time
 
+# os.environ["TORCH_LOGS"] = "+dynamo,inductor"
+# os.environ["TORCHDYNAMO_VERBOSE"] = "1"
+
 import click
 import numpy as np
 import torch
@@ -17,6 +20,8 @@ from models.select_model import define_Model
 from utils_n import utils_image as util
 from utils_n import utils_option as option
 from utils_n.utils_dist import init_dist
+
+torch.autograd.set_detect_anomaly(True)
 
 # import torch._dynamo
 

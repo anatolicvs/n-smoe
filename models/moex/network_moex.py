@@ -12,7 +12,7 @@ import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
 from utils_n.nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
-from torch.compiler import compile
+from torch import compile
 from enum import Enum
 
 torch.set_float32_matmul_precision("high")
@@ -801,7 +801,7 @@ class Encoder(Backbone[EncoderConfig]):
 
     def _interpolate(self, x, scale_factor):
         self.resizer.to(x.device)
-        B, C, H, W = x.size()
+        _, _, H, W = x.size()
         target_h = int(H * scale_factor)
         target_w = int(W * scale_factor)
         target_size: Tuple[int, int] = (target_h, target_w)
@@ -1184,8 +1184,8 @@ class MoE(Backbone[MoEConfig]):
                 scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
             rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
         else:  # KernelType.GAUSSIAN
-            # expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
-            # assert z == expected_z
+            expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
+            assert z == expected_z
             mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
             mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
             scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
@@ -1278,7 +1278,7 @@ class MoE(Backbone[MoEConfig]):
         else:
             ker = self.gaussian_kernel(g_full, mu_full, S)
 
-        ker *= w.view(B, ch, k, 1, 1)
+        ker = ker * w.view(B, ch, k, 1, 1)
         ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
         out = ker.sum(dim=2)
         return out.clamp(min=0, max=1)
@@ -1289,7 +1289,7 @@ class AutoencoderConfig:
     EncoderConfig: EncoderConfig
     DecoderConfig: MoEConfig
     d_in: int
-    d_out: int
+    d_out: Optional[int] = None
     phw: int = 32
     overlap: int = 24
 
@@ -1306,10 +1306,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
 
         self.encoder = compile(
-            Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out),
-            backend="inductor",
+            Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
         )
-        self.decoder = compile(MoE(cfg.DecoderConfig), backend="inductor")
+        self.decoder = compile(MoE(cfg.DecoderConfig))
 
     @staticmethod
     @compile(backend="inductor")
@@ -1422,7 +1421,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             [self.encoder(chunk) for chunk in splits], dim=0
         )
 
-        B, L, C, H, W, pad = dims
+        B, _, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
         sp: int = self.phw * self.encoder.scale_factor
 
         dec: torch.Tensor = torch.cat(
@@ -1440,6 +1439,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             ),
             sp,
             self.overlap * self.encoder.scale_factor,
-        )
+        )  # => (B, C, H, W)
 
         return y
