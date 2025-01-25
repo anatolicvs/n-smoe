@@ -1171,54 +1171,10 @@ class MoE(Backbone[MoEConfig]):
 
         return C_full
 
-    # def extract_parameters(self, p, k, ch):
-    #     B, _, z = p.shape
-    #     if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-    #         # expected_z = (7 * ch + 3) * k
-    #         # assert z == expected_z
-    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
-    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
-    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
-    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
-    #             2 * torch.pi
-    #         ) - torch.pi
-    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
-    #         alpha = torch.sigmoid(p[:, :, 6 * k : 7 * k].reshape(B, ch, k))
-    #         c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
-    #         if ch == 1:
-    #             scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
-    #         elif ch == 3:
-    #             scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
-    #         rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
-    #     else:  # KernelType.GAUSSIAN
-    #         expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
-    #         assert z == expected_z
-    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
-    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
-    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
-    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
-    #             2 * torch.pi
-    #         ) - torch.pi
-    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
-    #         if ch == 1:
-    #             scale_color = F.softplus(p[:, :, 6 * k : 7 * k].reshape(B, ch, k, 1))
-    #         elif ch == 3:
-    #             scale_color = F.softplus(p[:, :, 6 * k : 9 * k].reshape(B, ch, k, 3))
-    #         rho_color = torch.tanh(p[:, :, 9 * k : 10 * k].reshape(B, ch, k, 1))
-    #         alpha = None
-    #         c = None
-
-    #     mu = torch.cat([mu_x, mu_y], dim=-1)
-    #     cov_matrix = (
-    #         self.cov_mat(scale_xy, theta_xy, scale_color, rho_color, ch)
-    #         * self.sharpening_factor
-    #     )
-    #     return mu, cov_matrix, w, alpha, c
-
     def extract_parameters(
         self, p: torch.Tensor, k: int, ch: int
     ) -> Tuple[torch.Tensor, torch.Tensor, ...]:
-        B, _, z = p.shape
+        B, _, _ = p.shape
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
             mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
             mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
@@ -1231,10 +1187,10 @@ class MoE(Backbone[MoEConfig]):
             c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
             if ch == 1:
                 scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
-            else:
+            elif ch == 3:
                 scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
             rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
-        else:
+        else:  # KernelType.GAUSSIAN
             mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
             mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
             scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
@@ -1244,10 +1200,11 @@ class MoE(Backbone[MoEConfig]):
             w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
             if ch == 1:
                 scale_color = F.softplus(p[:, :, 6 * k : 7 * k].reshape(B, ch, k, 1))
-            else:
+            elif ch == 3:
                 scale_color = F.softplus(p[:, :, 6 * k : 9 * k].reshape(B, ch, k, 3))
             rho_color = torch.tanh(p[:, :, 9 * k : 10 * k].reshape(B, ch, k, 1))
-            alpha, c = None, None
+            alpha = None
+            c = None
 
         mu = torch.cat([mu_x, mu_y], dim=-1)
         cov_matrix = (
@@ -1281,14 +1238,17 @@ class MoE(Backbone[MoEConfig]):
         norm_x = torch.linalg.norm(x_sub_mu, dim=-1)
         H, W = norm_x.shape[-2], norm_x.shape[-1]
         c_expanded = c.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, H, W)
+
         Sigma_diag = Sigma_inv[..., 0, 0]
 
-        C_csigma = 1 / (1 + norm_x**2 / (c_expanded * Sigma_diag))
+        denominator = c_expanded * Sigma_diag.clamp(min=1e-8)
+        C_csigma = 1 / (1 + norm_x**2 / denominator)
+
         alpha_expanded = alpha.unsqueeze(-1).unsqueeze(-1)
 
-        blended_kernels = alpha_expanded * G_sigma + (1 - alpha_expanded) * C_csigma
+        blended_kers = alpha_expanded * G_sigma + (1 - alpha_expanded) * C_csigma
 
-        return blended_kernels
+        return blended_kers
 
     def gaussian_kernel(
         self, x: torch.Tensor, mu: torch.Tensor, Sigma_inv: torch.Tensor
@@ -1461,8 +1421,8 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         ml = self.mem_lim()
         bm: int = x_p.shape[1:].numel() * es
         mx_bs = ml // bm
-        n: int = max(1, min(x_p.shape[0] // 1024, mx_bs))
-        cs: int = (x_p.shape[0] + n - 1) // n
+        n: int = int(max(1, min(x_p.shape[0] // 1024, mx_bs)))
+        cs: int = int((x_p.shape[0] + n - 1) // n)
 
         gaussians: torch.Tensor = torch.cat(
             [self.encoder(chunk) for chunk in torch.split(x_p, cs)], dim=0
