@@ -110,7 +110,7 @@ def main():
         num_res_blocks=args["num_res_blocks"],
         attention_resolutions=args["attention_resolutions"],
         dropout=args["dropout"],
-        channel_mult=tuple(args["channel_mult"]),  # Convert list to tuple if necessary
+        channel_mult=tuple(args["channel_mult"]), 
         conv_resample=util_opts.str2bool(args["conv_resample"]),
         dims=args["dims"],
         use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
@@ -123,9 +123,9 @@ def main():
         scale_factor=args["sf"],
         resizer_num_layers=args["resizer_num_layers"],
         resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
-        activation=args["activation"],  # e.g., "LeakyReLU"
+        activation=args["activation"],
         rope_theta=args["rope_theta"],
-        attention_type=args["attention_type"],  # e.g., "cross_attention"
+        attention_type=args["attention_type"], 
     )
 
     decoder_cfg = MoEConfig(
