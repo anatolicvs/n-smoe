@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="48:00:00"
+TIME="24:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -132,7 +132,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v2/"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
 
 if [ ! -d "$SAVE_DIR" ]; then
   mkdir -p "$SAVE_DIR" || {
