@@ -800,7 +800,6 @@ class Encoder(Backbone[EncoderConfig]):
         )
 
     def _interpolate(self, x, scale_factor):
-        self.resizer.to(x.device)
         _, _, H, W = x.size()
         target_h = int(H * scale_factor)
         target_w = int(W * scale_factor)
@@ -850,7 +849,7 @@ class KernelType(Enum):
 class MoEConfig:
     kernel: int = 4
     sharpening_factor: float = 1.0
-    kernel_type: KernelType = KernelType.GAUSSIAN_CAUCHY
+    kernel_type: Optional[KernelType] = KernelType.GAUSSIAN_CAUCHY
 
 
 @dataclass
@@ -1145,7 +1144,14 @@ class MoE(Backbone[MoEConfig]):
     #         raise ValueError(f"Unsupported number of channels: {ch}")
     #     return C_full
 
-    def cov_mat(self, scale, theta_xy, scale_color, rho_color, ch):
+    def cov_mat(
+        self,
+        scale: torch.Tensor,
+        theta_xy: torch.Tensor,
+        scale_color: torch.Tensor,
+        rho_color: torch.Tensor,
+        ch: int,
+    ) -> torch.Tensor:
         R = self.ang_to_rot_mat(theta_xy)
         S = torch.diag_embed(scale)
         C_xy = R @ S @ S.transpose(-2, -1) @ R.transpose(-2, -1)
@@ -1162,13 +1168,58 @@ class MoE(Backbone[MoEConfig]):
             C_full[..., 2:, 2:] = C_rgb
         else:
             raise ValueError(f"Unsupported number of channels: {ch}")
+
         return C_full
 
-    def extract_parameters(self, p, k, ch):
+    # def extract_parameters(self, p, k, ch):
+    #     B, _, z = p.shape
+    #     if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+    #         # expected_z = (7 * ch + 3) * k
+    #         # assert z == expected_z
+    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
+    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
+    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
+    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
+    #             2 * torch.pi
+    #         ) - torch.pi
+    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
+    #         alpha = torch.sigmoid(p[:, :, 6 * k : 7 * k].reshape(B, ch, k))
+    #         c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
+    #         if ch == 1:
+    #             scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
+    #         elif ch == 3:
+    #             scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
+    #         rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
+    #     else:  # KernelType.GAUSSIAN
+    #         expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
+    #         assert z == expected_z
+    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
+    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
+    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
+    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
+    #             2 * torch.pi
+    #         ) - torch.pi
+    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
+    #         if ch == 1:
+    #             scale_color = F.softplus(p[:, :, 6 * k : 7 * k].reshape(B, ch, k, 1))
+    #         elif ch == 3:
+    #             scale_color = F.softplus(p[:, :, 6 * k : 9 * k].reshape(B, ch, k, 3))
+    #         rho_color = torch.tanh(p[:, :, 9 * k : 10 * k].reshape(B, ch, k, 1))
+    #         alpha = None
+    #         c = None
+
+    #     mu = torch.cat([mu_x, mu_y], dim=-1)
+    #     cov_matrix = (
+    #         self.cov_mat(scale_xy, theta_xy, scale_color, rho_color, ch)
+    #         * self.sharpening_factor
+    #     )
+    #     return mu, cov_matrix, w, alpha, c
+
+    def extract_parameters(
+        self, p: torch.Tensor, k: int, ch: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, ...]:
         B, _, z = p.shape
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            # expected_z = (7 * ch + 3) * k
-            # assert z == expected_z
             mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
             mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
             scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
@@ -1180,12 +1231,10 @@ class MoE(Backbone[MoEConfig]):
             c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
             if ch == 1:
                 scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
-            elif ch == 3:
+            else:
                 scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
             rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
-        else:  # KernelType.GAUSSIAN
-            expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
-            assert z == expected_z
+        else:
             mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
             mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
             scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
@@ -1195,11 +1244,10 @@ class MoE(Backbone[MoEConfig]):
             w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
             if ch == 1:
                 scale_color = F.softplus(p[:, :, 6 * k : 7 * k].reshape(B, ch, k, 1))
-            elif ch == 3:
+            else:
                 scale_color = F.softplus(p[:, :, 6 * k : 9 * k].reshape(B, ch, k, 3))
             rho_color = torch.tanh(p[:, :, 9 * k : 10 * k].reshape(B, ch, k, 1))
-            alpha = None
-            c = None
+            alpha, c = None, None
 
         mu = torch.cat([mu_x, mu_y], dim=-1)
         cov_matrix = (
@@ -1208,7 +1256,14 @@ class MoE(Backbone[MoEConfig]):
         )
         return mu, cov_matrix, w, alpha, c
 
-    def gaussian_cauchy_kernel(self, x, mu, Sigma_inv, alpha, c):
+    def gaussian_cauchy_kernel(
+        self,
+        x: torch.Tensor,
+        mu: torch.Tensor,
+        Sigma_inv: torch.Tensor,
+        alpha: Optional[torch.Tensor] = None,
+        c: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         x_sub_mu = x - mu
         x_sub_mu_t = x_sub_mu.unsqueeze(-1)
 
@@ -1235,7 +1290,9 @@ class MoE(Backbone[MoEConfig]):
 
         return blended_kernels
 
-    def gaussian_kernel(self, x, mu, Sigma_inv):
+    def gaussian_kernel(
+        self, x: torch.Tensor, mu: torch.Tensor, Sigma_inv: torch.Tensor
+    ) -> torch.Tensor:
         x_sub_mu = x - mu
         x_sub_mu_t = x_sub_mu.unsqueeze(-1)
         exp_terms = -0.5 * torch.einsum(
@@ -1245,11 +1302,13 @@ class MoE(Backbone[MoEConfig]):
         exp_terms = exp_terms - max_exp_terms
         return torch.exp(exp_terms)
 
-    def forward(self, height, width, params):
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
         return self.forward_spatial(height, width, params)
 
-    def forward_spatial(self, height, width, params):
-        B, ch, z = params.shape
+    def forward_spatial(
+        self, height: int, width: int, params: torch.Tensor
+    ) -> torch.Tensor:
+        B, ch, _ = params.shape
         k = self.kernel
 
         mu, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
@@ -1281,6 +1340,7 @@ class MoE(Backbone[MoEConfig]):
         ker = ker * w.view(B, ch, k, 1, 1)
         ker = ker / (ker.sum(dim=2, keepdim=True) + 1e-8)
         out = ker.sum(dim=2)
+
         return out.clamp(min=0, max=1)
 
 
@@ -1308,10 +1368,11 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.encoder = compile(
             Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
         )
+
         self.decoder = compile(MoE(cfg.DecoderConfig))
 
     @staticmethod
-    @compile(backend="inductor")
+    @compile
     def hann_window(
         block_size: int, C: int, step: int, device: torch.device
     ) -> torch.Tensor:
@@ -1325,7 +1386,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )  # Dynamic scaling based on step and block_size
         return window
 
-    @compile(backend="inductor")
+    @compile
     def extract_blocks(
         self, img_tensor: torch.Tensor, block_size: int, overlap: int
     ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
@@ -1345,22 +1406,17 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
         return patches, (B, L, C, H, W, pad)
 
-    @compile(backend="inductor")
+    @compile
     def reconstruct(
         self,
         decoded_patches: torch.Tensor,
-        dims: Tuple[int, int, int, int, int],
+        dims: Tuple[int, int, int, int, int, int],
         block_size_out: int,
         overlap_out: int,
     ) -> torch.Tensor:
-        B, C, H, W, pad_out = dims
+        B, L, C, H, W, pad_out = dims
         step_out = block_size_out - overlap_out
 
-        L_h = (H + 2 * pad_out - block_size_out) // step_out + 1
-        L_w = (W + 2 * pad_out - block_size_out) // step_out + 1
-        L = L_h * L_w
-
-        # Reshape decoded_patches from (B, L, C, K, K) to (B, C*K*K, L)
         decoded_patches = (
             decoded_patches.reshape(B, L, C * block_size_out * block_size_out)
             .permute(0, 2, 1)
@@ -1387,7 +1443,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return recon
 
     @staticmethod
-    @compile(backend="inductor")
+    @compile
     def mem_lim():
         if torch.cuda.is_available():
             device = torch.cuda.current_device()
@@ -1415,13 +1471,11 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         n: int = max(1, min(x_p.shape[0] // 1024, mx_bs))
         cs: int = (x_p.shape[0] + n - 1) // n
 
-        splits = torch.split(x_p, cs)
-
         gaussians: torch.Tensor = torch.cat(
-            [self.encoder(chunk) for chunk in splits], dim=0
+            [self.encoder(chunk) for chunk in torch.split(x_p, cs)], dim=0
         )
 
-        B, _, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
+        B, L, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
         sp: int = self.phw * self.encoder.scale_factor
 
         dec: torch.Tensor = torch.cat(
@@ -1432,6 +1486,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             dec,
             (
                 B,
+                L,
                 C,
                 H * self.encoder.scale_factor,
                 W * self.encoder.scale_factor,
@@ -1442,3 +1497,45 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )  # => (B, C, H, W)
 
         return y
+
+
+# @compile(backend="inductor")
+# def reconstruct(
+#     self,
+#     decoded_patches: torch.Tensor,
+#     dims: Tuple[int, int, int, int, int],
+#     block_size_out: int,
+#     overlap_out: int,
+# ) -> torch.Tensor:
+#     B, C, H, W, pad_out = dims
+#     step_out = block_size_out - overlap_out
+
+#     L_h = (H + 2 * pad_out - block_size_out) // step_out + 1
+#     L_w = (W + 2 * pad_out - block_size_out) // step_out + 1
+#     L = L_h * L_w
+
+#     # Reshape decoded_patches from (B, L, C, K, K) to (B, C*K*K, L)
+#     decoded_patches = (
+#         decoded_patches.reshape(B, L, C * block_size_out * block_size_out)
+#         .permute(0, 2, 1)
+#         .contiguous()
+#     )
+
+#     recon_padded = F.fold(
+#         decoded_patches,
+#         output_size=(H + 2 * pad_out, W + 2 * pad_out),
+#         kernel_size=block_size_out,
+#         stride=step_out,
+#     )
+
+#     window = self.hann_window(block_size_out, C, step_out, decoded_patches.device)
+#     window_sum = F.fold(
+#         torch.ones_like(decoded_patches) * window,
+#         output_size=(H + 2 * pad_out, W + 2 * pad_out),
+#         kernel_size=block_size_out,
+#         stride=step_out,
+#     )
+#     recon_padded = recon_padded / window_sum.clamp_min(1e-8)
+#     recon = recon_padded[:, :, pad_out : pad_out + H, pad_out : pad_out + W]
+
+#     return recon

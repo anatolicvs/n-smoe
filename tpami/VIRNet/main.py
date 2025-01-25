@@ -3,7 +3,7 @@
 import torch
 from typing import Tuple
 import time
-from networks.network_moex import (
+from tpami.VIRNet.networks.network_moex_v1 import (
     Encoder,
     EncoderConfig,
     MoEConfig,

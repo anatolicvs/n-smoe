@@ -36,6 +36,7 @@ from networks.network_moex import (
     MoEConfig,
     AutoencoderConfig,
     Autoencoder,
+    KernelType,
 )
 
 
@@ -130,17 +131,13 @@ def main():
     decoder_cfg = MoEConfig(
         kernel=args["kernel"],
         sharpening_factor=args.get("sharpening_factor", 1),
+        kernel_type=KernelType(args["kernel_type"]),
     )
-
-    kernel = args["kernel"]
-    ch = args.get("im_chn", 0)
-    z = (7 * ch + 3) * kernel
 
     autoencoder_cfg = AutoencoderConfig(
         EncoderConfig=encoder_cfg,
         DecoderConfig=decoder_cfg,
         d_in=args["im_chn"],
-        d_out=z,
         phw=args["phw"],
         overlap=args["overlap"],
         dep_S=args["dep_S"],
@@ -328,9 +325,6 @@ def main():
     alpha0 = 0.5 * torch.tensor([args["var_window"] ** 2], dtype=torch.float32).cuda()
     kappa0 = torch.tensor([args["kappa0"]], dtype=torch.float32).cuda()
     param_rnet = [x for name, x in net.named_parameters() if "encoder" in name.lower()]
-    # param_resizer = [
-    #     x for name, x in net.named_parameters() if "resizer" in name.lower()
-    # ]
     # param_rnet = [x for name, x in net.named_parameters() if "rnet " in name.lower()]
     param_snet = [x for name, x in net.named_parameters() if "snet" in name.lower()]
     param_knet = [x for name, x in net.named_parameters() if "knet" in name.lower()]
@@ -559,7 +553,7 @@ def main():
         scheduler.step()
         # save model
         if rank == 0:
-            timestamp = datetime.datetime.now().strftime('%Y%m%d-%H%M%S')
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             unique_id = str(uuid.uuid4())[:8]
             save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
             with open(save_path_model, "wb") as f:
@@ -567,7 +561,7 @@ def main():
                     {
                         "metadata": {
                             "time_created": datetime.datetime.now().isoformat(),
-                            "uuid_short": uuid.uuid4().hex[:8]
+                            "uuid_short": uuid.uuid4().hex[:8],
                         },
                         "epoch": epoch + 1,
                         "step": step + 1,
@@ -578,9 +572,9 @@ def main():
                             ]
                             + noise_types_list
                         },
-                        "model_state_dict": net.state_dict()
+                        "model_state_dict": net.state_dict(),
                     },
-                    f
+                    f,
                 )
             toc = time.time()
             print("This epoch take time {:.2f}".format(toc - tic))

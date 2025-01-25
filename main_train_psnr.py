@@ -23,6 +23,11 @@ from utils_n.utils_dist import init_dist
 
 torch.autograd.set_detect_anomaly(True)
 
+import torch._dynamo
+
+torch._dynamo.config.suppress_errors = True
+
+
 # import torch._dynamo
 
 # torch._dynamo.config.cache_size_limit = 16

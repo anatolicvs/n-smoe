@@ -106,7 +106,7 @@
       "netG": {
           "net_type": "network_moex",
           "kernel": 16,
-          "kernel_type": "gaussian",
+          "kernel_type": "gaussian_cauchy",
           "sharpening_factor": 1,
           "model_channels": 32,
           "num_res_blocks": 3,
@@ -173,9 +173,9 @@
         , "G_regularizer_orthstep": null    // unused
         , "G_regularizer_clipstep": null    // unused
     
-        , "checkpoint_test": 1000           // for testing
-        , "checkpoint_save": 1000           // for saving model
-        , "checkpoint_print": 100           // for print
+        , "checkpoint_test": 10000           // for testing
+        , "checkpoint_save": 10000           // for saving model
+        , "checkpoint_print": 50           // for print
       }
   }
   
