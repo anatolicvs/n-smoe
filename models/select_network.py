@@ -414,6 +414,7 @@ def define_G(opt):
         )
 
         netG = Autoencoder(cfg=autoenocer_cfg)
+        netG = torch.compile(netG)
 
     elif net_type == "transformer_moe":
         from models.network_transformer_moe1 import (

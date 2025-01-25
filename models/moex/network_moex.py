@@ -1365,14 +1365,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         else:
             d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
 
-        self.encoder = compile(
-            Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
-        )
-
-        self.decoder = compile(MoE(cfg.DecoderConfig))
+        self.encoder = Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
+        self.decoder = MoE(cfg.DecoderConfig)
 
     @staticmethod
-    @compile
     def hann_window(
         block_size: int, C: int, step: int, device: torch.device
     ) -> torch.Tensor:
@@ -1386,7 +1382,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )  # Dynamic scaling based on step and block_size
         return window
 
-    @compile
     def extract_blocks(
         self, img_tensor: torch.Tensor, block_size: int, overlap: int
     ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
@@ -1406,7 +1401,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
         return patches, (B, L, C, H, W, pad)
 
-    @compile
     def reconstruct(
         self,
         decoded_patches: torch.Tensor,
@@ -1443,7 +1437,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         return recon
 
     @staticmethod
-    @compile
     def mem_lim():
         if torch.cuda.is_available():
             device = torch.cuda.current_device()
