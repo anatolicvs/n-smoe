@@ -144,7 +144,9 @@ def main():
         dep_K=args["dep_K"],
     )
 
-    net = Autoencoder(cfg=autoencoder_cfg).cuda()
+    net = Autoencoder(cfg=autoencoder_cfg)
+    net = torch.compile(net)
+    net = net.cuda()
 
     if rank == 0:
         print(
