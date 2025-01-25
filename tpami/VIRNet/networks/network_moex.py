@@ -819,7 +819,7 @@ class Encoder(Backbone[EncoderConfig]):
 
         self.resizer = MullerResizer(
             self.d_in,
-            "bilinear",
+            "bicubic",
             kernel_size=5,
             stddev=1.0,
             num_layers=cfg.resizer_num_layers,
