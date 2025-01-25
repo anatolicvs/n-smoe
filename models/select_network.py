@@ -413,8 +413,7 @@ def define_G(opt):
             overlap=opt_net["overlap"],
         )
 
-        netG = Autoencoder(cfg=autoenocer_cfg)
-        netG = torch.compile(netG)
+        netG = torch.compile(Autoencoder(cfg=autoenocer_cfg))
 
     elif net_type == "transformer_moe":
         from models.network_transformer_moe1 import (
