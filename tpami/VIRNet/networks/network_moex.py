@@ -828,8 +828,7 @@ class Encoder(Backbone[EncoderConfig]):
         )
 
     def _interpolate(self, x, scale_factor):
-        self.resizer.to(x.device)
-        B, C, H, W = x.size()
+        _, _, H, W = x.size()
         target_h = int(H * scale_factor)
         target_w = int(W * scale_factor)
         target_size: Tuple[int, int] = (target_h, target_w)
@@ -996,50 +995,6 @@ class MoE(Backbone[MoEConfig]):
             raise ValueError(f"Unsupported number of channels: {ch}")
 
         return C_full
-
-    # def extract_parameters(self, p, k, ch):
-    #     B, _, z = p.shape
-    #     if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-    #         # expected_z = (7 * ch + 3) * k
-    #         # assert z == expected_z
-    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
-    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
-    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
-    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
-    #             2 * torch.pi
-    #         ) - torch.pi
-    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
-    #         alpha = torch.sigmoid(p[:, :, 6 * k : 7 * k].reshape(B, ch, k))
-    #         c = F.softplus(p[:, :, 7 * k : 8 * k].reshape(B, ch, k))
-    #         if ch == 1:
-    #             scale_color = F.softplus(p[:, :, 8 * k : 9 * k].reshape(B, ch, k, 1))
-    #         elif ch == 3:
-    #             scale_color = F.softplus(p[:, :, 8 * k : 11 * k].reshape(B, ch, k, 3))
-    #         rho_color = torch.tanh(p[:, :, 11 * k : 12 * k].reshape(B, ch, k, 1))
-    #     else:  # KernelType.GAUSSIAN
-    #         expected_z = (7 * ch) * k  # No alpha, c for GAUSSIAN
-    #         assert z == expected_z
-    #         mu_x = p[:, :, 0:k].reshape(B, ch, k, 1)
-    #         mu_y = p[:, :, k : 2 * k].reshape(B, ch, k, 1)
-    #         scale_xy = F.softplus(p[:, :, 2 * k : 4 * k].reshape(B, ch, k, 2))
-    #         theta_xy = (p[:, :, 4 * k : 5 * k].reshape(B, ch, k) + torch.pi) % (
-    #             2 * torch.pi
-    #         ) - torch.pi
-    #         w = F.softmax(p[:, :, 5 * k : 6 * k].reshape(B, ch, k), dim=-1)
-    #         if ch == 1:
-    #             scale_color = F.softplus(p[:, :, 6 * k : 7 * k].reshape(B, ch, k, 1))
-    #         elif ch == 3:
-    #             scale_color = F.softplus(p[:, :, 6 * k : 9 * k].reshape(B, ch, k, 3))
-    #         rho_color = torch.tanh(p[:, :, 9 * k : 10 * k].reshape(B, ch, k, 1))
-    #         alpha = None
-    #         c = None
-
-    #     mu = torch.cat([mu_x, mu_y], dim=-1)
-    #     cov_matrix = (
-    #         self.cov_mat(scale_xy, theta_xy, scale_color, rho_color, ch)
-    #         * self.sharpening_factor
-    #     )
-    #     return mu, cov_matrix, w, alpha, c
 
     def extract_parameters(
         self, p: torch.Tensor, k: int, ch: int
