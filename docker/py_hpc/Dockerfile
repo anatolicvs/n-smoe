@@ -44,7 +44,7 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
     pip install --no-cache-dir torchsampler torchgeometry torchio piq torchdiffeq hydra-core fvcore flax[all] jaxtyping  nibabel && \
     pip install --no-cache-dir dicom2nifti hdf5storage pydicom "jax[cuda12_local]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html && \
     pip install --no-cache-dir segmentation-models-pytorch ruamel.yaml nerfview viser icecream dahuffman vector-quantize-pytorch && \
-    pip install --no-cache-dir datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d diffusers[torch] commentjson
+    pip install --no-cache-dir datashader holoviews hvplot jupyterlab mahotas iopath SimpleITK monai connected-components-3d diffusers[torch] commentjson pytorch_msssim
 
     # gsplat removed temporarily
 
