@@ -4,14 +4,14 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 192, 
-    "batch_size": 96, 
+    "batch_size": 128, 
     "epochs": 120,
     "lr": 2e-4, # 2e-4, 
     "lr_min": 1e-6, 
     "print_freq": 100,
-    "num_workers": 32, 
+    "num_workers": 64, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/", 
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
     "resume": "",
 
 
@@ -20,7 +20,7 @@
     "model_channels": 32,
     "num_res_blocks": 3,
     "attention_resolutions": [32, 16, 8],
-    "dropout": 0.0,
+    "dropout": 0.05,
     "channel_mult": [2, 4, 8],
     "conv_resample": "False",
     "dims": 2,
@@ -33,10 +33,10 @@
     "resample_2d": "False",
     "resizer_num_layers": 2,
     "resizer_avg_pool": "False",
-    "activation": "GELU",
-    "rope_theta": 960000.0,
+    "activation": "LeakyReLU",
+    "rope_theta": 100000,
     "attention_type": "cross_attention", # attention | cross_attention
-    "kernel": 25, 
+    "kernel": 16, 
     "kernel_type": "gaussian_cauchy", # gaussian | gaussian_cauchy
     "phw": 16,
     "overlap": 4,

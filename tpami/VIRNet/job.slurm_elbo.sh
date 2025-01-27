@@ -10,7 +10,7 @@
 # devel: 8 total, 48 cores/node, 192 GB/node, Designed for testing jobs and programs. Max runtime: 1 Hour
 
 USE_APPTAINER=true
-BUILT_VERSION="1.3"
+BUILT_VERSION="1.4"
 DISTRIBUTED_TRAINING=true
 GPUS=${GPUS:-4}  # Default to 4 if not set
 
@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="8:00:00"
+TIME="48:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -132,7 +132,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
 
 if [ ! -d "$SAVE_DIR" ]; then
   mkdir -p "$SAVE_DIR" || {
