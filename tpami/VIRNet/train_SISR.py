@@ -145,7 +145,7 @@ def main():
     )
 
     net = Autoencoder(cfg=autoencoder_cfg)
-    net = torch.compile(net)
+    # net = torch.compile(net)
     net = net.cuda()
 
     if rank == 0:
