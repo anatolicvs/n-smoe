@@ -12,7 +12,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.4"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-4}  # Default to 4 if not set
+GPUS=${GPUS:-2}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="48:00:00"
+TIME="8:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -88,12 +88,12 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
   exit 1
 }
 
-PARTITION="c23g"
-
+PARTITION="c23g" # c23g_low
+STATES="idle,mixed"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-    sinfo -N -p "c23g" -h -o "%N" --states=idle | head -n 1
+    sinfo -N -p "$PARTITION" -h -o "%N" --states="$STATES" | head -n 1
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 }
 

@@ -30,6 +30,8 @@ import torchvision.utils as vutils
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
+import torch.backends.cudnn as cudnn
+
 
 from networks.network_moex import (
     EncoderConfig,
@@ -38,7 +40,6 @@ from networks.network_moex import (
     Autoencoder,
     KernelType,
 )
-
 
 def init_dist(backend="nccl", **kwargs):
     if mp.get_start_method(allow_none=True) is None:
@@ -82,9 +83,9 @@ def main():
         for key, value in args.items():
             print("{:<20s}: {:s}".format(key, str(value)))
 
-    if rank == 0:
-        base_dir = args["save_dir"]
-        util_common.mkdir(base_dir, delete=False)
+    torch.cuda.init()
+    cudnn.enabled = True
+    cudnn.benchmark = True
 
     torch.manual_seed(1234)
     torch.cuda.manual_seed_all(1234)
