@@ -82,7 +82,10 @@ def main():
         for key, value in args.items():
             print("{:<20s}: {:s}".format(key, str(value)))
 
-    # set the seed before initilizing the network
+    if rank == 0:
+        base_dir = args["save_dir"]
+        util_common.mkdir(base_dir, delete=False)
+
     torch.manual_seed(1234)
     torch.cuda.manual_seed_all(1234)
 
@@ -599,7 +602,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--save_dir",
-        default="./train_save",
+        default="/mnt/d/virnet_smoe",
         type=str,
         metavar="PATH",
         help="Path to save the log file",
