@@ -110,7 +110,7 @@ def main():
         num_res_blocks=args["num_res_blocks"],
         attention_resolutions=args["attention_resolutions"],
         dropout=args["dropout"],
-        channel_mult=tuple(args["channel_mult"]), 
+        channel_mult=tuple(args["channel_mult"]),
         conv_resample=util_opts.str2bool(args["conv_resample"]),
         dims=args["dims"],
         use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
@@ -125,7 +125,7 @@ def main():
         resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
         activation=args["activation"],
         rope_theta=args["rope_theta"],
-        attention_type=args["attention_type"], 
+        attention_type=args["attention_type"],
     )
 
     decoder_cfg = MoEConfig(
@@ -247,7 +247,7 @@ def main():
     train_dataset = GeneralTrainFloder(
         hr_dir=args["train_hr_patchs"],
         sf=args["sf"],
-        length=10000 * args["batch_size"],
+        length=10 * args["batch_size"],
         hr_size=args["hr_size"],
         k_size=args["k_size"],
         kernel_shift=util_opts.str2bool(args["kernel_shift"]),
@@ -551,7 +551,6 @@ def main():
                 print(log_str.format(noise_type, phase, psnr_per_epoch, ssim_per_epoch))
                 print("-" * 60)
 
-        # adjust the learning rate
         scheduler.step()
         # save model
         if rank == 0:
@@ -589,9 +588,9 @@ def main():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # DDP parameters
+
     parser.add_argument("--local_rank", type=int, default=0, help="Passed by launch.py")
-    # GPU settings
+
     parser.add_argument(
         "--config",
         type=str,

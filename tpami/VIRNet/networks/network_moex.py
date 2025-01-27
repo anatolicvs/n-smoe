@@ -2,6 +2,7 @@
 
 import math
 from dataclasses import dataclass
+from enum import Enum
 from functools import partial
 from typing import Any, Generic, Optional, Tuple, TypeVar
 
@@ -11,13 +12,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from .nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
-from torch import compile
-from enum import Enum
-from .DnCNN import DnCNN
-from .KNet import KernelNet
 from utils import util_net
 
+from .DnCNN import DnCNN
+from .KNet import KernelNet
+from .nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
 
 torch.set_float32_matmul_precision("high")
 
