@@ -31,10 +31,10 @@
     "resnet_use_first_pool": "True",
     "kernel_chn": 3,
     "noise_avg": "True",
-    "kernel": 25,
+    "kernel": 16,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
-    "overlap": 8,
+    "overlap": 4,
     "sharpening_factor": 1,
 
     # network architecture
