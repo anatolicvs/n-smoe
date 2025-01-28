@@ -304,7 +304,7 @@ def main():
             util_common.mkdir(log_dir, delete=True, parents=True)
             util_common.mkdir(model_dir, delete=False, parents=True)
 
-    db_length = args.get("db_length", 1000000)
+    db_length = args.get("db_length", 100000)
     train_dataset = GeneralTrainFloder(
         hr_dir=args["train_hr_patchs"],
         sf=args["sf"],

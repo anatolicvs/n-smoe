@@ -900,7 +900,7 @@ class MoE_(Backbone[MoEConfig]):
         return out.clamp(min=0, max=1)
 
 
-class MoE(nn.Module):
+class MoE(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
         super(MoE, self).__init__()
         self.kernel = cfg.kernel
@@ -1031,7 +1031,7 @@ class MoE(nn.Module):
             C_full += eps_val * torch.eye(3, device=scale.device).view(1, 1, 1, 3, 3)
         return C_full
 
-    def gaussian_cauchy_kernel(
+    def gaussian_cauchy_kernel_einsum(
         self,
         x: torch.Tensor,
         mu: torch.Tensor,
@@ -1061,8 +1061,34 @@ class MoE(nn.Module):
         alpha_expanded = alpha.unsqueeze(-1).unsqueeze(-1)
         blended_kers = alpha_expanded * G_sigma + (1 - alpha_expanded) * C_csigma
         return blended_kers
-
-    def gaussian_kernel(
+    
+    def gaussian_cauchy_kernel(
+        self,
+        x: torch.Tensor,
+        mu: torch.Tensor,
+        Sigma_inv: torch.Tensor,
+        alpha: Optional[torch.Tensor] = None,
+        c: Optional[torch.Tensor] = None):
+        d = x - mu
+        x1 = d.unsqueeze(-2)
+        x2 = torch.matmul(Sigma_inv, d.unsqueeze(-1))
+        e = -0.5 * torch.matmul(x1, x2).squeeze(-1).squeeze(-1)
+        mx = e.max(dim=2, keepdim=True).values
+        e = e - mx
+        G_sigma = torch.exp(e)
+        norm_x = torch.linalg.norm(d, dim=-1)
+        H, W = norm_x.shape[-2], norm_x.shape[-1]
+        c_e = c.unsqueeze(-1).unsqueeze(-1).expand(-1, -1, -1, H, W)
+        diag = Sigma_inv[..., 0, 0]
+        denominator = c_e * diag.clamp(min=1e-8)
+        C_csigma = 1 / (1 + norm_x**2 / denominator)
+        a_e = alpha.unsqueeze(-1).unsqueeze(-1)
+        blend = a_e * G_sigma + (1 - a_e) * C_csigma
+        # s = blend.sum(dim=2, keepdim=True)
+        # b = blend / (s + 1e-8)
+        return blend
+    
+    def gaussian_kernel_einsum(
         self, x: torch.Tensor, mu: torch.Tensor, Sigma_inv: torch.Tensor
     ) -> torch.Tensor:
         x_sub_mu = x - mu
@@ -1073,6 +1099,18 @@ class MoE(nn.Module):
         max_exp_terms = torch.max(exp_terms, dim=2, keepdim=True).values
         exp_terms = exp_terms - max_exp_terms
         return torch.exp(exp_terms)
+
+    def gaussian_kernel(
+        self, x: torch.Tensor, mu: torch.Tensor, Sigma_inv: torch.Tensor
+    ) -> torch.Tensor:
+        d = x - mu
+        x1 = d.unsqueeze(-2)
+        x2 = torch.matmul(Sigma_inv, d.unsqueeze(-1))
+        e = -0.5 * torch.matmul(x1, x2).squeeze(-1).squeeze(-1)
+        mx = e.max(dim=2, keepdim=True).values
+        e = e - mx
+        G_sigma = torch.exp(e)
+        return G_sigma
 
     def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
         return self.forward_spatial(height, width, params)

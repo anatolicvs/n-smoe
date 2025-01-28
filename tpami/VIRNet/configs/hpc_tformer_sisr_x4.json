@@ -4,12 +4,12 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 192, 
-    "batch_size": 16, 
+    "batch_size": 512, 
     "epochs": 120,
     "lr": 2e-4, # 2e-4, 
     "lr_min": 1e-6, 
-    "print_freq": 100,
-    "num_workers": 64, 
+    "print_freq": 500,
+    "num_workers": 32, 
     "prefetch_factor": 2, 
     "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
     "resume": "",
@@ -52,6 +52,7 @@
     "add_jpeg": "True",
     "kernel_shift": "True",
     "downsampler": "Bicubic",
+    "db_length": 1000000,
 
     # degradation process
     "sf": 4,
