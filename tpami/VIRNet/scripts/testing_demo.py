@@ -15,8 +15,8 @@ from skimage import img_as_ubyte
 
 import torch
 
-from utils import util_image
-from utils import util_common
+from util import util_image
+from util import util_common
 
 def load_model(task, ckpt_path, sf=None):
     if task == 'denoising-syn':

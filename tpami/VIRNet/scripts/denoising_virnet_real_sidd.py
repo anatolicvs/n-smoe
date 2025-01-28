@@ -17,10 +17,10 @@ from skimage import img_as_float, img_as_ubyte
 from thop import profile
 from networks.VIRNet import VIRAttResUNet
 
-from utils import util_net
-from utils import util_image
-from utils import util_common
-from utils.util_opts import str2bool
+from util import util_net
+from util import util_image
+from util import util_common
+from util.util_opts import str2bool
 
 parser = argparse.ArgumentParser()
 parser.add_argument(

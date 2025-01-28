@@ -6,7 +6,7 @@ import torch
 from math import pi, log, sqrt
 import torch.nn.functional as F
 import torch.distributions as tdist
-from utils import util_sisr
+from util import util_sisr
 
 # from ResizeRight.resize_right import resize
 

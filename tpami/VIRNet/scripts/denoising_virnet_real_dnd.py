@@ -16,8 +16,8 @@ from dnd_submission_py.bundle_submissions import bundle_submissions_srgb
 
 from networks.VIRNet import VIRAttResUNet
 
-from utils import util_common
-from utils.util_opts import str2bool
+from util import util_common
+from util.util_opts import str2bool
 
 parser = argparse.ArgumentParser(prog='DND Test', description='optional parameters for test')
 parser.add_argument(

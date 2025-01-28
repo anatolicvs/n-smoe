@@ -12,12 +12,12 @@ from loss.ELBO_simple import elbo_sisr
 # from networks.VIRNet import VIRAttResUNetSR
 from datasets.SISRDatasets import GeneralTrainFloder, GeneralTest
 
-from utils import util_net
-from utils import util_sisr
-from utils import util_image
-from utils import util_denoising
-from utils import util_opts
-from utils import util_common
+from util import util_net
+from util import util_sisr
+from util import util_image
+from util import util_denoising
+from util import util_opts
+from util import util_common
 
 import torch
 import torch.nn as nn
@@ -41,6 +41,17 @@ from networks.network_moex import (
     KernelType,
 )
 
+from networks.network_tformer_moex import (
+    Autoencoder,
+    EncoderConfig,
+    MoEConfig,
+    BackboneResnetCfg,
+    AutoencoderConfig,
+    BackboneDinoCfg,
+    KernelType,
+)
+
+
 def init_dist(backend="nccl", **kwargs):
     if mp.get_start_method(allow_none=True) is None:
         mp.set_start_method("spawn")
@@ -63,6 +74,8 @@ def main():
     # set the available GPUs
     num_gpus = torch.cuda.device_count()
     args["dist"] = True if num_gpus > 1 else False
+    dir_path = Path(args["save_dir"])
+    args["save_dir"] = str(dir_path)
 
     # noise types
     noise_types_list = [
@@ -104,37 +117,88 @@ def main():
     #     noise_avg=(not util_opts.str2bool(args["add_jpeg"])),
     # ).cuda()
 
+    # encoder_cfg = EncoderConfig(
+    #     sigma_chn=args["sigma_chn"],
+    #     kernel_chn=args["kernel_chn"],
+    #     noise_cond=util_opts.str2bool(args["noise_cond"]),
+    #     kernel_cond=util_opts.str2bool(args["kernel_cond"]),
+    #     noise_avg=util_opts.str2bool(args["noise_avg"]),
+    #     model_channels=args["model_channels"],
+    #     num_res_blocks=args["num_res_blocks"],
+    #     attention_resolutions=args["attention_resolutions"],
+    #     dropout=args["dropout"],
+    #     channel_mult=tuple(args["channel_mult"]),
+    #     conv_resample=util_opts.str2bool(args["conv_resample"]),
+    #     dims=args["dims"],
+    #     use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
+    #     use_fp16=util_opts.str2bool(args["use_fp16"]),
+    #     num_heads=args["num_heads"],
+    #     num_head_channels=args["num_head_channels"],
+    #     resblock_updown=util_opts.str2bool(args["resblock_updown"]),
+    #     num_groups=args["num_groups"],
+    #     resample_2d=util_opts.str2bool(args["resample_2d"]),
+    #     scale_factor=args["sf"],
+    #     resizer_num_layers=args["resizer_num_layers"],
+    #     resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
+    #     activation=args["activation"],
+    #     rope_theta=args["rope_theta"],
+    #     attention_type=args["attention_type"],
+    # )
+
+    # decoder_cfg = MoEConfig(
+    #     kernel=args["kernel"],
+    #     sharpening_factor=args.get("sharpening_factor", 1),
+    #     kernel_type=KernelType(args["kernel_type"]),
+    # )
+
+    # autoencoder_cfg = AutoencoderConfig(
+    #     EncoderConfig=encoder_cfg,
+    #     DecoderConfig=decoder_cfg,
+    #     d_in=args["im_chn"],
+    #     phw=args["phw"],
+    #     overlap=args["overlap"],
+    #     dep_S=args["dep_S"],
+    #     dep_K=args["dep_K"],
+    # )
+
+    # net = Autoencoder(cfg=autoencoder_cfg)
+    # # net = torch.compile(net)
+    # net = net.cuda()
+
     encoder_cfg = EncoderConfig(
-        sigma_chn=args["sigma_chn"],
-        kernel_chn=args["kernel_chn"],
-        noise_cond=util_opts.str2bool(args["noise_cond"]),
-        kernel_cond=util_opts.str2bool(args["kernel_cond"]),
-        noise_avg=util_opts.str2bool(args["noise_avg"]),
-        model_channels=args["model_channels"],
-        num_res_blocks=args["num_res_blocks"],
-        attention_resolutions=args["attention_resolutions"],
+        embed_dim=args["embed_dim"],
+        depth=args["depth"],
+        heads=args["heads"],
+        dim_head=args["dim_head"],
+        mlp_dim=args["mlp_dim"],
         dropout=args["dropout"],
-        channel_mult=tuple(args["channel_mult"]),
-        conv_resample=util_opts.str2bool(args["conv_resample"]),
-        dims=args["dims"],
-        use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
-        use_fp16=util_opts.str2bool(args["use_fp16"]),
-        num_heads=args["num_heads"],
-        num_head_channels=args["num_head_channels"],
-        resblock_updown=util_opts.str2bool(args["resblock_updown"]),
-        num_groups=args["num_groups"],
-        resample_2d=util_opts.str2bool(args["resample_2d"]),
+        patch_size=args["patch_size"],
         scale_factor=args["sf"],
         resizer_num_layers=args["resizer_num_layers"],
         resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
         activation=args["activation"],
-        rope_theta=args["rope_theta"],
-        attention_type=args["attention_type"],
+        backbone_cfg=BackboneDinoCfg(
+            name="dino",
+            model=args[
+                "dino_model"
+            ],  # "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8",
+            backbone_cfg=BackboneResnetCfg(
+                name="resnet",
+                model=args["resnet_model"],  # "resnet18", "resnet50", "resnet101"
+                num_layers=args["resnet_num_layers"],
+                use_first_pool=util_opts.str2bool(args["resnet_use_first_pool"]),
+            ),
+        ),
+        kernel_chn=args["kernel_chn"],
+        sigma_chn=args["sigma_chn"],
+        noise_cond=util_opts.str2bool(args["noise_cond"]),
+        kernel_cond=util_opts.str2bool(args["kernel_cond"]),
+        noise_avg=util_opts.str2bool(args["noise_avg"]),
     )
 
     decoder_cfg = MoEConfig(
         kernel=args["kernel"],
-        sharpening_factor=args.get("sharpening_factor", 1),
+        sharpening_factor=args["sharpening_factor"],
         kernel_type=KernelType(args["kernel_type"]),
     )
 
@@ -201,7 +265,6 @@ def main():
     if args["dist"]:
         net = DDP(net, device_ids=[rank])  # wrap the network
 
-    # optimizer
     optimizer = optim.Adam(net.parameters(), lr=args["lr"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=args["epochs"], eta_min=args["lr_min"]
@@ -245,13 +308,14 @@ def main():
     else:
         args["epoch_start"] = 0
         if rank == 0:
-            util_common.mkdir(log_dir, delete=True)
-            util_common.mkdir(model_dir, delete=False)
+            util_common.mkdir(log_dir, delete=True, parents=True)
+            util_common.mkdir(model_dir, delete=False, parents=True)
 
+    db_length = args.get("db_length", 1000000)
     train_dataset = GeneralTrainFloder(
         hr_dir=args["train_hr_patchs"],
         sf=args["sf"],
-        length=10 * args["batch_size"],
+        length=db_length * args["batch_size"],
         hr_size=args["hr_size"],
         k_size=args["k_size"],
         kernel_shift=util_opts.str2bool(args["kernel_shift"]),

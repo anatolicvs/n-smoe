@@ -6,7 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from utils import util_net
+from util import util_net
 
 class AttLayer(nn.Module):
     def __init__(self, out_chn=64, extra_chn=4):

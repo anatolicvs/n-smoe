@@ -10,7 +10,7 @@ sys.path.append(str(Path(__file__).resolve().parents[2]))
 
 import torch
 import numpy as np
-from utils import util_image
+from util import util_image
 
 def pytorch_denoiser(denoiser, use_cuda, flip=False):
     def wrap_denoiser(Inoisy, nlf):

@@ -12,7 +12,7 @@ from pathlib import Path
 from skimage import img_as_float32
 import torch.utils.data as uData
 
-from utils import util_sisr, util_image
+from util import util_sisr, util_image
 from ResizeRight.resize_right import resize
 
 

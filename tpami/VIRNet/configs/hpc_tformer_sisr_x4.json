@@ -1,0 +1,73 @@
+{
+    # training settings
+    "im_chn": 3,    # Image channel
+    "sigma_chn": 1, # Number of channel for the estimated noise varaince map
+    "kernel_chn": 3,
+    "hr_size": 192, 
+    "batch_size": 16, 
+    "epochs": 120,
+    "lr": 2e-4, # 2e-4, 
+    "lr_min": 1e-6, 
+    "print_freq": 100,
+    "num_workers": 64, 
+    "prefetch_factor": 2, 
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
+    "resume": "",
+
+
+    # network N-SMoE
+    "embed_dim": 16,
+    "depth": 2,
+    "heads": 8, 
+    "dim_head": 16,
+    "mlp_dim": 16,
+    "dropout": 0.1,
+    "patch_size": 4,
+    "resizer_num_layers": 2,
+    "resizer_avg_pool": "False",
+    "activation": "LeakyReLU", 
+    "dino_model": "dino_vits16",
+    "resnet_model": "resnet18",
+    "resnet_num_layers": 2,
+    "resnet_use_first_pool": "True",
+    "kernel_chn": 3,
+    "noise_avg": "True",
+    "kernel": 16,
+    "kernel_type": "gaussian_cauchy",
+    "phw": 16,
+    "overlap": 4,
+    "sharpening_factor": 1,
+
+    # network architecture
+    "dep_S": 5,
+    "dep_K": 8,
+    "n_feat": [96, 160, 224], 
+    "n_resblocks": 2, 
+    "extra_mode": "Both",
+    "noise_cond": "True",
+    "kernel_cond": "True",
+
+    # training and validation data path
+    "train_hr_patchs": "/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR", 
+    "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
+    "add_jpeg": "False",
+    "kernel_shift": "False",
+    "downsampler": "Bicubic",
+
+    # degradation process
+    "sf": 4,
+    "k_size": 21,
+    "noise_level": [0.01, 15],
+    "noise_jpeg": [0.01, 10],
+
+    # hyper-parameters of our model
+    "eps2": 1e-5,
+    "r2": 1e-4,
+    "var_window": 9,
+    "kappa0": 50,
+    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    "clip_grad_R": 5e2,
+    "clip_grad_S": 1e2, 
+    "clip_grad_K": 5e2,
+    "clip_grad_Resizer": 1e2
+}

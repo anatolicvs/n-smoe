@@ -9,7 +9,7 @@ import numpy as np
 import scipy.io as sio
 
 sys.path.append(str(Path(__file__).parents[3]))
-from utils import util_sisr
+from util import util_sisr
 
 kernel_dir = Path('./test_data') / 'kernels_sisr'
 if not kernel_dir.exists():

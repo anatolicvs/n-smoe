@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
-from utils import util_net
+from util import util_net
 
 from .DnCNN import DnCNN
 from .KNet import KernelNet

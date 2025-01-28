@@ -15,7 +15,7 @@ from .nn import GroupNorm32, avg_pool_nd, checkpoint, conv_nd, zero_module
 from torch.compiler import compile
 from .DnCNN import DnCNN
 from .KNet import KernelNet
-from utils import util_net
+from util import util_net
 
 torch.set_float32_matmul_precision("high")
 

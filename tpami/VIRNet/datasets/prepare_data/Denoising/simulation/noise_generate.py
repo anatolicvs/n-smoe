@@ -12,8 +12,8 @@ import h5py as h5
 import numpy as np
 from skimage import img_as_float
 
-from utils import util_image
-from utils import util_denoising
+from util import util_image
+from util import util_denoising
 
 parser = argparse.ArgumentParser()
 # trainning settings
