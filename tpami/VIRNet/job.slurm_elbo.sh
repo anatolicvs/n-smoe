@@ -12,7 +12,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.4"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-2}  # Default to 4 if not set
+GPUS=${GPUS:-4}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -75,7 +75,7 @@ CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="8:00:00"
+TIME="48:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -89,7 +89,8 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 }
 
 PARTITION="c23g" # c23g_low
-STATES="idle,mixed"
+# STATES="idle,mixed"
+STATES="idle"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
@@ -132,7 +133,7 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v3/gaussian_cauchy" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
 
 if [ ! -d "$SAVE_DIR" ]; then
   mkdir -p "$SAVE_DIR" || {
@@ -163,22 +164,22 @@ cat <<-EOT > "$JOB_SCRIPT"
 export CC=gcc
 export CXX=g++
 
-module load CUDA/12.6.1
+# module load CUDA/12.6.1
 
 echo "Starting job at: \$(date)"
 nvidia-smi
 echo "GPUs available: \$(nvidia-smi --query-gpu=name --format=csv,noheader | wc -l)"
 
 # export TORCH_DISTRIBUTED_DEBUG=INFO
+export TF_ENABLE_ONEDNN_OPTS=0
 export TORCH_NCCL_BLOCKING_WAIT=1
-export NCCL_BLOCKING_WAIT=1
 export TORCH_NCCL_ASYNC_ERROR_HANDLING=1
 # export NCCL_DEBUG=INFO
 # export NCCL_DEBUG_SUBSYS=ALL
 export NCCL_TIMEOUT=1200
 # export TORCH_DISTRIBUTED_DEBUG=DETAIL
-export NCCL_P2P_LEVEL=PXB
-export NCCL_P2P_DISABLE=1
+# export NCCL_P2P_LEVEL=PXB
+# export NCCL_P2P_DISABLE=1
 
 WANDB_KEY_FILE="${WORKDIR}/wandb_api_key.txt"
 if [ -f "\$WANDB_KEY_FILE" ]; then

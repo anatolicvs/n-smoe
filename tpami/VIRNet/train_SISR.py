@@ -30,16 +30,15 @@ import torchvision.utils as vutils
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
-import torch.backends.cudnn as cudnn
 
 
-from networks.network_moex import (
-    EncoderConfig,
-    MoEConfig,
-    AutoencoderConfig,
-    Autoencoder,
-    KernelType,
-)
+# from networks.network_moex import (
+#     EncoderConfig,
+#     MoEConfig,
+#     AutoencoderConfig,
+#     Autoencoder,
+#     KernelType,
+# )
 
 from networks.network_tformer_moex import (
     Autoencoder,
@@ -90,18 +89,14 @@ def main():
         rank = dist.get_rank()
     else:
         rank = 0
-
+    device = torch.device(f'cuda:{rank % num_gpus}')
     # print the arg pamameters
     if rank == 0:
         for key, value in args.items():
             print("{:<20s}: {:s}".format(key, str(value)))
 
-    torch.cuda.init()
-    cudnn.enabled = True
-    cudnn.benchmark = True
-
-    torch.manual_seed(1234)
-    torch.cuda.manual_seed_all(1234)
+    # torch.manual_seed(1234)
+    # torch.cuda.manual_seed_all(1234)
 
     # build the model
     # net = VIRAttResUNetSR(
@@ -212,9 +207,7 @@ def main():
         dep_K=args["dep_K"],
     )
 
-    net = Autoencoder(cfg=autoencoder_cfg)
-    # net = torch.compile(net)
-    net = net.cuda()
+    net = Autoencoder(cfg=autoencoder_cfg).to(device)
 
     if rank == 0:
         print(
@@ -263,7 +256,7 @@ def main():
         )
         print(net)
     if args["dist"]:
-        net = DDP(net, device_ids=[rank])  # wrap the network
+        net = DDP(net, device_ids=[rank], find_unused_parameters=True)  # wrap the network
 
     optimizer = optim.Adam(net.parameters(), lr=args["lr"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -527,6 +520,34 @@ def main():
             )
             writer.add_scalar("Loss_epoch", loss_per_epoch["Loss"], epoch)
             print("-" * 105)
+        
+        # save model
+        if rank == 0:
+            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+            unique_id = str(uuid.uuid4())[:8]
+            save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
+            with open(save_path_model, "wb") as f:
+                torch.save(
+                    {
+                        "metadata": {
+                            "time_created": datetime.datetime.now().isoformat(),
+                            "uuid_short": uuid.uuid4().hex[:8],
+                        },
+                        "epoch": epoch + 1,
+                        "step": step + 1,
+                        "step_img": {
+                            x: step_img[x]
+                            for x in [
+                                "train",
+                            ]
+                            + noise_types_list
+                        },
+                        "model_state_dict": net.state_dict(),
+                    },
+                    f,
+                )
+            toc = time.time()
+            print("This epoch take time {:.2f}".format(toc - tic))
 
         # test stage
         if rank == 0:
@@ -620,33 +641,8 @@ def main():
                 print("-" * 60)
 
         scheduler.step()
-        # save model
-        if rank == 0:
-            timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-            unique_id = str(uuid.uuid4())[:8]
-            save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
-            with open(save_path_model, "wb") as f:
-                torch.save(
-                    {
-                        "metadata": {
-                            "time_created": datetime.datetime.now().isoformat(),
-                            "uuid_short": uuid.uuid4().hex[:8],
-                        },
-                        "epoch": epoch + 1,
-                        "step": step + 1,
-                        "step_img": {
-                            x: step_img[x]
-                            for x in [
-                                "train",
-                            ]
-                            + noise_types_list
-                        },
-                        "model_state_dict": net.state_dict(),
-                    },
-                    f,
-                )
-            toc = time.time()
-            print("This epoch take time {:.2f}".format(toc - tic))
+        
+        
 
     if rank == 0:
         writer.close()

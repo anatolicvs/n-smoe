@@ -24,7 +24,7 @@ from .KNet import KernelNet
 from .nn import normalization
 
 
-torch.set_float32_matmul_precision("high")
+# torch.set_float32_matmul_precision("high")
 
 backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
 
