@@ -12,7 +12,7 @@
     "num_workers": 32, 
     "prefetch_factor": 2, 
     "save_dir": "", 
-    "resume": "",
+    "resume": "/mnt/d/virnet_smoe/models/model_20250130-082102_85d310fa.pth",
 
 
     # network N-SMoE

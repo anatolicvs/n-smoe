@@ -685,7 +685,7 @@ def log_parameter_stats(p, epoch, batch_idx):
     )
 
 
-class MoE(Backbone[MoEConfig]):
+class MoE_1(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
         super().__init__(cfg)
         self.kernel = cfg.kernel
@@ -955,7 +955,7 @@ class MoE(Backbone[MoEConfig]):
         return self.forward_spatial(height, width, params)
 
 
-class MoE_2(Backbone[MoEConfig]):
+class MoE(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
         super(MoE, self).__init__(cfg)
         self.kernel = cfg.kernel
@@ -1161,16 +1161,16 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         self.overlap: int = cfg.overlap
 
         # MoE_1
-        if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
-            d_out = 16 * cfg.DecoderConfig.kernel * cfg.d_in
-        else:
-            d_out = 18 * cfg.DecoderConfig.kernel * cfg.d_in
+        # if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
+        #     d_out = 16 * cfg.DecoderConfig.kernel * cfg.d_in
+        # else:
+        #     d_out = 18 * cfg.DecoderConfig.kernel * cfg.d_in
 
         # MoE_2
-        # if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
-        #     d_out = (7 * cfg.d_in) * cfg.DecoderConfig.kernel
-        # else:
-        #     d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
+        if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
+            d_out = (7 * cfg.d_in) * cfg.DecoderConfig.kernel
+        else:
+            d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
 
         self.snet = DnCNN(
             in_channels=cfg.d_in,

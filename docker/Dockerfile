@@ -1,5 +1,5 @@
-FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
-
+FROM nvidia/cuda:12.8.0-cudnn-runtime-ubuntu24.04
+# FROM nvidia/cuda:12.5.1-runtime-ubuntu24.04
 ENV CUDA_HOME=/usr/local/cuda
 ENV PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:${PATH}
 ENV LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64:/usr/local/cuda/lib64:${LD_LIBRARY_PATH}:/opt/miniconda/envs/venv/lib:/opt/miniconda/envs/venv/lib/python3.11/site-packages/torch/lib
