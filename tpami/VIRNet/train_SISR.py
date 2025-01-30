@@ -40,7 +40,7 @@ import datetime, uuid
 #     KernelType,
 # )
 
-from networks.network_tformer_moex import (
+from networks.network_transformer_moex import (
     Autoencoder,
     EncoderConfig,
     MoEConfig,
@@ -89,7 +89,7 @@ def main():
         rank = dist.get_rank()
     else:
         rank = 0
-    device = torch.device(f'cuda:{rank % num_gpus}')
+    device = torch.device(f"cuda:{rank % num_gpus}")
     # print the arg pamameters
     if rank == 0:
         for key, value in args.items():
@@ -256,7 +256,9 @@ def main():
         )
         print(net)
     if args["dist"]:
-        net = DDP(net, device_ids=[rank], find_unused_parameters=True)  # wrap the network
+        net = DDP(
+            net, device_ids=[rank], find_unused_parameters=True
+        )  # wrap the network
 
     optimizer = optim.Adam(net.parameters(), lr=args["lr"])
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
@@ -520,7 +522,7 @@ def main():
             )
             writer.add_scalar("Loss_epoch", loss_per_epoch["Loss"], epoch)
             print("-" * 105)
-        
+
         # save model
         if rank == 0:
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -641,8 +643,6 @@ def main():
                 print("-" * 60)
 
         scheduler.step()
-        
-        
 
     if rank == 0:
         writer.close()
@@ -658,7 +658,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x4.json",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_tformer_sisr_x4.json",
         help="Path for the config file",
     )
     parser.add_argument(

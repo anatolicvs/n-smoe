@@ -39,7 +39,7 @@
     "kernel": 16,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
-    "overlap": 8,
+    "overlap": 4,
 
     # network architecture
     "dep_S": 5,

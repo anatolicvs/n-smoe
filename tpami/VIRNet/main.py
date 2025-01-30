@@ -12,7 +12,7 @@ from torch.profiler import profile, ProfilerActivity
 #     Autoencoder,
 # )
 
-from networks.network_tformer_moex import (
+from tpami.VIRNet.networks.network_tformer_moex_old import (
     Autoencoder,
     EncoderConfig,
     MoEConfig,

@@ -2,37 +2,38 @@
     # training settings
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
-    "hr_size": 192, 
+    "hr_size": 128, 
     "batch_size": 4, 
+    "db_length": 1000,
     "epochs": 120,
     "lr": 2e-04, # 2e-4,
     "lr_min": 1e-6, 
     "print_freq": 100,
-    "num_workers": 16, 
+    "num_workers": 32, 
     "prefetch_factor": 2, 
     "save_dir": "", 
     "resume": "",
 
 
     # network N-SMoE
-    "embed_dim": 16,
+    "embed_dim": 32,
     "depth": 2,
     "heads": 8, 
     "dim_head": 16,
-    "mlp_dim": 16,
+    "mlp_dim": 32,
     "dropout": 0.5,
     "patch_size": 4,
     "resizer_num_layers": 2,
     "resizer_avg_pool": "False",
-    "activation": "LeakyReLU", 
+    "activation": "GELU", 
     "dino_model": "dino_vits16",
     "resnet_model": "resnet18",
     "resnet_num_layers": 2,
-    "resnet_use_first_pool": "True",
+    "resnet_use_first_pool": "False",
     "kernel_chn": 3,
     "noise_avg": "True",
     "kernel": 16,
-    "kernel_type": "gaussian_cauchy",
+    "kernel_type": "gaussian",
     "phw": 16,
     "overlap": 4,
     "sharpening_factor": 1,
@@ -47,8 +48,8 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/d/dataset/samuel/gt",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
-    "val_hr_path": "./test_data/Set14", # *.bmp,
+    "train_hr_patchs": "/mnt/e/dataset/Flickr2K/Flickr2K_HR",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR | /mnt/d/dataset/samuel/gt
+    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",
