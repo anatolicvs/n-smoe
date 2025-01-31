@@ -6,13 +6,13 @@
     "batch_size": 4, 
     "db_length": 1000,
     "epochs": 120,
-    "lr": 2e-04, # 2e-4,
+    "lr": 1e-04, # 2e-4,
     "lr_min": 1e-6, 
     "print_freq": 100,
     "num_workers": 32, 
     "prefetch_factor": 2, 
     "save_dir": "", 
-    "resume": "/mnt/d/virnet_smoe/models/model_20250130-082102_85d310fa.pth",
+    "resume": "",
 
 
     # network N-SMoE
@@ -32,7 +32,7 @@
     "resnet_use_first_pool": "False",
     "kernel_chn": 3,
     "noise_avg": "True",
-    "kernel": 16,
+    "kernel": 9,
     "kernel_type": "gaussian",
     "phw": 16,
     "overlap": 4,

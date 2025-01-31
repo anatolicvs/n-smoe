@@ -675,17 +675,527 @@ class Gaussians:
     scale: Optional[torch.Tensor] = None
 
 
-def log_parameter_stats(p, epoch, batch_idx):
-    p_mean = p.mean().item()
-    p_std = p.std().item()
-    p_min = p.min().item()
-    p_max = p.max().item()
-    print(
-        f"Epoch {epoch}, Batch {batch_idx}: mean={p_mean:.4f}, std={p_std:.4f}, min={p_min:.4f}, max={p_max:.4f}"
-    )
+class MoE(nn.Module):
+    def __init__(self, cfg: MoEConfig):
+        super().__init__()
+        self.kernel = cfg.kernel
+        self.sharpening_factor = cfg.sharpening_factor
+        self.kernel_type = cfg.kernel_type
+        self.min_diag = 1e-6
+        self.min_denominator = 1e-8
+
+    def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
+        xx = torch.linspace(0.0, 1.0, width, device=device)  # [W]
+        yy = torch.linspace(0.0, 1.0, height, device=device)  # [H]
+        gx, gy = torch.meshgrid(xx, yy, indexing="ij")  # gx: [W, H], gy: [W, H]
+        grid = torch.stack((gx, gy), dim=-1)  # [W, H, 2]
+        return grid.float()  # [W, H, 2]
+
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+        ct = torch.cos(theta).unsqueeze(-1)  # [B, ch, k, 1]
+        st = torch.sin(theta).unsqueeze(-1)  # [B, ch, k, 1]
+        R = torch.cat([ct, -st, st, ct], dim=-1)  # [B, ch, k, 4]
+        return R.view(*theta.shape, 2, 2)  # [B, ch, k, 2, 2]
+
+    def construct_lower_triangular_size1(self, params: torch.Tensor) -> torch.Tensor:
+        # params: [B, ch, k, 1]
+        L = torch.zeros(
+            params.size(0),
+            params.size(1),
+            params.size(2),
+            1,
+            1,
+            device=params.device,
+            dtype=params.dtype,
+        )  # [B, ch, k, 1, 1]
+        L[..., 0, 0] = F.softplus(params[..., 0]) + self.min_diag  # [B, ch, k]
+        return L  # [B, ch, k, 1, 1]
+
+    def construct_lower_triangular_size2(self, params: torch.Tensor) -> torch.Tensor:
+        # params: [B, ch, k, 3]
+        l11, l21, l22 = torch.split(params, 1, dim=-1)  # Each: [B, ch, k, 1]
+        l11 = F.softplus(l11) + self.min_diag  # [B, ch, k, 1]
+        l22 = F.softplus(l22) + self.min_diag  # [B, ch, k, 1]
+        L = torch.zeros(
+            params.size(0),
+            params.size(1),
+            params.size(2),
+            2,
+            2,
+            device=params.device,
+            dtype=params.dtype,
+        )  # [B, ch, k, 2, 2]
+        L[..., 0, 0] = l11.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 0] = l21.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 1] = l22.squeeze(-1)  # [B, ch, k]
+        return L  # [B, ch, k, 2, 2]
+
+    def construct_lower_triangular_size3(self, params: torch.Tensor) -> torch.Tensor:
+        # params: [B, ch, k, 6]
+        l11, l21, l22, l31, l32, l33 = torch.split(
+            params, 1, dim=-1
+        )  # Each: [B, ch, k, 1]
+        l11 = F.softplus(l11) + self.min_diag  # [B, ch, k, 1]
+        l22 = F.softplus(l22) + self.min_diag  # [B, ch, k, 1]
+        l33 = F.softplus(l33) + self.min_diag  # [B, ch, k, 1]
+        L = torch.zeros(
+            params.size(0),
+            params.size(1),
+            params.size(2),
+            3,
+            3,
+            device=params.device,
+            dtype=params.dtype,
+        )  # [B, ch, k, 3, 3]
+        L[..., 0, 0] = l11.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 0] = l21.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 1] = l22.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 0] = l31.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 1] = l32.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 2] = l33.squeeze(-1)  # [B, ch, k]
+        return L  # [B, ch, k, 3, 3]
+
+    def construct_lower_triangular(
+        self, params: torch.Tensor, size: int
+    ) -> torch.Tensor:
+        if size == 1:
+            return self.construct_lower_triangular_size1(params)  # [B, ch, k, 1, 1]
+        elif size == 2:
+            return self.construct_lower_triangular_size2(params)  # [B, ch, k, 2, 2]
+        elif size == 3:
+            return self.construct_lower_triangular_size3(params)  # [B, ch, k, 3, 3]
+        else:
+            raise ValueError(
+                f"Unsupported size: {size}. Only size=1, 2, and 3 are supported."
+            )
+
+    def cov_mat(
+        self,
+        L_spatial: torch.Tensor,
+        theta_xy: torch.Tensor,
+        L_color: torch.Tensor,
+        ch: int,
+    ) -> torch.Tensor:
+        # L_spatial: [B, ch, k, 2, 2]
+        # theta_xy: [B, ch, k]
+        # L_color: [B, ch, k, size, size]
+        R = self.ang_to_rot_mat(theta_xy)  # [B, ch, k, 2, 2]
+        C_xy = torch.matmul(
+            R, torch.matmul(L_spatial, L_spatial.transpose(-2, -1))
+        )  # [B, ch, k, 2, 2]
+        C_xy = torch.matmul(C_xy, R.transpose(-2, -1))  # [B, ch, k, 2, 2]
+        if ch == 1:
+            C_color = torch.matmul(L_color, L_color.transpose(-2, -1))  # [B,1,k,1,1]
+            B_, ch_, k_, _, _ = C_xy.shape
+            C_full = torch.zeros(
+                B_, ch_, k_, 3, 3, device=C_xy.device, dtype=C_xy.dtype
+            )  # [B,1,k,3,3]
+            C_full[..., :2, :2] = C_xy  # [B,1,k,2,2]
+            C_full[..., 2, 2] = C_color.squeeze(-1)  # [B,1,k]
+        elif ch == 3:
+            C_color = torch.matmul(L_color, L_color.transpose(-2, -1))  # [B,3,k,3,3]
+            B_, ch_, k_, _, _ = C_xy.shape
+            C_full = torch.zeros(
+                B_, ch_, k_, 5, 5, device=C_xy.device, dtype=C_xy.dtype
+            )  # [B,3,k,5,5]
+            C_full[..., :2, :2] = C_xy  # [B,3,k,2,2]
+            C_full[..., 2:, 2:] = C_color  # [B,3,k,3,3]
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
+        return C_full * self.sharpening_factor  # [B, ch, k, D, D]
+
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+    ]:
+        # p: [B, ch, k * param_per_kernel]
+        B, _, _ = p.shape
+        p = p.view(B, ch, k, -1)  # [B, ch, k, param_per_kernel]
+        if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            mu_x = p[..., 0].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
+            L_spatial = self.construct_lower_triangular(
+                L_spatial_params, size=2
+            )  # [B, ch, k, 2, 2]
+            theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
+                2 * torch.pi
+            ) - torch.pi  # [B, ch, k]
+            w = F.softmax(p[..., 6].reshape(B, ch, k), dim=-1)  # [B, ch, k]
+            alpha = torch.sigmoid(p[..., 7].reshape(B, ch, k))  # [B, ch, k]
+            c = F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag  # [B, ch, k]
+            if ch == 1:
+                L_color_params = p[..., 9:10].reshape(B, ch, k, 1)  # [B,1,k,1]
+                color_mean = torch.zeros_like(mu_x)  # [B,1,k,1]
+            elif ch == 3:
+                L_color_params = p[..., 9:15].reshape(B, ch, k, 6)  # [B,3,k,6]
+                color_mean = p[..., 15:18].reshape(B, ch, k, 3)  # [B,3,k,3]
+            else:
+                raise ValueError(f"Unsupported number of channels: {ch}")
+            color_cov_size = 1 if ch == 1 else 3
+            L_color = self.construct_lower_triangular(
+                L_color_params, size=color_cov_size
+            )  # [B, ch, k, size, size]
+            mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
+            cov_matrix = self.cov_mat(
+                L_spatial, theta_xy, L_color, ch
+            )  # [B, ch, k, D, D]
+            return mu_xy, cov_matrix, w, alpha, c
+        elif self.kernel_type == KernelType.GAUSSIAN:
+            mu_x = p[..., 0].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
+            L_spatial = self.construct_lower_triangular(
+                L_spatial_params, size=2
+            )  # [B, ch, k, 2, 2]
+            theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
+                2 * torch.pi
+            ) - torch.pi  # [B, ch, k]
+            w = F.softmax(p[..., 6].reshape(B, ch, k), dim=-1)  # [B, ch, k]
+            alpha = None
+            c = None
+            if ch == 1:
+                L_color_params = p[..., 7:8].reshape(B, ch, k, 1)  # [B,1,k,1]
+                color_mean = torch.zeros_like(mu_x)  # [B,1,k,1]
+            elif ch == 3:
+                L_color_params = p[..., 7:13].reshape(B, ch, k, 6)  # [B,3,k,6]
+                color_mean = p[..., 13:16].reshape(B, ch, k, 3)  # [B,3,k,3]
+            else:
+                raise ValueError(f"Unsupported number of channels: {ch}")
+            color_cov_size = 1 if ch == 1 else 3
+            L_color = self.construct_lower_triangular(
+                L_color_params, size=color_cov_size
+            )  # [B, ch, k, size, size]
+            mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
+            cov_matrix = self.cov_mat(
+                L_spatial, theta_xy, L_color, ch
+            )  # [B, ch, k, D, D]
+            return mu_xy, cov_matrix, w, alpha, c
+        else:
+            raise NotImplementedError(
+                f"Kernel type {self.kernel_type} not implemented."
+            )
+
+    def gaussian_cauchy_kernel(
+        self,
+        x: torch.Tensor,
+        mu: torch.Tensor,
+        Sigma_inv: torch.Tensor,
+        alpha: Optional[torch.Tensor],
+        c: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        # x: [B, ch, k, W, H, D]
+        # mu: [B, ch, k, 1, 1, D]
+        # Sigma_inv: [B, ch, k, D, D]
+        # alpha: [B, ch, k]
+        # c: [B, ch, k]
+        d = x - mu  # [B, ch, k, W, H, D]
+        e = -0.5 * torch.einsum(
+            "bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv, d
+        )  # [B, ch, k, W, H]
+        mx = e.max(dim=2, keepdim=True).values  # [B, ch, 1, W, H]
+        e = e - mx  # [B, ch, k, W, H]
+        G_sigma = torch.exp(e)  # [B, ch, k, W, H]
+        norm_x = torch.linalg.norm(d[..., :2], dim=-1)  # [B, ch, k, W, H]
+        denominator = c.unsqueeze(-1).unsqueeze(-1) * Sigma_inv[..., 0, 0].clamp(
+            min=self.min_diag
+        )  # [B, ch, k, 1, 1]
+        denominator = denominator.clamp(min=self.min_denominator)  # [B, ch, k, 1, 1]
+        C_csigma = 1.0 / (1.0 + norm_x**2 / denominator)  # [B, ch, k, W, H]
+        combined = (
+            alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma
+            + (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
+        )  # [B, ch, k, W, H]
+        return combined  # [B, ch, k, W, H]
+
+    def gaussian_kernel(
+        self, x: torch.Tensor, mu_spatial: torch.Tensor, Sigma_inv_spatial: torch.Tensor
+    ) -> torch.Tensor:
+        # x: [B, ch, k, W, H, 2]
+        # mu_spatial: [B, ch, k, 1, 1, 2]
+        # Sigma_inv_spatial: [B, ch, k, 2, 2]
+        d = x - mu_spatial  # [B, ch, k, W, H, 2]
+        e = -0.5 * torch.einsum(
+            "bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv_spatial, d
+        )  # [B, ch, k, W, H]
+        mx = e.max(dim=2, keepdim=True).values  # [B, ch, 1, W, H]
+        e = e - mx  # [B, ch, k, W, H]
+        G_sigma = torch.exp(e)  # [B, ch, k, W, H]
+        return G_sigma  # [B, ch, k, W, H]
+
+    def forward_spatial(
+        self, height: int, width: int, params: torch.Tensor
+    ) -> torch.Tensor:
+        # params: [B, ch, k * param_per_kernel]
+        B, ch, _ = params.shape
+        k = self.kernel
+        mu_xy, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+        # mu_xy: [B, ch, k, D]
+        # cov_matrix: [B, ch, k, D, D]
+        # w: [B, ch, k]
+        # alpha: [B, ch, k] or None
+        # c: [B, ch, k] or None
+
+        d = cov_matrix.shape[-1]  # D=3 or 5
+        eye_d = torch.eye(d, device=cov_matrix.device).view(
+            1, 1, 1, d, d
+        )  # [1,1,1,D,D]
+        cov_matrix_reg = cov_matrix + (self.min_diag + 1e-3) * eye_d  # [B, ch, k, D, D]
+        L = torch.linalg.cholesky(cov_matrix_reg)  # [B, ch, k, D, D]
+        Sigma_inv = torch.cholesky_inverse(L)  # [B, ch, k, D, D]
+        Sigma_inv = 0.5 * (Sigma_inv + Sigma_inv.transpose(-2, -1))  # [B, ch, k, D, D]
+
+        g = self.grid(height, width, params.device)  # [W, H, 2]
+        g_expanded = g.unsqueeze(0).unsqueeze(0).unsqueeze(2)  # [1,1,1,W,H,2]
+        g_expanded = g_expanded.repeat(B, ch, k, 1, 1, 1)  # [B, ch, k, W, H, 2]
+
+        mu_full = mu_xy[..., :2].unsqueeze(-2).unsqueeze(-2)  # [B, ch, k, 1, 1, 2]
+
+        if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            ker = self.gaussian_cauchy_kernel(
+                g_expanded, mu_full, Sigma_inv, alpha, c
+            )  # [B, ch, k, W, H]
+        else:
+            mu_spatial = mu_xy[..., :2].reshape(
+                B, ch, k, 1, 1, 2
+            )  # [B, ch, k, 1, 1, 2]
+            Sigma_inv_spatial = Sigma_inv[..., :2, :2]  # [B, ch, k, 2, 2]
+            ker = self.gaussian_kernel(
+                g_expanded, mu_spatial, Sigma_inv_spatial
+            )  # [B, ch, k, W, H]
+
+        detJ = torch.det(Sigma_inv).sqrt()  # [B, ch, k]
+        ker = ker * detJ.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, W, H]
+
+        mu_spatial = mu_xy[..., :2]  # [B, ch, k, 2]
+        mu_spatial_expanded = mu_spatial.unsqueeze(-2).unsqueeze(
+            -2
+        )  # [B, ch, k, 1, 1, 2]
+        distance_sq = torch.sum(
+            (g_expanded - mu_spatial_expanded) ** 2, dim=-1
+        )  # [B, ch, k, W, H]
+
+        sigma_w = 0.1  # Scalar hyperparameter
+        w_spatial = torch.exp(-distance_sq / (2 * sigma_w**2))  # [B, ch, k, W, H]
+        w_spatial = F.softmax(w_spatial, dim=2)  # [B, ch, k, W, H]
+
+        ker = ker * w_spatial  # [B, ch, k, W, H]
+        ker_sum = ker.sum(dim=2, keepdim=True)  # [B, ch, 1, W, H]
+        ker = ker / (ker_sum + 1e-8)  # [B, ch, k, W, H]
+        out = ker.sum(dim=2)  # [B, ch, W, H]
+        return torch.clamp(out, min=0.0, max=1.0)  # [B, ch, W, H]
+
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        return self.forward_spatial(height, width, params)
 
 
-class MoE_1(Backbone[MoEConfig]):
+@dataclass
+class AutoencoderConfig:
+    EncoderConfig: EncoderConfig
+    DecoderConfig: MoEConfig
+    d_in: int
+    dep_S: int
+    dep_K: int
+    d_out: Optional[int] = None
+    phw: int = 32
+    overlap: int = 24
+
+
+class Autoencoder(Backbone[AutoencoderConfig]):
+    def __init__(self, cfg: AutoencoderConfig) -> None:
+        super().__init__(cfg)
+        self.phw: int = cfg.phw
+        self.overlap: int = cfg.overlap
+
+        # MoE_1
+        d_out = self.num_params(
+            cfg.DecoderConfig.kernel_type, cfg.d_in, cfg.DecoderConfig.kernel
+        )
+
+        # MoE_2
+        # if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
+        #     d_out = (7 * cfg.d_in) * cfg.DecoderConfig.kernel
+        # else:
+        #     d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
+
+        self.snet = DnCNN(
+            in_channels=cfg.d_in,
+            out_channels=cfg.EncoderConfig.sigma_chn,
+            dep=cfg.dep_S,
+            noise_avg=cfg.EncoderConfig.noise_avg,
+        )
+        self.knet = KernelNet(
+            in_nc=cfg.d_in,
+            out_chn=cfg.EncoderConfig.kernel_chn,
+            num_blocks=cfg.dep_K,
+        )
+
+        self.encoder = Encoder(
+            cfg=cfg.EncoderConfig, phw=cfg.phw, d_in=cfg.d_in, d_out=d_out
+        )
+        self.decoder = MoE(cfg=cfg.DecoderConfig)
+
+    @staticmethod
+    def hann_window(
+        block_size: int, C: int, step: int, device: torch.device
+    ) -> torch.Tensor:
+        hann_1d = torch.hann_window(block_size, periodic=False, device=device)
+        hann_2d = hann_1d.unsqueeze(1) * hann_1d.unsqueeze(0)
+        window = hann_2d.view(1, 1, block_size * block_size)
+        window = window.repeat(C, 1, 1)
+        window = window.view(1, C * block_size * block_size, 1)
+        window = window * (
+            step / block_size
+        )  # Dynamic scaling based on step and block_size
+        return window
+
+    @staticmethod
+    def num_params(kernel_type: KernelType, ch: int, kernel: int) -> int:
+        if kernel_type == KernelType.GAUSSIAN:
+            if ch == 1:
+                params_per_kernel = 8
+            elif ch == 3:
+                params_per_kernel = 17
+            else:
+                raise ValueError(
+                    "Unsupported number of channels. Supported values: 1 (Grayscale), 3 (RGB)."
+                )
+        elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            if ch == 1:
+                params_per_kernel = 9
+            elif ch == 3:
+                params_per_kernel = 18
+            else:
+                raise ValueError(
+                    "Unsupported number of channels. Supported values: 1 (Grayscale), 3 (RGB)."
+                )
+        else:
+            raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
+
+        return kernel * params_per_kernel
+
+    def extract_blocks(
+        self, img_tensor: torch.Tensor, block_size: int, overlap: int
+    ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
+        B, C, H, W = img_tensor.shape
+        step = block_size - overlap
+        pad = (block_size - step) // 2 + step
+        img_padded = F.pad(img_tensor, (pad, pad, pad, pad), mode="reflect")
+        patches = F.unfold(img_padded, kernel_size=block_size, stride=step)
+        window = self.hann_window(block_size, C, step, img_tensor.device)
+        L = patches.shape[-1]
+        window = window.repeat(1, 1, L)
+        patches = patches * window
+        patches = (
+            patches.view(B, C, block_size, block_size, L)
+            .permute(0, 4, 1, 2, 3)
+            .contiguous()
+        )
+        return patches, (B, L, C, H, W, pad)
+
+    def reconstruct(
+        self,
+        decoded_patches: torch.Tensor,
+        dims: Tuple[int, int, int, int, int, int],
+        block_size_out: int,
+        overlap_out: int,
+    ) -> torch.Tensor:
+        B, L, C, H, W, pad_out = dims
+        step_out = block_size_out - overlap_out
+
+        decoded_patches = (
+            decoded_patches.reshape(B, L, C * block_size_out * block_size_out)
+            .permute(0, 2, 1)
+            .contiguous()
+        )
+
+        recon_padded = F.fold(
+            decoded_patches,
+            output_size=(H + 2 * pad_out, W + 2 * pad_out),
+            kernel_size=block_size_out,
+            stride=step_out,
+        )
+
+        window = self.hann_window(block_size_out, C, step_out, decoded_patches.device)
+        window_sum = F.fold(
+            torch.ones_like(decoded_patches) * window,
+            output_size=(H + 2 * pad_out, W + 2 * pad_out),
+            kernel_size=block_size_out,
+            stride=step_out,
+        )
+        recon_padded = recon_padded / window_sum.clamp_min(1e-8)
+        recon = recon_padded[:, :, pad_out : pad_out + H, pad_out : pad_out + W]
+
+        return recon
+
+    @staticmethod
+    def mem_lim():
+        if torch.cuda.is_available():
+            device = torch.cuda.current_device()
+            torch.cuda.set_device(device)
+            free_mem, tot_mem = torch.cuda.mem_get_info(device)
+            thresholds = [0.9, 0.8, 0.7]
+            for percent in thresholds:
+                threshold = tot_mem * percent
+                if free_mem > threshold:
+                    return threshold
+            return max(1 * 2**30, tot_mem * 0.05)
+        return 1 * 2**30
+
+    def forward(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
+
+        if x_p.ndim == 5:
+            x_p = x_p.reshape(-1, *x_p.shape[2:])
+
+        es: int = x_p.element_size()
+        ml = self.mem_lim()
+        bm: int = x_p.shape[1:].numel() * es
+        mx_bs = ml // bm
+        n: int = int(max(1, min(x_p.shape[0] // 1024, mx_bs)))
+        cs: int = int((x_p.shape[0] + n - 1) // n)
+
+        res = [
+            self.encoder(chunk, self.snet(chunk), self.knet(chunk))
+            for chunk in torch.split(x_p, cs)
+        ]
+
+        gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
+
+        B, L, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
+        sp: int = self.phw * self.encoder.scale_factor
+
+        dec: torch.Tensor = torch.cat(
+            [self.decoder(sp, sp, bt) for bt in torch.split(gaussians, cs)], dim=0
+        )
+
+        y: torch.Tensor = self.reconstruct(
+            dec,
+            (
+                B,
+                L,
+                C,
+                H * self.encoder.scale_factor,
+                W * self.encoder.scale_factor,
+                pad * self.encoder.scale_factor,
+            ),
+            sp,
+            self.overlap * self.encoder.scale_factor,
+        )  # => (B, C, H, W)
+
+        kinfo = kinfo.view(B, L, -1).mean(dim=1)
+        sigma = sigma.view(B, L, 1, 1, 1).mean(dim=1)
+
+        return y, kinfo, sigma
+
+
+class MoE_0(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
         super().__init__(cfg)
         self.kernel = cfg.kernel
@@ -731,7 +1241,6 @@ class MoE_1(Backbone[MoEConfig]):
             F.softplus(L[..., indices[0][diag_mask], indices[1][diag_mask]]) + 1e-2
         )
 
-        # Ensure diagonals are sufficiently large
         L[..., indices[0][diag_mask], indices[1][diag_mask]] = torch.clamp(
             L[..., indices[0][diag_mask], indices[1][diag_mask]], min=1e-3
         )
@@ -955,9 +1464,9 @@ class MoE_1(Backbone[MoEConfig]):
         return self.forward_spatial(height, width, params)
 
 
-class MoE(Backbone[MoEConfig]):
+class MoE_2(Backbone[MoEConfig]):
     def __init__(self, cfg: MoEConfig):
-        super(MoE, self).__init__(cfg)
+        super().__init__(cfg)
         self.kernel = cfg.kernel
         self.sharpening_factor = cfg.sharpening_factor
         self.kernel_type = cfg.kernel_type
@@ -1142,180 +1651,290 @@ class MoE(Backbone[MoEConfig]):
         return torch.clamp(out, min=0.0, max=1.0)
 
 
-@dataclass
-class AutoencoderConfig:
-    EncoderConfig: EncoderConfig
-    DecoderConfig: MoEConfig
-    d_in: int
-    dep_S: int
-    dep_K: int
-    d_out: Optional[int] = None
-    phw: int = 32
-    overlap: int = 24
+class MoE_3(nn.Module):
+    def __init__(self, cfg: MoEConfig):
+        super().__init__()
+        self.kernel = cfg.kernel
+        self.sharpening_factor = cfg.sharpening_factor
+        self.kernel_type = cfg.kernel_type
+        self.min_diag = 1e-6
+        self.min_denominator = 1e-8
 
+    def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
+        xx = torch.linspace(0.0, 1.0, width, device=device)  # [W]
+        yy = torch.linspace(0.0, 1.0, height, device=device)  # [H]
+        gx, gy = torch.meshgrid(xx, yy, indexing="ij")  # Each [W, H]
+        grid = torch.stack((gx, gy), dim=-1)  # [W, H, 2]
+        return grid.float()  # [W, H, 2]
 
-class Autoencoder(Backbone[AutoencoderConfig]):
-    def __init__(self, cfg: AutoencoderConfig) -> None:
-        super().__init__(cfg)
-        self.phw: int = cfg.phw
-        self.overlap: int = cfg.overlap
+    def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
+        ct = torch.cos(theta).unsqueeze(-1)  # [B, ch, k, 1]
+        st = torch.sin(theta).unsqueeze(-1)  # [B, ch, k, 1]
+        R = torch.cat([ct, -st, st, ct], dim=-1)  # [B, ch, k, 4]
+        return R.view(*theta.shape, 2, 2)  # [B, ch, k, 2, 2]
 
-        # MoE_1
-        # if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
-        #     d_out = 16 * cfg.DecoderConfig.kernel * cfg.d_in
-        # else:
-        #     d_out = 18 * cfg.DecoderConfig.kernel * cfg.d_in
+    def construct_lower_triangular_size1(self, params: torch.Tensor) -> torch.Tensor:
+        B, ch, k, _ = params.shape  # [B, ch, k, 1]
+        L = torch.zeros(
+            B, ch, k, 1, 1, device=params.device, dtype=params.dtype
+        )  # [B, ch, k, 1, 1]
+        L[..., 0, 0] = F.softplus(params[..., 0]) + 1e-2  # [B, ch, k]
+        return L  # [B, ch, k, 1, 1]
 
-        # MoE_2
-        if cfg.DecoderConfig.kernel_type == KernelType.GAUSSIAN:
-            d_out = (7 * cfg.d_in) * cfg.DecoderConfig.kernel
+    def construct_lower_triangular_size2(self, params: torch.Tensor) -> torch.Tensor:
+        B, ch, k, _ = params.shape  # [B, ch, k, 3]
+        l11, l21, l22 = torch.split(params, 1, dim=-1)  # Each [B, ch, k, 1]
+        l11 = F.softplus(l11) + 1e-2  # [B, ch, k, 1]
+        l22 = F.softplus(l22) + 1e-2  # [B, ch, k, 1]
+        L = torch.zeros(
+            B, ch, k, 2, 2, device=params.device, dtype=params.dtype
+        )  # [B, ch, k, 2, 2]
+        L[..., 0, 0] = l11.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 0] = l21.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 1] = l22.squeeze(-1)  # [B, ch, k]
+        return L  # [B, ch, k, 2, 2]
+
+    def construct_lower_triangular_size3(self, params: torch.Tensor) -> torch.Tensor:
+        B, ch, k, _ = params.shape  # [B, ch, k, 6]
+        l11, l21, l22, l31, l32, l33 = torch.split(
+            params, 1, dim=-1
+        )  # Each [B, ch, k, 1]
+        l11 = F.softplus(l11) + 1e-2  # [B, ch, k, 1]
+        l22 = F.softplus(l22) + 1e-2  # [B, ch, k, 1]
+        l33 = F.softplus(l33) + 1e-2  # [B, ch, k, 1]
+        L = torch.zeros(
+            B, ch, k, 3, 3, device=params.device, dtype=params.dtype
+        )  # [B, ch, k, 3, 3]
+        L[..., 0, 0] = l11.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 0] = l21.squeeze(-1)  # [B, ch, k]
+        L[..., 1, 1] = l22.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 0] = l31.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 1] = l32.squeeze(-1)  # [B, ch, k]
+        L[..., 2, 2] = l33.squeeze(-1)  # [B, ch, k]
+        return L  # [B, ch, k, 3, 3]
+
+    def construct_lower_triangular(
+        self, params: torch.Tensor, size: int
+    ) -> torch.Tensor:
+        if size == 1:
+            return self.construct_lower_triangular_size1(params)  # [B, ch, k, 1, 1]
+        elif size == 2:
+            return self.construct_lower_triangular_size2(params)  # [B, ch, k, 2, 2]
+        elif size == 3:
+            return self.construct_lower_triangular_size3(params)  # [B, ch, k, 3, 3]
         else:
-            d_out = (7 * cfg.d_in + 3) * cfg.DecoderConfig.kernel
+            raise ValueError(
+                f"Unsupported size: {size}. Only size=1, 2, and 3 are supported."
+            )
 
-        self.snet = DnCNN(
-            in_channels=cfg.d_in,
-            out_channels=cfg.EncoderConfig.sigma_chn,
-            dep=cfg.dep_S,
-            noise_avg=cfg.EncoderConfig.noise_avg,
-        )
-        self.knet = KernelNet(
-            in_nc=cfg.d_in,
-            out_chn=cfg.EncoderConfig.kernel_chn,
-            num_blocks=cfg.dep_K,
-        )
-
-        self.encoder = Encoder(
-            cfg=cfg.EncoderConfig, phw=cfg.phw, d_in=cfg.d_in, d_out=d_out
-        )
-        self.decoder = MoE(cfg=cfg.DecoderConfig)
-
-    @staticmethod
-    def hann_window(
-        block_size: int, C: int, step: int, device: torch.device
-    ) -> torch.Tensor:
-        hann_1d = torch.hann_window(block_size, periodic=False, device=device)
-        hann_2d = hann_1d.unsqueeze(1) * hann_1d.unsqueeze(0)
-        window = hann_2d.view(1, 1, block_size * block_size)
-        window = window.repeat(C, 1, 1)
-        window = window.view(1, C * block_size * block_size, 1)
-        window = window * (
-            step / block_size
-        )  # Dynamic scaling based on step and block_size
-        return window
-
-    def extract_blocks(
-        self, img_tensor: torch.Tensor, block_size: int, overlap: int
-    ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
-        B, C, H, W = img_tensor.shape
-        step = block_size - overlap
-        pad = (block_size - step) // 2 + step
-        img_padded = F.pad(img_tensor, (pad, pad, pad, pad), mode="reflect")
-        patches = F.unfold(img_padded, kernel_size=block_size, stride=step)
-        window = self.hann_window(block_size, C, step, img_tensor.device)
-        L = patches.shape[-1]
-        window = window.repeat(1, 1, L)
-        patches = patches * window
-        patches = (
-            patches.view(B, C, block_size, block_size, L)
-            .permute(0, 4, 1, 2, 3)
-            .contiguous()
-        )
-        return patches, (B, L, C, H, W, pad)
-
-    def reconstruct(
+    def cov_mat(
         self,
-        decoded_patches: torch.Tensor,
-        dims: Tuple[int, int, int, int, int, int],
-        block_size_out: int,
-        overlap_out: int,
+        L_spatial: torch.Tensor,
+        theta_xy: torch.Tensor,
+        L_color: torch.Tensor,
+        ch: int,
     ) -> torch.Tensor:
-        B, L, C, H, W, pad_out = dims
-        step_out = block_size_out - overlap_out
+        R = self.ang_to_rot_mat(theta_xy)  # [B, ch, k, 2, 2]
+        C_xy = torch.matmul(
+            R, torch.matmul(L_spatial, L_spatial.transpose(-2, -1))
+        )  # [B, ch, k, 2, 2]
+        C_xy = torch.matmul(C_xy, R.transpose(-2, -1))  # [B, ch, k, 2, 2]
+        if ch == 1:
+            C_color = torch.matmul(L_color, L_color.transpose(-2, -1))  # [B,1,k,1,1]
+            B_, ch_, k_, _, _ = C_xy.shape
+            C_full = torch.zeros(
+                B_, ch_, k_, 3, 3, device=C_xy.device, dtype=C_xy.dtype
+            )  # [B,1,k,3,3]
+            C_full[..., :2, :2] = C_xy  # [B,1,k,2,2]
+            C_full[..., 2, 2] = C_color.squeeze(-1)  # [B,1,k]
+        elif ch == 3:
+            C_color = torch.matmul(L_color, L_color.transpose(-2, -1))  # [B,3,k,3,3]
+            B_, ch_, k_, _, _ = C_xy.shape
+            C_full = torch.zeros(
+                B_, ch_, k_, 5, 5, device=C_xy.device, dtype=C_xy.dtype
+            )  # [B,3,k,5,5]
+            C_full[..., :2, :2] = C_xy  # [B,3,k,2,2]
+            C_full[..., 2:, 2:] = C_color  # [B,3,k,3,3]
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
+        return C_full * self.sharpening_factor  # [B, ch, k, D, D]
 
-        decoded_patches = (
-            decoded_patches.reshape(B, L, C * block_size_out * block_size_out)
-            .permute(0, 2, 1)
-            .contiguous()
-        )
+    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
+        Optional[torch.Tensor],
+        Optional[torch.Tensor],
+    ]:
+        B, _, _ = p.shape  # [B, ch, k * param_per_kernel]
+        p = p.view(B, ch, k, -1)  # [B, ch, k, param_per_kernel]
+        if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            mu_x = p[..., 0].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
+            L_spatial = self.construct_lower_triangular(
+                L_spatial_params, size=2
+            )  # [B, ch, k, 2, 2]
+            theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
+                2 * torch.pi
+            ) - torch.pi  # [B, ch, k]
+            w = F.softmax(p[..., 6].reshape(B, ch, k), dim=-1)  # [B, ch, k]
+            alpha = torch.sigmoid(p[..., 7].reshape(B, ch, k))  # [B, ch, k]
+            c = F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag  # [B, ch, k]
+            if ch == 1:
+                L_color_params = p[..., 9:10].reshape(B, ch, k, 1)  # [B,1,k,1]
+                color_mean = torch.zeros_like(mu_x)  # [B,1,k,1]
+            elif ch == 3:
+                L_color_params = p[..., 9:15].reshape(B, ch, k, 6)  # [B,3,k,6]
+                color_mean = p[..., 15:18].reshape(B, ch, k, 3)  # [B,3,k,3]
+            else:
+                raise ValueError(f"Unsupported number of channels: {ch}")
+            color_cov_size = 1 if ch == 1 else 3
+            L_color = self.construct_lower_triangular(
+                L_color_params, size=color_cov_size
+            )  # [B, ch, k, size, size]
+            mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
+            cov_matrix = self.cov_mat(
+                L_spatial, theta_xy, L_color, ch
+            )  # [B, ch, k, D, D]
+            return mu_xy, cov_matrix, w, alpha, c
+        elif self.kernel_type == KernelType.GAUSSIAN:
+            mu_x = p[..., 0].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
+            L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
+            L_spatial = self.construct_lower_triangular(
+                L_spatial_params, size=2
+            )  # [B, ch, k, 2, 2]
+            theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
+                2 * torch.pi
+            ) - torch.pi  # [B, ch, k]
+            w = F.softmax(p[..., 6].reshape(B, ch, k), dim=-1)  # [B, ch, k]
+            if ch == 1:
+                L_color_params = p[..., 7:8].reshape(B, ch, k, 1)  # [B,1,k,1]
+                color_mean = torch.zeros_like(mu_x)  # [B,1,k,1]
+            elif ch == 3:
+                L_color_params = p[..., 7:13].reshape(B, ch, k, 6)  # [B,3,k,6]
+                color_mean = p[..., 13:16].reshape(B, ch, k, 3)  # [B,3,k,3]
+            else:
+                raise ValueError(f"Unsupported number of channels: {ch}")
+            color_cov_size = 1 if ch == 1 else 3
+            L_color = self.construct_lower_triangular(
+                L_color_params, size=color_cov_size
+            )  # [B, ch, k, size, size]
+            mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
+            cov_matrix = self.cov_mat(
+                L_spatial, theta_xy, L_color, ch
+            )  # [B, ch, k, D, D]
+            return mu_xy, cov_matrix, w, None, None
+        else:
+            raise NotImplementedError(
+                f"Kernel type {self.kernel_type} not implemented."
+            )
 
-        recon_padded = F.fold(
-            decoded_patches,
-            output_size=(H + 2 * pad_out, W + 2 * pad_out),
-            kernel_size=block_size_out,
-            stride=step_out,
-        )
+    def gaussian_cauchy_kernel(
+        self,
+        x: torch.Tensor,
+        mu: torch.Tensor,
+        Sigma_inv: torch.Tensor,
+        alpha: Optional[torch.Tensor],
+        c: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        d = x - mu  # [B, ch, k, W, H, D]
+        e = -0.5 * torch.einsum(
+            "bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv, d
+        )  # [B, ch, k, W, H]
+        mx = e.max(dim=2, keepdim=True).values  # [B, ch, 1, W, H]
+        e = e - mx  # [B, ch, k, W, H]
+        G_sigma = torch.exp(e)  # [B, ch, k, W, H]
+        norm_x = torch.linalg.norm(d[..., :2], dim=-1)  # [B, ch, k, W, H]
+        denominator = c.unsqueeze(-1).unsqueeze(-1) * Sigma_inv[..., 0, 0].clamp(
+            min=self.min_diag
+        )  # [B, ch, k, 1, 1]
+        denominator = denominator.clamp(min=self.min_denominator)  # [B, ch, k, 1, 1]
+        C_csigma = 1.0 / (1.0 + norm_x**2 / denominator)  # [B, ch, k, W, H]
+        combined = (
+            alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma
+            + (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
+        )  # [B, ch, k, W, H]
+        return combined  # [B, ch, k, W, H]
 
-        window = self.hann_window(block_size_out, C, step_out, decoded_patches.device)
-        window_sum = F.fold(
-            torch.ones_like(decoded_patches) * window,
-            output_size=(H + 2 * pad_out, W + 2 * pad_out),
-            kernel_size=block_size_out,
-            stride=step_out,
-        )
-        recon_padded = recon_padded / window_sum.clamp_min(1e-8)
-        recon = recon_padded[:, :, pad_out : pad_out + H, pad_out : pad_out + W]
+    def gaussian_kernel(
+        self, x: torch.Tensor, mu_spatial: torch.Tensor, Sigma_inv_spatial: torch.Tensor
+    ) -> torch.Tensor:
+        d = x - mu_spatial  # [B, ch, k, W, H, 2]
+        e = -0.5 * torch.einsum(
+            "bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv_spatial, d
+        )  # [B, ch, k, W, H]
+        mx = e.max(dim=2, keepdim=True).values  # [B, ch, 1, W, H]
+        e = e - mx  # [B, ch, k, W, H]
+        G_sigma = torch.exp(e)  # [B, ch, k, W, H]
+        return G_sigma  # [B, ch, k, W, H]
 
-        return recon
+    def forward_spatial(
+        self, height: int, width: int, params: torch.Tensor
+    ) -> torch.Tensor:
+        B, ch, _ = params.shape  # [B, ch, k * param_per_kernel]
+        k = self.kernel  # int
+        mu_xy, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+        # mu_xy: [B, ch, k, D]
+        # cov_matrix: [B, ch, k, D, D]
+        # w: [B, ch, k]
+        # alpha: [B, ch, k] or None
+        # c: [B, ch, k] or None
 
-    @staticmethod
-    def mem_lim():
-        if torch.cuda.is_available():
-            device = torch.cuda.current_device()
-            torch.cuda.set_device(device)
-            free_mem, tot_mem = torch.cuda.mem_get_info(device)
-            thresholds = [0.9, 0.8, 0.7]
-            for percent in thresholds:
-                threshold = tot_mem * percent
-                if free_mem > threshold:
-                    return threshold
-            return max(1 * 2**30, tot_mem * 0.05)
-        return 1 * 2**30
+        d = cov_matrix.shape[-1]  # D=3 or 5
+        eye_d = torch.eye(d, device=cov_matrix.device).view(
+            1, 1, 1, d, d
+        )  # [1,1,1,D,D]
+        cov_matrix_reg = cov_matrix + (self.min_diag + 1e-3) * eye_d  # [B, ch, k, D, D]
+        L = torch.linalg.cholesky(cov_matrix_reg)  # [B, ch, k, D, D]
+        Sigma_inv = torch.cholesky_inverse(L)  # [B, ch, k, D, D]
+        Sigma_inv = 0.5 * (Sigma_inv + Sigma_inv.transpose(-2, -1))  # [B, ch, k, D, D]
 
-    def forward(
-        self, x: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        g = self.grid(height, width, params.device)  # [W, H, 2]
+        g_expanded = g.unsqueeze(0).unsqueeze(0).unsqueeze(2)  # [1,1,1,W,H,2]
+        g_expanded = g_expanded.repeat(B, ch, k, 1, 1, 1)  # [B, ch, k, W, H, 2]
 
-        x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
+        mu_full = mu_xy.unsqueeze(3).unsqueeze(4)  # [B, ch, k, 1, 1, D]
 
-        if x_p.ndim == 5:
-            x_p = x_p.reshape(-1, *x_p.shape[2:])
+        if ch == 1:
+            color_zeros = (
+                torch.zeros_like(mu_xy[..., -1:]).unsqueeze(3).unsqueeze(4)
+            )  # [B,1,k,1,1,1]
+            color_zeros = color_zeros.expand(
+                -1, -1, -1, height, width, -1
+            )  # [B,1,k,H,W,1]
+            x = torch.cat([g_expanded, color_zeros], dim=-1)  # [B,1,k,W,H,3]
+        elif ch == 3:
+            color_mean = mu_xy[..., -3:].unsqueeze(3).unsqueeze(4)  # [B,3,k,1,1,3]
+            color_mean_expanded = color_mean.expand(
+                -1, -1, -1, height, width, -1
+            )  # [B,3,k,H,W,3]
+            x = torch.cat([g_expanded, color_mean_expanded], dim=-1)  # [B,3,k,W,H,5]
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
 
-        es: int = x_p.element_size()
-        ml = self.mem_lim()
-        bm: int = x_p.shape[1:].numel() * es
-        mx_bs = ml // bm
-        n: int = int(max(1, min(x_p.shape[0] // 1024, mx_bs)))
-        cs: int = int((x_p.shape[0] + n - 1) // n)
+        if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            ker = self.gaussian_cauchy_kernel(
+                x, mu_full, Sigma_inv, alpha, c
+            )  # [B, ch, k, W, H]
+        else:
+            mu_spatial = mu_xy[..., :2].reshape(B, ch, k, 1, 1, 2)  # [B, ch, k,1,1,2]
+            Sigma_inv_spatial = Sigma_inv[..., :2, :2]  # [B, ch, k,2,2]
+            ker = self.gaussian_kernel(
+                g_expanded, mu_spatial, Sigma_inv_spatial
+            )  # [B, ch, k, W, H]
 
-        res = [
-            self.encoder(chunk, self.snet(chunk), self.knet(chunk))
-            for chunk in torch.split(x_p, cs)
-        ]
+        # detJ = torch.det(Sigma_inv[..., :2, :2]).clamp(min=1e-3)  # [B, ch, k]
+        # detJ = detJ.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k,1,1]
+        detJ = torch.det(Sigma_inv).sqrt()
+        ker = ker * detJ.unsqueeze(-1).unsqueeze(-1)
+        # ker = ker * detJ  # [B, ch, k, W, H]
+        ker = ker * w.view(B, ch, k, 1, 1)  # [B, ch, k, W, H]
+        ker_sum = ker.sum(dim=2, keepdim=True)  # [B, ch, 1, W, H]
+        ker = ker / (ker_sum + 1e-8)  # [B, ch, k, W, H]
+        out = ker.sum(dim=2)  # [B, ch, W, H]
+        return torch.clamp(out, min=0.0, max=1.0)  # [B, ch, W, H]
 
-        gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
-
-        B, L, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
-        sp: int = self.phw * self.encoder.scale_factor
-
-        dec: torch.Tensor = torch.cat(
-            [self.decoder(sp, sp, bt) for bt in torch.split(gaussians, cs)], dim=0
-        )
-
-        y: torch.Tensor = self.reconstruct(
-            dec,
-            (
-                B,
-                L,
-                C,
-                H * self.encoder.scale_factor,
-                W * self.encoder.scale_factor,
-                pad * self.encoder.scale_factor,
-            ),
-            sp,
-            self.overlap * self.encoder.scale_factor,
-        )  # => (B, C, H, W)
-
-        kinfo = kinfo.view(B, L, -1).mean(dim=1)
-        sigma = sigma.view(B, L, 1, 1, 1).mean(dim=1)
-
-        return y, kinfo, sigma
+    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+        return self.forward_spatial(height, width, params)
