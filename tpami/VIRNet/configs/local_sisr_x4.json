@@ -10,17 +10,18 @@
     "print_freq": 100,
     "num_workers": 16, 
     "prefetch_factor": 2, 
-    "save_dir": "./train_save/local_sisr_x4/gaussian_cauchy", 
+    "db_length": 1000,
+    "save_dir": "", 
     "resume": "",
 
 
     # network N-SMoE
     "kernel_chn": 3,
     "noise_avg": "True",
-    "model_channels": 16,
-    "num_res_blocks": 3,
+    "model_channels": 64,
+    "num_res_blocks": 4,
     "attention_resolutions": [32, 16, 8],
-    "dropout": 0.05,
+    "dropout": 0.01,
     "channel_mult": [2, 4, 8],
     "conv_resample":"False",
     "dims": 2,
@@ -33,8 +34,8 @@
     "resample_2d": "False",
     "resizer_num_layers": 2,
     "resizer_avg_pool": "False",
-    "activation": "LeakyReLU",
-    "rope_theta": 960000.0,
+    "activation": "GELU",
+    "rope_theta": 10000.0,
     "attention_type": "cross_attention",
     "kernel": 16,
     "kernel_type": "gaussian_cauchy",
@@ -52,10 +53,11 @@
 
     # training and validation data path
     "train_hr_patchs": "/mnt/d/dataset/samuel/gt",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
-    "val_hr_path": "./test_data/Set14", # *.bmp,
+    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",
+    "chn":"rgb",  
 
     # degradation process
     "sf": 4,

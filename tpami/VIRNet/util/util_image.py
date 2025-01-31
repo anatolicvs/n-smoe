@@ -316,28 +316,57 @@ def imwrite(im, path, chn="rgb", qf=None):
 
 
 def jpeg_compress(im, qf, chn_in="rgb"):
-    """
-    Input:
-        im: h x w x 3 array
-        qf: compress factor, (0, 100]
-        chn_in: 'rgb' or 'bgr'
-    Return:
-        Compressed Image with channel order: chn_in
-    """
-    # transform to BGR channle and uint8 data type
-    im_bgr = rgb2bgr(im) if chn_in.lower() == "rgb" else im
-    if im.dtype != np.dtype("uint8"):
-        im_bgr = img_as_ubyte(im_bgr)
-
-    # JPEG compress
-    flag, encimg = cv2.imencode(".jpg", im_bgr, [int(cv2.IMWRITE_JPEG_QUALITY), qf])
-    assert flag
-    im_jpg_bgr = cv2.imdecode(encimg, 1)  # uint8, BGR
-
-    # transform back to original channel and the original data type
-    im_out = bgr2rgb(im_jpg_bgr) if chn_in.lower() == "rgb" else im_jpg_bgr
-    if im.dtype != np.dtype("uint8"):
-        im_out = img_as_float32(im_out).astype(im.dtype)
+    chn_lower = chn_in.lower()
+    if chn_lower == "rgb":
+        im_proc = cv2.cvtColor(im, cv2.COLOR_RGB2BGR)
+    elif chn_lower == "bgr":
+        im_proc = im.copy()
+    elif chn_lower == "ycbcr":
+        im_proc = cv2.cvtColor(im, cv2.COLOR_YCrCb2BGR)
+    elif chn_lower in ["gray", "grayscale"]:
+        im_proc = im.squeeze(axis=2) if im.ndim == 3 else im
+    else:
+        raise ValueError("Invalid chn_in")
+    if im_proc.dtype != np.uint8:
+        im_proc = (
+            img_as_ubyte(im_proc) if im_proc.max() <= 1.0 else im_proc.astype(np.uint8)
+        )
+    if chn_lower in ["rgb", "bgr", "ycbcr"]:
+        flag, encimg = cv2.imencode(
+            ".jpg", im_proc, [int(cv2.IMWRITE_JPEG_QUALITY), qf]
+        )
+        if not flag:
+            raise ValueError("JPEG encoding failed")
+        im_jpg_bgr = cv2.imdecode(encimg, cv2.IMREAD_COLOR)
+        if im_jpg_bgr is None:
+            raise ValueError("JPEG decoding failed")
+        if chn_lower == "rgb":
+            im_jpg = cv2.cvtColor(im_jpg_bgr, cv2.COLOR_BGR2RGB)
+        elif chn_lower == "bgr":
+            im_jpg = im_jpg_bgr
+        elif chn_lower == "ycbcr":
+            im_jpg = cv2.cvtColor(im_jpg_bgr, cv2.COLOR_BGR2YCrCb)
+    elif chn_lower in ["gray", "grayscale"]:
+        flag, encimg = cv2.imencode(
+            ".jpg", im_proc, [int(cv2.IMWRITE_JPEG_QUALITY), qf]
+        )
+        if not flag:
+            raise ValueError("JPEG encoding failed")
+        im_jpg_gray = cv2.imdecode(encimg, cv2.IMREAD_GRAYSCALE)
+        if im_jpg_gray is None:
+            raise ValueError("JPEG decoding failed")
+        im_jpg = (
+            im_jpg_gray.reshape(im_jpg_gray.shape[0], im_jpg_gray.shape[1], 1)
+            if im_jpg_gray.ndim == 2
+            else im_jpg_gray
+        )
+    if im.dtype != np.uint8:
+        if im.dtype in [np.float32, np.float64]:
+            im_out = im_jpg.astype(im.dtype) / 255.0
+        else:
+            im_out = im_jpg.astype(im.dtype)
+    else:
+        im_out = im_jpg
     return im_out
 
 

@@ -3,6 +3,7 @@
 # Power by Zongsheng Yue 2020-03-24 12:27:06
 
 import sys
+from typing import Optional
 import cv2
 import math
 import random
@@ -21,6 +22,7 @@ class GeneralTrainFloder(uData.Dataset):
         self,
         hr_dir,
         length,
+        chn: Optional[str] = "rgb",
         hr_size=192,
         sf=2,
         k_size=21,
@@ -37,13 +39,25 @@ class GeneralTrainFloder(uData.Dataset):
         self.kernel_shift = kernel_shift
         self.downsampler = downsampler
         self.length = length
+        self.chn = chn
 
-        supported_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.gif']        
-        self.hr_path_list = sorted([
-            str(x) for x in Path(hr_dir).iterdir()
-            if x.is_file() and x.suffix.lower() in supported_extensions
-        ])
-        
+        supported_extensions = [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+        ]
+        self.hr_path_list = sorted(
+            [
+                str(x)
+                for x in Path(hr_dir).iterdir()
+                if x.is_file() and x.suffix.lower() in supported_extensions
+            ]
+        )
+
         self.num_images = len(self.hr_path_list)
 
         self.noise_types = [
@@ -80,7 +94,7 @@ class GeneralTrainFloder(uData.Dataset):
         hr_size = self.hr_size
         ind_im = random.randint(0, self.num_images - 1)
         im_path = self.hr_path_list[ind_im]
-        im_ori = util_image.imread(im_path, dtype="float32", chn="rgb")
+        im_ori = util_image.imread(im_path, dtype="float32", chn=self.chn)
         im_hr = util_image.random_crop_patch(im_ori, self.hr_size)
 
         # random augmentation
@@ -162,6 +176,7 @@ class GeneralTest(uData.Dataset):
         downsampler="bicubic",
         seed=10000,
         noise_type="Gaussian",
+        chn: Optional[str] = "bgr",
     ):
         super(GeneralTest, self).__init__()
         self.sf = sf
@@ -169,12 +184,24 @@ class GeneralTest(uData.Dataset):
         self.kernel_shift = kernel_shift
         self.downsampler = downsampler
         self.seed = seed
+        self.chn = chn
 
-        supported_extensions = ['.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.tif', '.gif']        
-        self.hr_path_list = sorted([
-            str(x) for x in Path(hr_dir).iterdir()
-            if x.is_file() and x.suffix.lower() in supported_extensions
-        ])
+        supported_extensions = [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+        ]
+        self.hr_path_list = sorted(
+            [
+                str(x)
+                for x in Path(hr_dir).iterdir()
+                if x.is_file() and x.suffix.lower() in supported_extensions
+            ]
+        )
 
         self.num_images = len(self.hr_path_list)
 
@@ -182,31 +209,36 @@ class GeneralTest(uData.Dataset):
 
         self.fixed_noise = self.generate_noise()
 
+        self.chn = chn
+
     def __len__(self):
         return self.num_images
 
     def generate_noise(self):
         h_max, w_max = 1, 1
         for im_path in self.hr_path_list:
-            im = util_image.imread(im_path, chn="bgr", dtype="uint8")
+            im = util_image.imread(im_path, chn=self.chn, dtype="uint8")
             h, w = im.shape[:2]
             if h_max < h:
                 h_max = h
             if w_max < w:
                 w_max = w
         h_down, w_down = math.ceil(h_max / self.sf), math.ceil(w_max / self.sf)
-
+        channels = 1 if self.chn.lower() == "gray" else 3
         g = torch.Generator()
         g.manual_seed(self.seed)
         noise = torch.randn(
-            [h_down, w_down, 3], generator=g, dtype=torch.float32
+            [h_down, w_down, channels], generator=g, dtype=torch.float32
         ).numpy()
         return noise
 
     def __getitem__(self, index):
-        im_hr = util_image.imread(self.hr_path_list[index], chn="rgb", dtype="float32")
-        if im_hr.ndim == 2 or im_hr.shape[2] == 1:
-            im_hr = np.stack([im_hr, im_hr, im_hr], axis=2)
+        im_hr = util_image.imread(
+            self.hr_path_list[index], chn=self.chn, dtype="float32"
+        )
+        # if im_hr.ndim == 2 or im_hr.shape[2] == 1:
+        #     im_hr = np.stack([im_hr, im_hr, im_hr], axis=2)
+
         im_hr = util_sisr.modcrop(im_hr, self.sf)
 
         # blur kernel
@@ -250,7 +282,7 @@ class GeneralTest(uData.Dataset):
                 :w,
             ] * (2.55 / 255)
             im_noisy = np.clip(im_noisy, a_min=0.0, a_max=1.0).astype(np.float32)
-            im_lr = util_image.jpeg_compress(im_noisy, 40, chn_in="rgb")
+            im_lr = util_image.jpeg_compress(im_noisy, 40, chn_in=self.chn)
         else:
             sys.exit("Please input corrected noise type: JPEG or Gaussian")
 

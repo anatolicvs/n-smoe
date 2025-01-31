@@ -32,23 +32,23 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 
 
-# from networks.network_moex import (
-#     EncoderConfig,
-#     MoEConfig,
-#     AutoencoderConfig,
-#     Autoencoder,
-#     KernelType,
-# )
-
-from networks.network_transformer_moex import (
-    Autoencoder,
+from networks.network_moex import (
     EncoderConfig,
     MoEConfig,
-    BackboneResnetCfg,
     AutoencoderConfig,
-    BackboneDinoCfg,
+    Autoencoder,
     KernelType,
 )
+
+# from networks.network_transformer_moex import (
+#     Autoencoder,
+#     EncoderConfig,
+#     MoEConfig,
+#     BackboneResnetCfg,
+#     AutoencoderConfig,
+#     BackboneDinoCfg,
+#     KernelType,
+# )
 
 
 def init_dist(backend="nccl", **kwargs):
@@ -112,88 +112,37 @@ def main():
     #     noise_avg=(not util_opts.str2bool(args["add_jpeg"])),
     # ).cuda()
 
-    # encoder_cfg = EncoderConfig(
-    #     sigma_chn=args["sigma_chn"],
-    #     kernel_chn=args["kernel_chn"],
-    #     noise_cond=util_opts.str2bool(args["noise_cond"]),
-    #     kernel_cond=util_opts.str2bool(args["kernel_cond"]),
-    #     noise_avg=util_opts.str2bool(args["noise_avg"]),
-    #     model_channels=args["model_channels"],
-    #     num_res_blocks=args["num_res_blocks"],
-    #     attention_resolutions=args["attention_resolutions"],
-    #     dropout=args["dropout"],
-    #     channel_mult=tuple(args["channel_mult"]),
-    #     conv_resample=util_opts.str2bool(args["conv_resample"]),
-    #     dims=args["dims"],
-    #     use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
-    #     use_fp16=util_opts.str2bool(args["use_fp16"]),
-    #     num_heads=args["num_heads"],
-    #     num_head_channels=args["num_head_channels"],
-    #     resblock_updown=util_opts.str2bool(args["resblock_updown"]),
-    #     num_groups=args["num_groups"],
-    #     resample_2d=util_opts.str2bool(args["resample_2d"]),
-    #     scale_factor=args["sf"],
-    #     resizer_num_layers=args["resizer_num_layers"],
-    #     resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
-    #     activation=args["activation"],
-    #     rope_theta=args["rope_theta"],
-    #     attention_type=args["attention_type"],
-    # )
-
-    # decoder_cfg = MoEConfig(
-    #     kernel=args["kernel"],
-    #     sharpening_factor=args.get("sharpening_factor", 1),
-    #     kernel_type=KernelType(args["kernel_type"]),
-    # )
-
-    # autoencoder_cfg = AutoencoderConfig(
-    #     EncoderConfig=encoder_cfg,
-    #     DecoderConfig=decoder_cfg,
-    #     d_in=args["im_chn"],
-    #     phw=args["phw"],
-    #     overlap=args["overlap"],
-    #     dep_S=args["dep_S"],
-    #     dep_K=args["dep_K"],
-    # )
-
-    # net = Autoencoder(cfg=autoencoder_cfg)
-    # # net = torch.compile(net)
-    # net = net.cuda()
-
     encoder_cfg = EncoderConfig(
-        embed_dim=args["embed_dim"],
-        depth=args["depth"],
-        heads=args["heads"],
-        dim_head=args["dim_head"],
-        mlp_dim=args["mlp_dim"],
+        sigma_chn=args["sigma_chn"],
+        kernel_chn=args["kernel_chn"],
+        noise_cond=util_opts.str2bool(args["noise_cond"]),
+        kernel_cond=util_opts.str2bool(args["kernel_cond"]),
+        noise_avg=util_opts.str2bool(args["noise_avg"]),
+        model_channels=args["model_channels"],
+        num_res_blocks=args["num_res_blocks"],
+        attention_resolutions=args["attention_resolutions"],
         dropout=args["dropout"],
-        patch_size=args["patch_size"],
+        channel_mult=tuple(args["channel_mult"]),
+        conv_resample=util_opts.str2bool(args["conv_resample"]),
+        dims=args["dims"],
+        use_checkpoint=util_opts.str2bool(args["use_checkpoint"]),
+        use_fp16=util_opts.str2bool(args["use_fp16"]),
+        num_heads=args["num_heads"],
+        num_head_channels=args["num_head_channels"],
+        resblock_updown=util_opts.str2bool(args["resblock_updown"]),
+        num_groups=args["num_groups"],
+        resample_2d=util_opts.str2bool(args["resample_2d"]),
         scale_factor=args["sf"],
         resizer_num_layers=args["resizer_num_layers"],
         resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
         activation=args["activation"],
-        backbone_cfg=BackboneDinoCfg(
-            name="dino",
-            model=args[
-                "dino_model"
-            ],  # "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8",
-            backbone_cfg=BackboneResnetCfg(
-                name="resnet",
-                model=args["resnet_model"],  # "resnet18", "resnet50", "resnet101"
-                num_layers=args["resnet_num_layers"],
-                use_first_pool=util_opts.str2bool(args["resnet_use_first_pool"]),
-            ),
-        ),
-        kernel_chn=args["kernel_chn"],
-        sigma_chn=args["sigma_chn"],
-        noise_cond=util_opts.str2bool(args["noise_cond"]),
-        kernel_cond=util_opts.str2bool(args["kernel_cond"]),
-        noise_avg=util_opts.str2bool(args["noise_avg"]),
+        rope_theta=args["rope_theta"],
+        attention_type=args["attention_type"],
     )
 
     decoder_cfg = MoEConfig(
         kernel=args["kernel"],
-        sharpening_factor=args["sharpening_factor"],
+        sharpening_factor=args.get("sharpening_factor", 1),
         kernel_type=KernelType(args["kernel_type"]),
     )
 
@@ -207,7 +156,58 @@ def main():
         dep_K=args["dep_K"],
     )
 
-    net = Autoencoder(cfg=autoencoder_cfg).to(device)
+    net = Autoencoder(cfg=autoencoder_cfg)
+    # net = torch.compile(net)
+    net = net.cuda()
+
+    # encoder_cfg = EncoderConfig(
+    #     embed_dim=args["embed_dim"],
+    #     depth=args["depth"],
+    #     heads=args["heads"],
+    #     dim_head=args["dim_head"],
+    #     mlp_dim=args["mlp_dim"],
+    #     dropout=args["dropout"],
+    #     patch_size=args["patch_size"],
+    #     scale_factor=args["sf"],
+    #     resizer_num_layers=args["resizer_num_layers"],
+    #     resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
+    #     activation=args["activation"],
+    #     backbone_cfg=BackboneDinoCfg(
+    #         name="dino",
+    #         model=args[
+    #             "dino_model"
+    #         ],  # "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8",
+    #         backbone_cfg=BackboneResnetCfg(
+    #             name="resnet",
+    #             model=args["resnet_model"],  # "resnet18", "resnet50", "resnet101"
+    #             num_layers=args["resnet_num_layers"],
+    #             use_first_pool=util_opts.str2bool(args["resnet_use_first_pool"]),
+    #         ),
+    #     ),
+    #     kernel_chn=args["kernel_chn"],
+    #     sigma_chn=args["sigma_chn"],
+    #     noise_cond=util_opts.str2bool(args["noise_cond"]),
+    #     kernel_cond=util_opts.str2bool(args["kernel_cond"]),
+    #     noise_avg=util_opts.str2bool(args["noise_avg"]),
+    # )
+
+    # decoder_cfg = MoEConfig(
+    #     kernel=args["kernel"],
+    #     sharpening_factor=args["sharpening_factor"],
+    #     kernel_type=KernelType(args["kernel_type"]),
+    # )
+
+    # autoencoder_cfg = AutoencoderConfig(
+    #     EncoderConfig=encoder_cfg,
+    #     DecoderConfig=decoder_cfg,
+    #     d_in=args["im_chn"],
+    #     phw=args["phw"],
+    #     overlap=args["overlap"],
+    #     dep_S=args["dep_S"],
+    #     dep_K=args["dep_K"],
+    # )
+
+    # net = Autoencoder(cfg=autoencoder_cfg).to(device)
 
     if rank == 0:
         print(
@@ -318,6 +318,7 @@ def main():
         add_jpeg=util_opts.str2bool(args["add_jpeg"]),
         noise_jpeg=args["noise_jpeg"],
         noise_level=args["noise_level"],
+        chn=args["chn"],
     )
     if rank == 0:
         print(
@@ -353,6 +354,7 @@ def main():
             kernel_shift=util_opts.str2bool(args["kernel_shift"]),
             downsampler=args["downsampler"],
             noise_type=x,
+            chn=args["chn"],
         )
         for x in noise_types_list
     }
@@ -658,7 +660,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_tformer_sisr_x4.json",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x4.json",
         help="Path for the config file",
     )
     parser.add_argument(
