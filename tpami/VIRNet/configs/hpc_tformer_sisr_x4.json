@@ -11,7 +11,7 @@
     "print_freq": 500,
     "num_workers": 32, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v4/gaussian_cauchy",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
     "resume": "",
 
 
@@ -31,7 +31,7 @@
     "resnet_num_layers": 2,
     "resnet_use_first_pool": "True",
     "noise_avg": "True",
-    "kernel": 16,
+    "kernel": 9,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
     "overlap": 4,
