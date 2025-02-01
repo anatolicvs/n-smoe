@@ -667,6 +667,9 @@ class Encoder(Backbone[EncoderConfig]):
         if hasattr(nn, cfg.activation):
             self.activation = getattr(nn, cfg.activation)()
 
+        self.kernel_min = getattr(cfg, "kernel_min", 8)
+        self.kernel_max = getattr(cfg, "kernel_max", 16)
+
         self.noise_cond = cfg.noise_cond
         self.noise_avg = cfg.noise_avg
         self.kernel_cond = cfg.kernel_cond
@@ -804,6 +807,15 @@ class Encoder(Backbone[EncoderConfig]):
         )
         self._feature_size += ch
 
+        self.kernel_estimator = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),  # Global pooling: [B, ch, 1, 1]
+            nn.Flatten(),  # -> [B, ch_est]
+            nn.Linear(ch, 32),
+            self.activation,
+            nn.Linear(32, 1),
+            nn.Sigmoid(),
+        )
+
         self.out = nn.Sequential(
             normalization(num_channels=ch, num_groups=cfg.num_groups),
             self.activation,
@@ -842,7 +854,9 @@ class Encoder(Backbone[EncoderConfig]):
         x: torch.Tensor,
         sigma_est: Optional[torch.Tensor] = None,
         kinfo_est: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor] == None
+    ]:
 
         sigma = torch.exp(torch.clamp(sigma_est, min=log_min, max=log_max))
 
@@ -879,11 +893,22 @@ class Encoder(Backbone[EncoderConfig]):
         h = self.middle_block(h)
         h = h.to(dtype=x_input.dtype)
 
+        pool_h = F.adaptive_avg_pool2d(h, (1, 1))
+        kernel_ratio = self.kernel_estimator(pool_h)  # Shape: [B, 1]
+        # Scale to [kernel_min, kernel_max] and round to integer.
+        kernel_count = (
+            torch.round(
+                self.kernel_min + (self.kernel_max - self.kernel_min) * kernel_ratio
+            )
+            .long()
+            .squeeze(1)
+        )  # Shape: [B]
+
         gaussians = self.out(h)
         gaussians = rearrange(
             gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
         )
-        return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma
+        return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma, kernel_count
 
     @property
     def d_out(self) -> int:
@@ -1138,11 +1163,12 @@ class MoE(Backbone[MoEConfig]):
         G_sigma = torch.exp(e)  # [B, ch, k, W, H]
         return G_sigma  # [B, ch, k, W, H]
 
-    def forward_spatial(
+    def forward_spatial_(
         self, height: int, width: int, params: torch.Tensor
     ) -> torch.Tensor:
         B, ch, _ = params.shape  # [B, ch, k * param_per_kernel]
         k = self.kernel  # int
+
         mu_xy, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
         # mu_xy: [B, ch, k, D]
         # cov_matrix: [B, ch, k, D, D]
@@ -1206,8 +1232,76 @@ class MoE(Backbone[MoEConfig]):
         out = ker.sum(dim=2)  # [B, ch, W, H]
         return torch.clamp(out, min=0.0, max=1.0)  # [B, ch, W, H]
 
-    def forward(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
+    def extract_dynamic(
+        self, x: torch.Tensor, cnt: torch.Tensor, p: int
+    ) -> torch.Tensor:
+        # x: [B, C, L] where L = padded length = max_possible * p; cnt: [B]
+        B, C, _ = x.shape
+        K = int(cnt.max().item())
+        lst = []
+        for i in range(B):
+            k_i = int(cnt[i].item())
+            xi = x[i, :, : k_i * p].view(C, k_i, p)  # [C, k_i, p]
+            if k_i < K:
+                pad = torch.zeros(C, K - k_i, p, device=x.device, dtype=x.dtype)
+                xi = torch.cat([xi, pad], dim=1)
+            lst.append(xi.unsqueeze(0))
+
+        return torch.cat(lst, dim=0)  # [B, C, K, p]
+
+    def forward_(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
         return self.forward_spatial(height, width, params)
+
+    def forward_spatial(
+        self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
+    ) -> torch.Tensor:
+        B, ch, L = params.shape  # L = padded length = p * (padded kernel count)
+        p = L // (cnt.max().item() if cnt.numel() > 0 else 1)
+        x_dyn = self.extract_dynamic(params, cnt, p)
+        x_flat = x_dyn.view(B, ch, -1)
+        mu, cov, wt, alp, cst = self.extract_parameters(x_flat, x_dyn.shape[2], ch)
+        d = cov.shape[-1]
+        I = torch.eye(d, device=cov.device).view(1, 1, 1, d, d)
+        eig = torch.linalg.eigvalsh(cov)
+        m = eig.min(dim=-1).values[..., None, None]
+        eps = F.softplus(-m) + 1e-8
+        cov_reg = cov + (1e-6 + eps) * I
+        L_chol = torch.linalg.cholesky(cov_reg)
+        SI = torch.cholesky_inverse(L_chol)
+        G = self.grid(h, w, params.device)
+        G_exp = (
+            G.unsqueeze(0)
+            .unsqueeze(0)
+            .unsqueeze(2)
+            .repeat(B, ch, x_dyn.shape[2], 1, 1, 1)
+        )
+        mu_full = mu.unsqueeze(3).unsqueeze(4)
+        if ch == 1:
+            CZ = torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4)
+            CZ = CZ.expand(-1, -1, -1, h, w, -1)
+            X = torch.cat([G_exp, CZ], dim=-1)
+        elif ch == 3:
+            CM = mu[..., -3:].unsqueeze(3).unsqueeze(4)
+            CM_exp = CM.expand(-1, -1, -1, h, w, -1)
+            X = torch.cat([G_exp, CM_exp], dim=-1)
+        else:
+            raise ValueError(f"Unsupported ch: {ch}")
+        if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            K_out = self.gaussian_cauchy_kernel(X, mu_full, SI, alp, cst)
+        else:
+            mu_sp = mu[..., :2].reshape(B, ch, x_dyn.shape[2], 1, 1, 2)
+            SI_sp = SI[..., :2, :2]
+            K_out = self.gaussian_kernel(G_exp, mu_sp, SI_sp)
+        K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
+        KS = K_out.sum(dim=2, keepdim=True)
+        K_norm = K_out / (KS + 1e-8)
+        out = K_norm.sum(dim=2)
+        return torch.clamp(out, 0.0, 1.0)
+
+    def forward(
+        self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
+    ) -> torch.Tensor:
+        return self.forward_spatial(h, w, params, cnt)
 
 
 @dataclass
@@ -1222,13 +1316,22 @@ class AutoencoderConfig:
     overlap: int = 24
 
 
+def get_params_per_kernel(kernel_type: any, ch: int) -> int:
+    if kernel_type == KernelType.GAUSSIAN:
+        return 10 if ch == 1 else 17
+    elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
+        return 12 if ch == 1 else 18
+    else:
+        raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
+
+
 class Autoencoder(Backbone[AutoencoderConfig]):
     def __init__(self, cfg: AutoencoderConfig) -> None:
         super().__init__(cfg)
         self.phw: int = cfg.phw
         self.overlap: int = cfg.overlap
 
-        d_out = self.num_params(
+        d_out, params_per_kernel = self.num_params(
             cfg.DecoderConfig.kernel_type, cfg.d_in, cfg.DecoderConfig.kernel
         )
 
@@ -1251,6 +1354,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
         self.encoder = Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
         self.decoder = MoE(cfg.DecoderConfig)
+        self.params_per_kernel = params_per_kernel
 
     @staticmethod
     def hann_window(
@@ -1268,28 +1372,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
 
     @staticmethod
     def num_params(kernel_type: KernelType, ch: int, kernel: int) -> int:
-        if kernel_type == KernelType.GAUSSIAN:
-            if ch == 1:
-                params_per_kernel = 10
-            elif ch == 3:
-                params_per_kernel = 17
-            else:
-                raise ValueError(
-                    "Unsupported number of channels. Supported values: 1 (Grayscale), 3 (RGB)."
-                )
-        elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            if ch == 1:
-                params_per_kernel = 12
-            elif ch == 3:
-                params_per_kernel = 18
-            else:
-                raise ValueError(
-                    "Unsupported number of channels. Supported values: 1 (Grayscale), 3 (RGB)."
-                )
-        else:
-            raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
+        num_parms = get_params_per_kernel(kernel_type, ch)
+        num_params_per_kernel = num_parms * kernel
 
-        return kernel * params_per_kernel
+        return num_params_per_kernel, num_parms
 
     def extract_blocks(
         self, img_tensor: torch.Tensor, block_size: int, overlap: int
@@ -1362,51 +1448,66 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     def forward(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-
-        x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
-
-        if x_p.ndim == 5:
-            x_p = x_p.reshape(-1, *x_p.shape[2:])
-
-        es: int = x_p.element_size()
+        pchs, dm = self.extract_blocks(
+            x, self.phw, self.overlap
+        )  # dm: (B_orig, L_orig, C, H, W, pd)
+        if pchs.ndim == 5:
+            pchs = pchs.reshape(-1, *pchs.shape[2:])  # pchs: [B_enc, C, bs, bs]
+        es = pchs.element_size()
         ml = self.mem_lim()
-        bm: int = x_p.shape[1:].numel() * es
+        bm = pchs.shape[1:].numel() * es
         mx_bs = ml // bm
-        n: int = int(max(1, min(x_p.shape[0] // 1024, mx_bs)))
-        cs: int = int((x_p.shape[0] + n - 1) // n)
-
+        n = int(max(1, min(pchs.shape[0] // 1024, mx_bs)))
+        cs = int((pchs.shape[0] + n - 1) // n)
         res = [
             self.encoder(chunk, self.snet(chunk), self.knet(chunk))
-            for chunk in torch.split(x_p, cs)
+            for chunk in torch.split(pchs, cs)
         ]
-
-        gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
-
-        B, L, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
-        sp: int = self.phw * self.encoder.scale_factor
-
-        dec: torch.Tensor = torch.cat(
-            [self.decoder(sp, sp, bt) for bt in torch.split(gaussians, cs)], dim=0
-        )
-
-        y: torch.Tensor = self.reconstruct(
+        g, kinfo, sigma, kcnt = map(lambda a: torch.cat(a, dim=0), zip(*res))
+        # g: [B_enc, C, latent_enc] with B_enc = B_orig * L_orig
+        # kcnt: [B_enc]
+        B_enc, C_enc, L_enc = g.shape
+        B_orig, L_orig, C_orig, H, W, pd = dm  # B_orig, L_orig from dm
+        sp = self.phw * self.encoder.scale_factor
+        # Reshape g and kcnt to [B_orig, L_orig, C, latent_enc] and [B_orig, L_orig] respectively.
+        g_r = g.view(B_orig, L_orig, C_enc, L_enc)
+        
+       
+        g_flat = g_r.view(B_enc, C_enc, L_enc)
+       
+        thresholds = kcnt.view(B_enc) * self.params_per_kernel  # [B_enc]
+        idx = (
+            torch.arange(L_enc, device=g.device).unsqueeze(0).expand(B_enc, L_enc)
+        )  # [B_enc, L_enc]
+        mask = idx < thresholds.unsqueeze(1)  # [B_enc, L_enc]
+        mask_exp = mask.unsqueeze(1).expand(B_enc, C_enc, L_enc)
+        g_mask = g_flat * mask_exp  # [B_enc, C_enc, L_enc]
+        
+        splits = torch.split(g_mask, cs)  # each [cs, C, L_enc]
+        kcnt_splits = torch.split(kcnt, cs)  # each [cs]
+        
+        dec_list = [
+            self.decoder(sp, sp, latent, cnt)
+            for latent, cnt in zip(splits, kcnt_splits)
+        ]
+        dec = torch.cat(dec_list, dim=0)  # [B_enc, C, ...]
+        rec = self.reconstruct(
             dec,
             (
-                B,
-                L,
-                C,
+                B_orig,
+                L_orig,
+                C_orig,
                 H * self.encoder.scale_factor,
                 W * self.encoder.scale_factor,
-                pad * self.encoder.scale_factor,
+                pd * self.encoder.scale_factor,
             ),
             sp,
             self.overlap * self.encoder.scale_factor,
-        )  # => (B, C, H, W)
-
-        kinfo = kinfo.view(B, L, -1).mean(dim=1)
-        sigma = sigma.view(B, L, 1, 1, 1).mean(dim=1)
-
-        return y, kinfo, sigma
+        )
+        kinfo_avg = kinfo.view(B_orig, L_orig, -1).mean(dim=1)
+        sigma_avg = sigma.view(B_orig, L_orig, 1, 1, 1).mean(dim=1)
+        
+        return rec, kinfo_avg, sigma_avg
 
 
 class MoE_(nn.Module):
