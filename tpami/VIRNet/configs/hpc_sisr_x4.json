@@ -4,42 +4,43 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 192, 
-    "batch_size": 16, 
+    "batch_size": 128, 
     "epochs": 120,
     "lr": 2e-4, # 2e-4, 
     "lr_min": 1e-6, 
-    "print_freq": 100,
-    "num_workers": 64, 
+    "print_freq": 500,
+    "num_workers": 32, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v5/gaussian_cauchy/",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
     "resume": "",
 
 
     # network N-SMoE
+    "kernel_chn": 3,
     "noise_avg": "True",
     "model_channels": 32,
-    "num_res_blocks": 3,
-    "attention_resolutions": [32, 16, 8],
-    "dropout": 0.01,
+    "num_res_blocks": 4,
+    "attention_resolutions": [16, 8],
+    "dropout": 0.1,
     "channel_mult": [2, 4, 8],
-    "conv_resample": "False",
+    "conv_resample":"False",
     "dims": 2,
     "use_checkpoint": "True",
     "use_fp16": "False",
-    "num_heads": 16,
+    "num_heads": 4,
     "num_head_channels": -1,
     "resblock_updown": "True",
     "num_groups": 32,
     "resample_2d": "False",
-    "resizer_num_layers": 2,
+    "resizer_num_layers": 3,
     "resizer_avg_pool": "False",
-    "activation": "GELU",
+    "activation": "LeakyReLU",
     "rope_theta": 10000.0,
     "attention_type": "cross_attention",
-    "kernel": 16, 
-    "kernel_type": "gaussian",
+    "kernel": 16,
+    "kernel_type": "gaussian_cauchy",
     "phw": 16,
-    "overlap": 4,
+    "overlap": 8,
 
     # network architecture
     "dep_S": 5,
@@ -51,11 +52,13 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR", 
+    "train_hr_patchs": "/hpcwork/p0021791/dataset/rgb/train_0",  # hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR
     "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
-    "add_jpeg": "False",
-    "kernel_shift": "False",
+    "add_jpeg": "True",
+    "kernel_shift": "True",
     "downsampler": "Bicubic",
+    "db_length": 100000,
+    "chn":"rgb",  
 
     # degradation process
     "sf": 4,
