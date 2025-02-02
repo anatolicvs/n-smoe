@@ -1160,7 +1160,7 @@ class MoE(Backbone[MoEConfig]):
         G_sigma = torch.exp(e)  # [B, ch, k, W, H]
         return G_sigma  # [B, ch, k, W, H]
 
-    def forward_spatial_(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
+    def forward_spatial(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
         B, ch, _ = params.shape  # [B, ch, k * param_per_kernel]
         k = self.kernel  # int
 
@@ -1286,7 +1286,7 @@ class MoE(Backbone[MoEConfig]):
         self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         if cnt is None:
-            return self.forward_spatial_(h, w, params)
+            return self.forward_spatial(h, w, params)
         else:
             return self.forward_spatial_(h, w, params, cnt)
 
