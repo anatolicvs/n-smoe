@@ -1061,7 +1061,7 @@ class MoE(Backbone[MoEConfig]):
             mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
             L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
             L_spatial = self.construct_lower_triangular(
-                L_spatial_params, size=2
+                L_spatial_params, s=2
             )  # [B, ch, k, 2, 2]
             theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
                 2 * torch.pi
@@ -1079,7 +1079,7 @@ class MoE(Backbone[MoEConfig]):
                 raise ValueError(f"Unsupported number of channels: {ch}")
             color_cov_size = 1 if ch == 1 else 3
             L_color = self.construct_lower_triangular(
-                L_color_params, size=color_cov_size
+                L_color_params, s=color_cov_size
             )  # [B, ch, k, size, size]
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
             cov_matrix = self.cov_mat(
@@ -1091,7 +1091,7 @@ class MoE(Backbone[MoEConfig]):
             mu_y = p[..., 1].reshape(B, ch, k, 1)  # [B, ch, k, 1]
             L_spatial_params = p[..., 2:5].reshape(B, ch, k, 3)  # [B, ch, k, 3]
             L_spatial = self.construct_lower_triangular(
-                L_spatial_params, size=2
+                L_spatial_params, s=2
             )  # [B, ch, k, 2, 2]
             theta_xy = (p[..., 5].reshape(B, ch, k) + torch.pi) % (
                 2 * torch.pi
@@ -1107,7 +1107,7 @@ class MoE(Backbone[MoEConfig]):
                 raise ValueError(f"Unsupported number of channels: {ch}")
             color_cov_size = 1 if ch == 1 else 3
             L_color = self.construct_lower_triangular(
-                L_color_params, size=color_cov_size
+                L_color_params, s=color_cov_size
             )  # [B, ch, k, size, size]
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)  # [B, ch, k, D]
             cov_matrix = self.cov_mat(
