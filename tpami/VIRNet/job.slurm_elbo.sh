@@ -12,7 +12,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.5"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-4}  # Default to 4 if not set
+GPUS=${GPUS:-1}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -90,32 +90,32 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 
 PARTITION="c23g" # c23g_low
 # STATES="idle,mixed"
-STATES="idle"
-
-# get_idle_node() {
-#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
-#     sinfo -N -p "$PARTITION" -h -o "%N" --states="$STATES" | head -n 1
-#     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
-# }
-
-EXCLUDE_NODES="n23g0010"
+STATES="idle,mixed"
 
 get_idle_node() {
-    sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
-    $2 == "idle" {
-        split(exclude_nodes, excl_nodes, ",");
-        for (node in excl_nodes) {
-            if ($1 == excl_nodes[node]) {
-                next;  # Skip the excluded nodes
-            }
-        }
-        split($3, gpu_info, ":");
-        if (gpu_info[2] >= gpus) {
-            print $1;
-            exit;
-        }
-    }'
+    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
+    sinfo -N -p "$PARTITION" -h -o "%N" --states="$STATES" | head -n 1
+    # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1}' | head -n 1
 }
+
+# EXCLUDE_NODES="n23g0010"
+
+# get_idle_node() {
+#     sinfo -N -p "$PARTITION" -h -o "%N %T %G" | awk -v gpus="$GPUS" -v exclude_nodes="$EXCLUDE_NODES" '
+#     $2 == "idle" {
+#         split(exclude_nodes, excl_nodes, ",");
+#         for (node in excl_nodes) {
+#             if ($1 == excl_nodes[node]) {
+#                 next;  # Skip the excluded nodes
+#             }
+#         }
+#         split($3, gpu_info, ":");
+#         if (gpu_info[2] >= gpus) {
+#             print $1;
+#             exit;
+#         }
+#     }'
+# }
 
 IDLE_NODE=$(get_idle_node)
 if [ -z "$IDLE_NODE" ]; then
@@ -154,7 +154,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
 # #SBATCH --mem=$TOTAL_MEM
-#SBATCH --mem-per-gpu=90G
+#SBATCH --mem-per-gpu=64G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks-per-node=$NTASKS_PER_NODE
 #SBATCH --mail-type=$MAIL_TYPE
