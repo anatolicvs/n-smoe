@@ -1219,17 +1219,6 @@ class MoE(Backbone[MoEConfig]):
         out = K_norm.sum(dim=2)  # [B, ch, W, H]
         return torch.clamp(out, min=0.0, max=1.0)  # [B, ch, W, H]
 
-    def extract_dynamic_(
-        self, x: torch.Tensor, cnt: torch.Tensor, p: int
-    ) -> torch.Tensor:
-        B, C, L = x.shape
-        K_all = L // p
-        K_eff = int(cnt.max().item())
-        x_r = x.view(B, C, K_all, p)[:, :, :K_eff, :]
-        idx = torch.arange(K_eff, device=x.device).unsqueeze(0).expand(B, K_eff)
-        msk = (idx < cnt.unsqueeze(1)).to(x.dtype).unsqueeze(1).unsqueeze(-1)
-        return x_r * msk
-
     def extract_dynamic(
         self, x: torch.Tensor, cnt: torch.Tensor, p: int
     ) -> torch.Tensor:
@@ -1247,7 +1236,7 @@ class MoE(Backbone[MoEConfig]):
 
         return torch.cat(lst, dim=0)  # [B, C, K, p]
 
-    def forward_spatial(
+    def forward_spatial_(
         self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
     ) -> torch.Tensor:
         B, ch, L = params.shape  # L = padded length = p * (padded kernel count)
@@ -1299,7 +1288,7 @@ class MoE(Backbone[MoEConfig]):
         if cnt is None:
             return self.forward_spatial_(h, w, params)
         else:
-            return self.forward_spatial(h, w, params, cnt)
+            return self.forward_spatial_(h, w, params, cnt)
 
 
 @dataclass

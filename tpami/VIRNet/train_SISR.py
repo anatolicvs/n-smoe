@@ -30,6 +30,9 @@ import torchvision.utils as vutils
 from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
+import torch._dynamo
+
+torch._dynamo.config.cache_size_limit = 256
 
 
 from networks.network_moex import (

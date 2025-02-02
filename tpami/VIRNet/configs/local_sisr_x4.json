@@ -3,7 +3,7 @@
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "hr_size": 192, 
-    "batch_size": 16, 
+    "batch_size": 4, 
     "epochs": 120,
     "lr": 1e-4,
     "lr_min": 1e-6, 
