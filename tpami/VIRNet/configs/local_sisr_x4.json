@@ -12,17 +12,17 @@
     "prefetch_factor": 2, 
     "db_length": 1000,
     "save_dir": "", 
-     "resume": "/mnt/d/virnet_smoe/models/model_20250202-182446_9daad8f2.pth",
+     "resume": "" , # "/mnt/d/virnet_smoe/models/model_20250202-182446_9daad8f2.pth"
 
 
     # network N-SMoE
     "kernel_chn": 3,
     "noise_avg": "True",
     "model_channels": 32,
-    "num_res_blocks": 4,
-    "attention_resolutions": [16, 8],
+    "num_res_blocks": 2, 
+    "attention_resolutions": [32, 16, 8],
     "dropout": 0.1,
-    "channel_mult": [2, 4, 8],
+    "channel_mult": [2, 4, 8, 16],
     "conv_resample":"False",
     "dims": 2,
     "use_checkpoint": "True",
@@ -37,7 +37,7 @@
     "activation": "LeakyReLU",
     "rope_theta": 10000.0,
     "attention_type": "cross_attention",
-    "kernel": 16,
+    "kernel": 8,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
     "overlap": 8,

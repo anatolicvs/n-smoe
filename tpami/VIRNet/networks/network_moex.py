@@ -1351,7 +1351,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     def num_params(self, kernel_type: KernelType, ch: int, kernel: int) -> int:
         num_parms = self.get_params_per_kernel(kernel_type, ch)
         num_params_per_kernel = num_parms * kernel
-
         return num_params_per_kernel, num_parms
 
     @staticmethod

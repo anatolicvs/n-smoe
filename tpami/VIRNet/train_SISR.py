@@ -32,7 +32,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 import torch._dynamo
 
-torch._dynamo.config.cache_size_limit = 256
+torch._dynamo.config.cache_size_limit = 0
 
 
 from networks.network_moex import (
