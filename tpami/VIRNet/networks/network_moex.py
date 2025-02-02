@@ -1301,7 +1301,6 @@ class MoE(Backbone[MoEConfig]):
         else:
             return self.forward_spatial(h, w, params, cnt)
 
-
 @dataclass
 class AutoencoderConfig:
     EncoderConfig: EncoderConfig
