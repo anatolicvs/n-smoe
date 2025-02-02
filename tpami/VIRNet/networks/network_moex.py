@@ -808,14 +808,14 @@ class Encoder(Backbone[EncoderConfig]):
         )
         self._feature_size += ch
 
-        self.kernel_estimator = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)),  # Global pooling: [B, ch, 1, 1]
-            nn.Flatten(),  # -> [B, ch_est]
-            nn.Linear(ch, 32),
-            self.activation,
-            nn.Linear(32, 1),
-            nn.Sigmoid(),
-        )
+        # self.kernel_estimator = nn.Sequential(
+        #     nn.AdaptiveAvgPool2d((1, 1)),  # Global pooling: [B, ch, 1, 1]
+        #     nn.Flatten(),  # -> [B, ch_est]
+        #     nn.Linear(ch, 32),
+        #     self.activation,
+        #     nn.Linear(32, 1),
+        #     nn.Sigmoid(),
+        # )
 
         self.out = nn.Sequential(
             normalization(num_channels=ch, num_groups=cfg.num_groups),
@@ -894,22 +894,23 @@ class Encoder(Backbone[EncoderConfig]):
         h = self.middle_block(h)
         h = h.to(dtype=x_input.dtype)
 
-        pool_h = F.adaptive_avg_pool2d(h, (1, 1))
-        kernel_ratio = self.kernel_estimator(pool_h)  # Shape: [B, 1]
+        # pool_h = F.adaptive_avg_pool2d(h, (1, 1))
+        # kernel_ratio = self.kernel_estimator(pool_h)  # Shape: [B, 1]
         # Scale to [kernel_min, kernel_max] and round to integer.
-        kernel_count = (
-            torch.round(
-                self.kernel_min + (self.kernel_max - self.kernel_min) * kernel_ratio
-            )
-            .long()
-            .squeeze(1)
-        )  # Shape: [B]
+        # kernel_count = (
+        #     torch.round(
+        #         self.kernel_min + (self.kernel_max - self.kernel_min) * kernel_ratio
+        #     )
+        #     .long()
+        #     .squeeze(1)
+        # )  # Shape: [B]
 
         gaussians = self.out(h)
         gaussians = rearrange(
             gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
         )
-        return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma, kernel_count
+        # return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma, kernel_count # dynamic kernel count
+        return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma
 
     @property
     def d_out(self) -> int:
@@ -1136,11 +1137,11 @@ class MoE(Backbone[MoEConfig]):
         G_sigma = torch.exp(e)  # [B, ch, k, W, H]
         norm_x = torch.linalg.norm(d[..., :2], dim=-1)  # [B, ch, k, W, H]
         Sigma_inv_diag = Sigma_inv[..., 0, 0].unsqueeze(-1).unsqueeze(-1)
-        denominator = c.unsqueeze(-1).unsqueeze(-1) * Sigma_inv_diag.clamp(
+        denom = c.unsqueeze(-1).unsqueeze(-1) * Sigma_inv_diag.clamp(
             min=self.min_diag
         )  # [B, ch, k, 1, 1]
-        denominator = denominator.clamp(min=self.min_denominator)
-        C_csigma = 1.0 / (1.0 + norm_x**2 / denominator)  # [B, ch, k, W, H]
+        denom = denom.clamp(min=self.min_denom)
+        C_csigma = 1.0 / (1.0 + norm_x**2 / denom)  # [B, ch, k, W, H]
         combined = (
             alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma
             + (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
@@ -1159,76 +1160,66 @@ class MoE(Backbone[MoEConfig]):
         G_sigma = torch.exp(e)  # [B, ch, k, W, H]
         return G_sigma  # [B, ch, k, W, H]
 
-    def forward_spatial_(
-        self, height: int, width: int, params: torch.Tensor
-    ) -> torch.Tensor:
+    def forward_spatial_(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
         B, ch, _ = params.shape  # [B, ch, k * param_per_kernel]
         k = self.kernel  # int
 
-        mu_xy, cov_matrix, w, alpha, c = self.extract_parameters(params, k, ch)
+        mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
         # mu_xy: [B, ch, k, D]
         # cov_matrix: [B, ch, k, D, D]
         # w: [B, ch, k]
         # alpha: [B, ch, k] or None
         # c: [B, ch, k] or None
 
-        d = cov_matrix.shape[-1]  # D=3 or 5
-        eye_d = torch.eye(d, device=cov_matrix.device).view(
-            1, 1, 1, d, d
-        )  # [1,1,1,D,D]
+        d = cov.shape[-1]
+        I = torch.eye(d, device=cov.device).view(1, 1, 1, d, d)
+        eig = torch.linalg.eigvalsh(cov)
+        m = eig.min(dim=-1).values[..., None, None]
+        eps = F.softplus(-m) + 1e-8
+        cov_reg = cov + (1e-6 + eps) * I
 
-        eigenvalues = torch.linalg.eigvalsh(cov_matrix)
-        min_eig = eigenvalues.min(dim=-1).values[..., None, None]
-        eps_adaptive = F.softplus(-min_eig) + 1e-8
-
-        cov_matrix_reg = cov_matrix + (1e-6 + eps_adaptive) * eye_d
-
-        L = torch.linalg.cholesky(cov_matrix_reg)  # [B, ch, k, D, D]
-        Sigma_inv = torch.cholesky_inverse(L)  # [B, ch, k, D, D]
+        L_chol = torch.linalg.cholesky(cov_reg)  # [B, ch, k, D, D]
+        SI = torch.cholesky_inverse(L_chol)  # [B, ch, k, D, D]
 
         # Sigma_inv = torch.linalg.solve(cov_matrix + eps * eye_d, eye_d)
 
-        g = self.grid(height, width, params.device)  # [W, H, 2]
-        g_expanded = g.unsqueeze(0).unsqueeze(0).unsqueeze(2)  # [1,1,1,W,H,2]
-        g_expanded = g_expanded.repeat(B, ch, k, 1, 1, 1)  # [B, ch, k, W, H, 2]
+        G = self.grid(h, w, params.device)  # [W, H, 2]
+        G_exp = G.unsqueeze(0).unsqueeze(0).unsqueeze(2)  # [1,1,1,W,H,2]
+        G_exp = G_exp.repeat(B, ch, k, 1, 1, 1)
 
-        mu_full = mu_xy.unsqueeze(3).unsqueeze(4)  # [B, ch, k, 1, 1, D]
+        mu_full = mu.unsqueeze(3).unsqueeze(4)  # [B, ch, k, 1, 1, D]
 
         if ch == 1:
-            color_zeros = (
-                torch.zeros_like(mu_xy[..., -1:]).unsqueeze(3).unsqueeze(4)
+            CZ = (
+                torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4)
             )  # [B,1,k,1,1,1]
-            color_zeros = color_zeros.expand(
-                -1, -1, -1, height, width, -1
-            )  # [B,1,k,H,W,1]
-            x = torch.cat([g_expanded, color_zeros], dim=-1)  # [B,1,k,W,H,3]
+            CZ = CZ.expand(-1, -1, -1, h, w, -1)  # [B,1,k,H,W,1]
+            X = torch.cat([G_exp, CZ], dim=-1)  # [B,1,k,W,H,3]
         elif ch == 3:
-            color_mean = mu_xy[..., -3:].unsqueeze(3).unsqueeze(4)  # [B,3,k,1,1,3]
-            color_mean_expanded = color_mean.expand(
-                -1, -1, -1, height, width, -1
-            )  # [B,3,k,H,W,3]
-            x = torch.cat([g_expanded, color_mean_expanded], dim=-1)  # [B,3,k,W,H,5]
+            CM = mu[..., -3:].unsqueeze(3).unsqueeze(4)  # [B,3,k,1,1,3]
+            CM_exp = CM.expand(-1, -1, -1, h, w, -1)  # [B,3,k,H,W,3]
+            X = torch.cat([G_exp, CM_exp], dim=-1)  # [B,3,k,W,H,5]
         else:
             raise ValueError(f"Unsupported number of channels: {ch}")
 
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            ker = self.gaussian_cauchy_kernel(
-                x, mu_full, Sigma_inv, alpha, c
+            K_out = self.gaussian_cauchy_kernel(
+                X, mu_full, SI, alp, cst
             )  # [B, ch, k, W, H]
         else:
-            mu_spatial = mu_xy[..., :2].reshape(B, ch, k, 1, 1, 2)  # [B, ch, k,1,1,2]
-            Sigma_inv_spatial = Sigma_inv[..., :2, :2]  # [B, ch, k,2,2]
-            ker = self.gaussian_kernel(
-                g_expanded, mu_spatial, Sigma_inv_spatial
-            )  # [B, ch, k, W, H]
+            mu_sp = mu[..., :2].reshape(
+                B, ch, x_dyn.shape[2], 1, 1, 2
+            )  # [B, ch, k,1,1,2]
+            SI_sp = SI[..., :2, :2]  # [B, ch, k,2,2]
+            K_out = self.gaussian_kernel(G_exp, mu_sp, SI_sp)  # [B, ch, k, W, H]
 
-        ker = ker * w.view(B, ch, k, 1, 1)  # [B, ch, k, W, H]
-        ker_sum = ker.sum(dim=2, keepdim=True)  # [B, ch, 1, W, H]
-        ker = ker / (ker_sum + 1e-8)  # [B, ch, k, W, H]
-        out = ker.sum(dim=2)  # [B, ch, W, H]
+        K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, W, H]
+        KS = K_out.sum(dim=2, keepdim=True)  # [B, ch, 1, W, H]
+        K_norm = K_out / (KS + 1e-8)  # [B, ch, k, W, H]
+        out = K_norm.sum(dim=2)  # [B, ch, W, H]
         return torch.clamp(out, min=0.0, max=1.0)  # [B, ch, W, H]
 
-    def extract_dynamic(
+    def extract_dynamic_(
         self, x: torch.Tensor, cnt: torch.Tensor, p: int
     ) -> torch.Tensor:
         B, C, L = x.shape
@@ -1238,6 +1229,23 @@ class MoE(Backbone[MoEConfig]):
         idx = torch.arange(K_eff, device=x.device).unsqueeze(0).expand(B, K_eff)
         msk = (idx < cnt.unsqueeze(1)).to(x.dtype).unsqueeze(1).unsqueeze(-1)
         return x_r * msk
+
+    def extract_dynamic(
+        self, x: torch.Tensor, cnt: torch.Tensor, p: int
+    ) -> torch.Tensor:
+        # x: [B, C, L] where L = padded length = max_possible * p; cnt: [B]
+        B, C, _ = x.shape
+        K = int(cnt.max().item())
+        lst = []
+        for i in range(B):
+            k_i = int(cnt[i].item())
+            xi = x[i, :, : k_i * p].view(C, k_i, p)  # [C, k_i, p]
+            if k_i < K:
+                pad = torch.zeros(C, K - k_i, p, device=x.device, dtype=x.dtype)
+                xi = torch.cat([xi, pad], dim=1)
+            lst.append(xi.unsqueeze(0))
+
+        return torch.cat(lst, dim=0)  # [B, C, K, p]
 
     def forward_spatial(
         self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
@@ -1286,7 +1294,7 @@ class MoE(Backbone[MoEConfig]):
         return torch.clamp(out, 0.0, 1.0)
 
     def forward(
-        self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor]
+        self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None
     ) -> torch.Tensor:
         if cnt is None:
             return self.forward_spatial_(h, w, params)
@@ -1437,11 +1445,61 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     def forward(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+
+        x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
+
+        if x_p.ndim == 5:
+            x_p = x_p.reshape(-1, *x_p.shape[2:])
+
+        es: int = x_p.element_size()
+        ml = self.mem_lim()
+        bm: int = x_p.shape[1:].numel() * es
+        mx_bs = ml // bm
+        n: int = int(max(1, min(x_p.shape[0] // 1024, mx_bs)))
+        cs: int = int((x_p.shape[0] + n - 1) // n)
+
+        res = [
+            self.encoder(chunk, self.snet(chunk), self.knet(chunk))
+            for chunk in torch.split(x_p, cs)
+        ]
+
+        gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
+
+        B, L, C, H, W, pad = dims  # => (B, L, C, H, W, pad)
+        sp: int = self.phw * self.encoder.scale_factor
+
+        dec: torch.Tensor = torch.cat(
+            [self.decoder(sp, sp, bt) for bt in torch.split(gaussians, cs)], dim=0
+        )
+
+        rec: torch.Tensor = self.reconstruct(
+            dec,
+            (
+                B,
+                L,
+                C,
+                H * self.encoder.scale_factor,
+                W * self.encoder.scale_factor,
+                pad * self.encoder.scale_factor,
+            ),
+            sp,
+            self.overlap * self.encoder.scale_factor,
+        )  # => (B, C, H, W)
+
+        kinfo_avg = kinfo.view(B, L, -1).mean(dim=1)
+        sigma_avg = sigma.view(B, L, 1, 1, 1).mean(dim=1)
+
+        return rec, kinfo_avg, sigma_avg
+
+    def forward_(
+        self, x: torch.Tensor
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pchs, dm = self.extract_blocks(
             x, self.phw, self.overlap
         )  # dm: (B_orig, L_orig, C, H, W, pd)
         if pchs.ndim == 5:
             pchs = pchs.reshape(-1, *pchs.shape[2:])  # pchs: [B_enc, C, bs, bs]
+
         es = pchs.element_size()
         ml = self.mem_lim()
         bm = pchs.shape[1:].numel() * es
