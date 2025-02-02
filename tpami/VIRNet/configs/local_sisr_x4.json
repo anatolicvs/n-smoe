@@ -12,7 +12,7 @@
     "prefetch_factor": 2, 
     "db_length": 1000,
     "save_dir": "", 
-    "resume": "",
+    "resume": "/mnt/d/virnet_smoe/models/model_20250201-211541_e1f933d8.pth",
 
 
     # network N-SMoE
