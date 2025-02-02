@@ -949,7 +949,7 @@ class MoE(Backbone[MoEConfig]):
         self.sharpening_factor = cfg.sharpening_factor
         self.kernel_type = cfg.kernel_type
         self.min_diag = 1e-6
-        self.min_denominator = 1e-8
+        self.min_denom = 1e-8
 
     def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
         xx = torch.linspace(0.0, 1.0, width, device=device)  # [W]
@@ -1300,6 +1300,7 @@ class MoE(Backbone[MoEConfig]):
             return self.forward_spatial_(h, w, params)
         else:
             return self.forward_spatial(h, w, params, cnt)
+
 
 @dataclass
 class AutoencoderConfig:
