@@ -12,6 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from einops import rearrange
 from torch.nn.attention import SDPBackend, sdpa_kernel
+from torch.nn.utils.rnn import pad_sequence
 from util import util_net
 
 from .DnCNN import DnCNN
@@ -1002,19 +1003,14 @@ class MoE(Backbone[MoEConfig]):
         L[..., 2, 2] = l33.squeeze(-1)  # [B, ch, k]
         return L  # [B, ch, k, 3, 3]
 
-    def construct_lower_triangular(
-        self, params: torch.Tensor, size: int
-    ) -> torch.Tensor:
-        if size == 1:
-            return self.construct_lower_triangular_size1(params)  # [B, ch, k, 1, 1]
-        elif size == 2:
-            return self.construct_lower_triangular_size2(params)  # [B, ch, k, 2, 2]
-        elif size == 3:
-            return self.construct_lower_triangular_size3(params)  # [B, ch, k, 3, 3]
-        else:
-            raise ValueError(
-                f"Unsupported size: {size}. Only size=1, 2, and 3 are supported."
-            )
+    def construct_lower_triangular(self, p: torch.Tensor, s: int) -> torch.Tensor:
+        if s == 1:
+            return self.construct_lower_triangular_size1(p)
+        if s == 2:
+            return self.construct_lower_triangular_size2(p)
+        if s == 3:
+            return self.construct_lower_triangular_size3(p)
+        raise ValueError(f"Unsupported size: {s}")
 
     def cov_mat(
         self,
@@ -1235,22 +1231,13 @@ class MoE(Backbone[MoEConfig]):
     def extract_dynamic(
         self, x: torch.Tensor, cnt: torch.Tensor, p: int
     ) -> torch.Tensor:
-        # x: [B, C, L] where L = padded length = max_possible * p; cnt: [B]
-        B, C, _ = x.shape
-        K = int(cnt.max().item())
-        lst = []
-        for i in range(B):
-            k_i = int(cnt[i].item())
-            xi = x[i, :, : k_i * p].view(C, k_i, p)  # [C, k_i, p]
-            if k_i < K:
-                pad = torch.zeros(C, K - k_i, p, device=x.device, dtype=x.dtype)
-                xi = torch.cat([xi, pad], dim=1)
-            lst.append(xi.unsqueeze(0))
-
-        return torch.cat(lst, dim=0)  # [B, C, K, p]
-
-    def forward_(self, height: int, width: int, params: torch.Tensor) -> torch.Tensor:
-        return self.forward_spatial(height, width, params)
+        B, C, L = x.shape
+        K_all = L // p
+        K_eff = int(cnt.max().item())
+        x_r = x.view(B, C, K_all, p)[:, :, :K_eff, :]
+        idx = torch.arange(K_eff, device=x.device).unsqueeze(0).expand(B, K_eff)
+        msk = (idx < cnt.unsqueeze(1)).to(x.dtype).unsqueeze(1).unsqueeze(-1)
+        return x_r * msk
 
     def forward_spatial(
         self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
@@ -1299,9 +1286,12 @@ class MoE(Backbone[MoEConfig]):
         return torch.clamp(out, 0.0, 1.0)
 
     def forward(
-        self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
+        self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor]
     ) -> torch.Tensor:
-        return self.forward_spatial(h, w, params, cnt)
+        if cnt is None:
+            return self.forward_spatial_(h, w, params)
+        else:
+            return self.forward_spatial(h, w, params, cnt)
 
 
 @dataclass
@@ -1314,15 +1304,6 @@ class AutoencoderConfig:
     d_out: Optional[int] = None
     phw: int = 32
     overlap: int = 24
-
-
-def get_params_per_kernel(kernel_type: any, ch: int) -> int:
-    if kernel_type == KernelType.GAUSSIAN:
-        return 10 if ch == 1 else 17
-    elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
-        return 12 if ch == 1 else 18
-    else:
-        raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
 
 
 class Autoencoder(Backbone[AutoencoderConfig]):
@@ -1370,12 +1351,20 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )  # Dynamic scaling based on step and block_size
         return window
 
-    @staticmethod
-    def num_params(kernel_type: KernelType, ch: int, kernel: int) -> int:
-        num_parms = get_params_per_kernel(kernel_type, ch)
+    def num_params(self, kernel_type: KernelType, ch: int, kernel: int) -> int:
+        num_parms = self.get_params_per_kernel(kernel_type, ch)
         num_params_per_kernel = num_parms * kernel
 
         return num_params_per_kernel, num_parms
+
+    @staticmethod
+    def get_params_per_kernel(kernel_type: any, ch: int) -> int:
+        if kernel_type == KernelType.GAUSSIAN:
+            return 10 if ch == 1 else 17
+        elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
+            return 12 if ch == 1 else 18
+        else:
+            raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
 
     def extract_blocks(
         self, img_tensor: torch.Tensor, block_size: int, overlap: int
@@ -1463,6 +1452,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             self.encoder(chunk, self.snet(chunk), self.knet(chunk))
             for chunk in torch.split(pchs, cs)
         ]
+
         g, kinfo, sigma, kcnt = map(lambda a: torch.cat(a, dim=0), zip(*res))
         # g: [B_enc, C, latent_enc] with B_enc = B_orig * L_orig
         # kcnt: [B_enc]
@@ -1471,10 +1461,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         sp = self.phw * self.encoder.scale_factor
         # Reshape g and kcnt to [B_orig, L_orig, C, latent_enc] and [B_orig, L_orig] respectively.
         g_r = g.view(B_orig, L_orig, C_enc, L_enc)
-        
-       
+
         g_flat = g_r.view(B_enc, C_enc, L_enc)
-       
+
         thresholds = kcnt.view(B_enc) * self.params_per_kernel  # [B_enc]
         idx = (
             torch.arange(L_enc, device=g.device).unsqueeze(0).expand(B_enc, L_enc)
@@ -1482,10 +1471,10 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         mask = idx < thresholds.unsqueeze(1)  # [B_enc, L_enc]
         mask_exp = mask.unsqueeze(1).expand(B_enc, C_enc, L_enc)
         g_mask = g_flat * mask_exp  # [B_enc, C_enc, L_enc]
-        
+
         splits = torch.split(g_mask, cs)  # each [cs, C, L_enc]
         kcnt_splits = torch.split(kcnt, cs)  # each [cs]
-        
+
         dec_list = [
             self.decoder(sp, sp, latent, cnt)
             for latent, cnt in zip(splits, kcnt_splits)
@@ -1506,7 +1495,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
         kinfo_avg = kinfo.view(B_orig, L_orig, -1).mean(dim=1)
         sigma_avg = sigma.view(B_orig, L_orig, 1, 1, 1).mean(dim=1)
-        
+
         return rec, kinfo_avg, sigma_avg
 
 
