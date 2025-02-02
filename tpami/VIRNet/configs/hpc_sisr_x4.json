@@ -4,9 +4,9 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 192, 
-    "batch_size": 72, 
+    "batch_size": 256, 
     "epochs": 120,
-    "lr": 2e-4, # 2e-4, 
+    "lr": 1e-4, # 2e-4, 
     "lr_min": 1e-6, 
     "print_freq": 500,
     "num_workers": 32, 
