@@ -75,7 +75,7 @@ CPUS_PER_TASK=32
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="8:00:00"
+TIME="30:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -90,7 +90,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 
 PARTITION="c23g" # c23g_low
 # STATES="idle,mixed"
-STATES="mixed"
+STATES="idle,mix,alloc,drain"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
@@ -154,7 +154,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
 # #SBATCH --mem=$TOTAL_MEM
-#SBATCH --mem-per-gpu=64G
+#SBATCH --mem-per-gpu=16G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks-per-node=$NTASKS_PER_NODE
 #SBATCH --mail-type=$MAIL_TYPE
