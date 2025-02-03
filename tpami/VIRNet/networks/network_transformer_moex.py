@@ -1044,26 +1044,24 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             cfg.DecoderConfig.kernel_type, cfg.d_in, cfg.DecoderConfig.kernel
         )
 
-        self.snet = torch.compile(
-            DnCNN(
+        self.snet =  DnCNN(
                 in_channels=cfg.d_in,
                 out_channels=cfg.EncoderConfig.sigma_chn,
                 dep=cfg.dep_S,
                 noise_avg=cfg.EncoderConfig.noise_avg,
             )
-        )
-        self.knet = torch.compile(
-            KernelNet(
+        
+        self.knet = KernelNet(
                 in_nc=cfg.d_in,
                 out_chn=cfg.EncoderConfig.kernel_chn,
                 num_blocks=cfg.dep_K,
             )
-        )
+        
 
         self.encoder = torch.compile(
             Encoder(cfg=cfg.EncoderConfig, phw=cfg.phw, d_in=cfg.d_in, d_out=d_out)
         )
-        self.decoder = torch.compile(MoE(cfg=cfg.DecoderConfig))
+        self.decoder = MoE(cfg=cfg.DecoderConfig)
 
         self.params_per_kernel = params_per_kernel
         self.register_buffer("ml", torch.tensor(self.mem_lim()))
@@ -1101,7 +1099,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         else:
             raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
 
-    @torch.compile
+    # @torch.compile
     def extract_blocks(
         self, img_tensor: torch.Tensor, block_size: int, overlap: int
     ) -> Tuple[torch.Tensor, Tuple[int, int, int, int, int]]:
@@ -1121,7 +1119,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
         return patches, (B, L, C, H, W, pad)
 
-    @torch.compile
+    # @torch.compile
     def reconstruct(
         self,
         decoded_patches: torch.Tensor,
