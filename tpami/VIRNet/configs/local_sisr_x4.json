@@ -2,7 +2,7 @@
     # training settings
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
-    "hr_size": 192, 
+    "hr_size": 128, 
     "batch_size": 4, 
     "epochs": 120,
     "lr": 1e-4,

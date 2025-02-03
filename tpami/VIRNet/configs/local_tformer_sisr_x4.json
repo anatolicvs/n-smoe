@@ -18,16 +18,16 @@
     # network N-SMoE
     "embed_dim": 32,
     "depth": 2,
-    "heads": 8, 
+    "heads": 4, 
     "dim_head": 16,
     "mlp_dim": 32,
-    "dropout": 0.01,
+    "dropout": 0.5,
     "patch_size": 4,
     "resizer_num_layers": 2,
     "resizer_avg_pool": "False",
     "activation": "GELU", 
     "dino_model": "dino_vits16",
-    "resnet_model": "resnet18",
+    "resnet_model": "resnet34",
     "resnet_num_layers": 2,
     "resnet_use_first_pool": "False",
     "kernel_chn": 3,
@@ -35,7 +35,7 @@
     "kernel": 9,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
-    "overlap": 4,
+    "overlap": 12,
     "sharpening_factor": 1,
 
     # network architecture
@@ -53,6 +53,7 @@
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",
+    "chn":"rgb",  
 
     # degradation process
     "sf": 4,

@@ -298,7 +298,7 @@ class BackboneResnet(Backbone[BackboneResnetCfg]):
         super().__init__(cfg)
 
         norm_layer = functools.partial(
-            nn.InstanceNorm2d, affine=True, track_running_stats=False
+            nn.InstanceNorm2d, affine=False, track_running_stats=False
         )
 
         model_weights = {
@@ -1335,6 +1335,7 @@ class MoE(Backbone[MoEConfig]):
             return self.forward_spatial(h, w, params)
         else:
             return self.forward_spatial_(h, w, params, cnt)
+
 
 class Autoencoder(Backbone[AutoencoderConfig]):
     def __init__(self, cfg: AutoencoderConfig) -> None:
