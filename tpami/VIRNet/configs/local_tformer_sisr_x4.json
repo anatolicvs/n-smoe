@@ -17,7 +17,7 @@
 
     # network N-SMoE
     "embed_dim": 64, # embed_dim = heads x dim_head (8x8=64)
-    "depth": 3,
+    "depth": 4,
     "heads": 8, 
     "dim_head": 8,
     "mlp_dim": 256, # mlp_dim = 2xembed_dim (2x64=128)
@@ -28,7 +28,7 @@
     "activation": "GELU", 
     "dino_model": "dino_vits8",
     "resnet_model": "resnet18",
-    "resnet_num_layers": 3,
+    "resnet_num_layers": 4,
     "resnet_use_first_pool": "True",
     "kernel_chn": 3,
     "noise_avg": "True",
