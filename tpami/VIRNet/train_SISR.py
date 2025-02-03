@@ -32,8 +32,8 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 import torch._dynamo
 
-torch._dynamo.config.cache_size_limit = 0
-
+torch._dynamo.config.cache_size_limit = 1024 * 1024
+torch._dynamo.config.capture_scalar_outputs = True
 
 # from networks.network_moex import (
 #     EncoderConfig,
@@ -212,7 +212,7 @@ def main():
 
     net = Autoencoder(cfg=autoencoder_cfg)
     net = net.cuda()
-    net = torch.compile(net)
+    # net = torch.compile(net)
 
     if rank == 0:
         print(
