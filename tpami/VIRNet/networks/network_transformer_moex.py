@@ -610,7 +610,8 @@ class Encoder(Backbone[EncoderConfig]):
         kinfo_est: Optional[torch.Tensor] = None,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        sigma = torch.exp(torch.clamp(sigma_est, min=log_min, max=log_max))
+        # sigma = torch.exp(torch.clamp(sigma_est, min=log_min, max=log_max))
+        sigma = F.softplus(sigma_est) + 1e-8
 
         x_up = self._interpolate(x, self.scale_factor)
         h_up, w_up = x_up.shape[-2], x_up.shape[-1]
