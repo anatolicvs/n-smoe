@@ -160,8 +160,8 @@ def main():
     # )
 
     # net = Autoencoder(cfg=autoencoder_cfg)
-    # net = torch.compile(net)
     # net = net.cuda()
+    # net = torch.compile(net)
 
     encoder_cfg = EncoderConfig(
         embed_dim=args["embed_dim"],

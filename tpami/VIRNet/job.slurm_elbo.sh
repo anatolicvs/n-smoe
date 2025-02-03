@@ -12,7 +12,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.5"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-3}  # Default to 4 if not set
+GPUS=${GPUS:-1}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -71,11 +71,11 @@ JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}"
 
 NODES=1
 NTASKS_PER_NODE=$GPUS
-CPUS_PER_TASK=16
+CPUS_PER_TASK=32
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
-TIME="30:00:00"
+TIME="8:00:00"
 MAIL_TYPE="ALL"
 MAIL_USER="aytac@linux.com"
 
@@ -90,7 +90,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 
 PARTITION="c23g" # c23g_low
 # STATES="idle,mixed"
-STATES="idle,mixed"
+STATES="mixed"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
@@ -133,8 +133,8 @@ fi
 
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
-# SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v4/gaussian_cauchy" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v5/gaussian_cauchy/"
+SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v5/gaussian_cauchy" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
+# SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v5/gaussian_cauchy/"
 
 
 if [ ! -d "$SAVE_DIR" ]; then
