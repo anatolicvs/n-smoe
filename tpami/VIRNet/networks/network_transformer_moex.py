@@ -24,8 +24,6 @@ from .KNet import KernelNet
 from .nn import normalization
 
 
-torch.set_float32_matmul_precision("high")
-
 backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_ATTENTION]
 
 OLD_GPU = True
@@ -399,7 +397,9 @@ class BackboneDinoCfg:
 class BackboneDino(Backbone[BackboneDinoCfg]):
     def __init__(self, cfg: BackboneDinoCfg, d_in: int, d_out: int) -> None:
         super().__init__(cfg)
-        self.dino = torch.hub.load("facebookresearch/dino:main", cfg.model)
+        self.dino = torch.hub.load(
+            "facebookresearch/dino:main", cfg.model, skip_validation=True
+        )
         self._configure_dino_patch_embedding(d_in)
         self.resnet_backbone = BackboneResnet(cfg.backbone_cfg, d_in, d_out)
         dino_dim = self.get_dino_feature_dim()
@@ -569,8 +569,11 @@ class Encoder(Backbone[EncoderConfig]):
 
         self.out = nn.Sequential(
             # normalization(cfg.num_groups, int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
-            normalization(
-                channels=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
+            # normalization(
+            #     channels=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
+            # ),
+            nn.LayerNorm(
+                normalized_shape=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
             ),
             activation,
             AttentionPool2d(
@@ -1050,15 +1053,14 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             dep=cfg.dep_S,
             noise_avg=cfg.EncoderConfig.noise_avg,
         )
-
         self.knet = KernelNet(
             in_nc=cfg.d_in,
             out_chn=cfg.EncoderConfig.kernel_chn,
             num_blocks=cfg.dep_K,
         )
 
-        self.encoder = torch.compile(
-            Encoder(cfg=cfg.EncoderConfig, phw=cfg.phw, d_in=cfg.d_in, d_out=d_out)
+        self.encoder = Encoder(
+            cfg=cfg.EncoderConfig, phw=cfg.phw, d_in=cfg.d_in, d_out=d_out
         )
         self.decoder = MoE(cfg=cfg.DecoderConfig)
 

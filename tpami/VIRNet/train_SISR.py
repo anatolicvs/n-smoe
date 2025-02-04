@@ -55,6 +55,10 @@ from networks.network_transformer_moex import (
 )
 
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Disable TensorFlow logging
+os.environ["XLA_FLAGS"] = "--xla_gpu_force_compilation_parallelism=1"
+
+
 def init_dist(backend="nccl", **kwargs):
     if mp.get_start_method(allow_none=True) is None:
         mp.set_start_method("spawn")
@@ -216,6 +220,7 @@ def main():
     # net = torch.compile(net)
 
     if rank == 0:
+        torch.set_float32_matmul_precision("high")
         print(
             "Number of parameters in SNet: {:.2f}M".format(
                 util_net.calculate_parameters(net.snet) / (1000**2)
