@@ -134,8 +134,7 @@ fi
 VISIBLE_DEVICES=$(seq -s, 0 $((GPUS - 1)))
 
 SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v5/gaussian_cauchy" # /hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/
-SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x2/v5/gaussian_cauchy"
-
+# SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x2/v5/gaussian_cauchy"
 # SAVE_DIR="/hpcwork/p0021791/zoo/vir-n-smoe/x4/v5/gaussian_cauchy/"
 
 
