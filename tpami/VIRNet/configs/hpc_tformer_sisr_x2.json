@@ -3,7 +3,7 @@
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "hr_size": 96, 
-    "batch_size": 4, 
+    "batch_size": 192, 
     "db_length": 10000,
     "epochs": 120,
     "lr": 1e-4,
@@ -11,7 +11,7 @@
     "print_freq": 100,
     "num_workers": 8, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x2/v4/gaussian_cauchy", 
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x2/v5/gaussian_cauchy", 
     "resume": "",
 
 
@@ -20,12 +20,12 @@
     "depth": 3,
     "heads": 8, 
     "dim_head": 8,
-    "mlp_dim": 128, # mlp_dim = 2xembed_dim (2x64=128)
+    "mlp_dim": 256, # mlp_dim = 4xembed_dim (4x64=256)
     "dropout": 0.2,
     "patch_size": 4,
     "resizer_num_layers": 2,
     "resizer_avg_pool": "True",
-    "activation": "LeakyReLU", 
+    "activation": "GELU", 
     "dino_model": "dino_vits8",
     "resnet_model": "resnet18",
     "resnet_num_layers": 3,
@@ -37,11 +37,11 @@
     "phw": 16,
     "overlap": 8,
     "sharpening_factor": 1,
-
+   
 
     # network architecture
-    "dep_S": 5,
-    "dep_K": 8,
+    "dep_S": 8, # 5
+    "dep_K": 12, # 8
     "n_feat": [96, 160, 224], 
     "n_resblocks": 2, 
     "extra_mode": "Both",
@@ -67,7 +67,7 @@
     "r2": 1e-4,
     "var_window": 9,
     "kappa0": 50,
-    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    "penalty_K": [0.01, 1],    # little influence, [0.02, 1] degenerates to the loss of paper
     "clip_grad_R": 1e2,
     "clip_grad_S": 1e2, 
     "clip_grad_K": 1e2
