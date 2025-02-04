@@ -2,17 +2,17 @@
     # training settings
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
-    "hr_size": 128, 
+    "hr_size": 96, 
     "batch_size": 4, 
-    "db_length": 1000,
+    "db_length": 10000,
     "epochs": 120,
-    "lr": 2e-4, # 2e-4,
-    "lr_min": 1e-6, 
+    "lr": 1e-4,
+    "lr_min": 5e-7, 
     "print_freq": 100,
-    "num_workers": 32, 
+    "num_workers": 8, 
     "prefetch_factor": 2, 
-    "save_dir": "", 
-    "resume": "/mnt/d/virnet_smoe_transformer_knum_25/models/model_20250203-163117_c4a73fe4.pth", # /mnt/d/virnet_smoe_transformer_knum_16/models/model_20250203-094819_4038e294.pth
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x2/v4/gaussian_cauchy", 
+    "resume": "",
 
 
     # network N-SMoE
@@ -38,6 +38,7 @@
     "overlap": 8,
     "sharpening_factor": 1,
 
+
     # network architecture
     "dep_S": 5,
     "dep_K": 8,
@@ -48,15 +49,15 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/e/dataset/Flickr2K/Flickr2K_HR",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR | /mnt/d/dataset/samuel/gt
-    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
-    "add_jpeg": "False",
-    "kernel_shift": "False",
+    "train_hr_patchs": "/hpcwork/p0021791/dataset/rgb/train_0",  # hpcwork/p0021791/dataset/Flickr2K/Flickr2K_HR
+    "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
+    "add_jpeg": "True",
+    "kernel_shift": "True",
     "downsampler": "Bicubic",
     "chn":"rgb",  
 
     # degradation process
-    "sf": 4,
+    "sf": 2,
     "k_size": 21,
     "noise_level": [0.01, 15],
     "noise_jpeg": [0.01, 10],
@@ -67,8 +68,7 @@
     "var_window": 9,
     "kappa0": 50,
     "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
-    "clip_grad_R": 5e2,
+    "clip_grad_R": 1e2,
     "clip_grad_S": 1e2, 
-    "clip_grad_K": 5e2,
-    "clip_grad_Resizer": 1e2
+    "clip_grad_K": 1e2
 }
