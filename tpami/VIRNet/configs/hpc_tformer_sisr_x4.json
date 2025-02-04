@@ -4,14 +4,14 @@
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "kernel_chn": 3,
     "hr_size": 128, 
-    "batch_size": 64, 
-    "epochs": 120,
+    "batch_size": 256, 
+    "epochs": 250,
     "lr": 1e-4, # 2e-4, 
     "lr_min": 1e-6, 
     "print_freq": 500,
     "num_workers": 32, 
     "prefetch_factor": 2, 
-    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v4/gaussian_cauchy",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
+    "save_dir": "/hpcwork/p0021791/zoo/vir-n-smoe_tformer/x4/v5/gaussian_cauchy",  # "/hpcwork/p0021791/zoo/vir-n-smoe/x4/v3/gaussian_cauchy/"
     "resume": "",
 
 
@@ -20,7 +20,7 @@
     "depth": 3,
     "heads": 8, 
     "dim_head": 8,
-    "mlp_dim": 128, # mlp_dim = 2xembed_dim (2x64=128)
+    "mlp_dim": 256, # mlp_dim = 2xembed_dim (2x64=128)
     "dropout": 0.2,
     "patch_size": 4,
     "resizer_num_layers": 2,
@@ -32,7 +32,7 @@
     "resnet_use_first_pool": "False",
     "kernel_chn": 3,
     "noise_avg": "True",
-    "kernel": 25,
+    "kernel": 16,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
     "overlap": 8,
@@ -53,7 +53,7 @@
     "add_jpeg": "True",
     "kernel_shift": "True",
     "downsampler": "Bicubic",
-    "db_length": 1000000,
+    "db_length": 100000,
     "chn":"rgb",  
 
     # degradation process
@@ -67,7 +67,7 @@
     "r2": 1e-4,
     "var_window": 9,
     "kappa0": 50,
-    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    "penalty_K": [0.01, 1],    # little influence, [0.02, 1] degenerates to the loss of paper
     "clip_grad_R": 5e2,
     "clip_grad_S": 1e2, 
     "clip_grad_K": 5e2,

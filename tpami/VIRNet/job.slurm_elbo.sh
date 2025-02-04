@@ -12,7 +12,7 @@
 USE_APPTAINER=true
 BUILT_VERSION="1.5"
 DISTRIBUTED_TRAINING=true
-GPUS=${GPUS:-1}  # Default to 4 if not set
+GPUS=${GPUS:-4}  # Default to 4 if not set
 
 while getopts ":m:o:a:dg:h" opt; do
   case $opt in
@@ -71,7 +71,7 @@ JOB_NAME="${TODAYS_DATE}__${MODEL_NAME}"
 
 NODES=1
 NTASKS_PER_NODE=$GPUS
-CPUS_PER_TASK=32
+CPUS_PER_TASK=16
 MEM_PER_GPU=90G
 TOTAL_MEM=$((GPUS * 90))G
 
@@ -90,7 +90,7 @@ mkdir -p "$OUTPUT_DIR" "$ERROR_DIR" "/home/p0021791/tmp" || {
 
 PARTITION="c23g" # c23g_low
 # STATES="idle,mixed"
-STATES="idle,mix,alloc,drain"
+STATES="idle"
 
 get_idle_node() {
     # sinfo -N -p "$PARTITION" -h -o "%N %T" | grep -w "idle" | awk '{print $1; exit}'
@@ -154,7 +154,7 @@ cat <<-EOT > "$JOB_SCRIPT"
 #SBATCH --gres=gpu:$GPUS
 #SBATCH -c $CPUS_PER_TASK
 # #SBATCH --mem=$TOTAL_MEM
-#SBATCH --mem-per-gpu=16G
+#SBATCH --mem-per-gpu=32G
 #SBATCH --nodes=$NODES
 #SBATCH --ntasks-per-node=$NTASKS_PER_NODE
 #SBATCH --mail-type=$MAIL_TYPE
