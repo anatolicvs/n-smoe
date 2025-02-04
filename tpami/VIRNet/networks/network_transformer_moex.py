@@ -569,12 +569,12 @@ class Encoder(Backbone[EncoderConfig]):
 
         self.out = nn.Sequential(
             # normalization(cfg.num_groups, int(((phw * cfg.scale_factor)//cfg.patch_size))**2),
-            # normalization(
-            #     channels=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
-            # ),
-            nn.LayerNorm(
-                normalized_shape=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
+            normalization(
+                channels=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
             ),
+            # nn.LayerNorm(
+            #     normalized_shape=int(((phw * cfg.scale_factor) // cfg.patch_size)) ** 2
+            # ),
             activation,
             AttentionPool2d(
                 cfg.embed_dim,
