@@ -37,7 +37,7 @@
     "activation": "GELU",
     "rope_theta": 10000.0,
     "attention_type": "cross_attention",
-    "kernel": 8,
+    "kernel": 16,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
     "overlap": 8,

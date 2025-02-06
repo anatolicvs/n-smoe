@@ -132,11 +132,12 @@ class AttentionPool2d_(nn.Module):
 class FourierPosition(nn.Module):
     def __init__(self, in_dim: int = 2, mapping_size: int = 128, scale: float = 1.0):
         super().__init__()
+        assert mapping_size % 2 == 0, "mapping_size must be even"
         self.mapping_size = mapping_size
         self.B = nn.Parameter(torch.randn(in_dim, mapping_size // 2) * scale)
 
     def forward(self, coords: torch.Tensor) -> torch.Tensor:
-        x_proj = 2 * math.pi * coords @ self.B
+        x_proj = 2 * torch.pi * coords @ self.B  # torch.pi ensures device compatibility
         return torch.cat([torch.sin(x_proj), torch.cos(x_proj)], dim=-1)
 
 
@@ -145,15 +146,16 @@ class AttentionPool2d(nn.Module):
         self,
         embed_dim: int,
         num_heads: int,
-        output_dim: int,
-        H: int,
-        W: int,
+        output_dim: int = None,
+        H: int = 32,
+        W: int = 32,
         fourier_size: int = 128,
         fourier_scale: float = 1.0,
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
+
         self.output_dim = output_dim or embed_dim
         self.fourier_pos = FourierPosition(
             in_dim=2, mapping_size=fourier_size, scale=fourier_scale
@@ -586,7 +588,7 @@ class AttentionBlockConfig:
     attention_type: str = "cross_attention"  # "attention" or "cross_attention"
 
 
-class AttentionBlock(Backbone[AttentionBlockConfig]):
+class AttentionBlock_(Backbone[AttentionBlockConfig]):
     def __init__(self, cfg: AttentionBlockConfig, phw: int, scale_factor: int = 1):
         super().__init__(cfg)
         self.cfg: AttentionBlockConfig = cfg
@@ -639,6 +641,61 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
 
         h = self.proj_out(h)
         return (x + h).reshape(b, c, *spatial)
+
+
+class AttentionBlock(Backbone[AttentionBlockConfig]):
+    def __init__(self, cfg: AttentionBlockConfig, phw: int, scale_factor: int = 1):
+        super().__init__(cfg)
+        self.cfg: AttentionBlockConfig = cfg
+        self.scale_factor: int = scale_factor
+        self.phw: int = phw
+
+        self.norm = normalization(num_channels=cfg.channels, num_groups=cfg.num_groups)
+        self.qkv = conv_nd(cfg.dims, cfg.channels, cfg.channels * 3, 1)
+
+        self.attention_type = (
+            cfg.attention_type if hasattr(cfg, "attention_type") else "attention"
+        )
+
+        self.attention_map = {
+            "attention": QKVAttention(cfg.num_heads),
+            "cross_attention": RoPEAttention(
+                embedding_dim=cfg.channels,
+                num_heads=cfg.num_heads,
+                rope_theta=cfg.rope_theta,
+                rope_k_repeat=True,
+                feat_sizes=(phw, phw),
+            ),
+        }
+        self.attention = self.attention_map.get(self.attention_type, None)
+
+        self.proj_out = zero_module(conv_nd(cfg.dims, cfg.channels, cfg.channels, 1))
+        # Learnable scaling factor for the attention branch output.
+        self.layer_scale = nn.Parameter(torch.full((cfg.channels,), 0.1))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return checkpoint(
+            self._forward, (x,), list(self.parameters()), self.cfg.use_checkpoint
+        )
+
+    def _forward(self, x: torch.Tensor) -> torch.Tensor:
+        b, c, *spatial = x.shape
+        x_reshaped = x.reshape(b, c, -1)
+        qkv = self.qkv(self.norm(x_reshaped))
+
+        if self.attention_type == "attention" and self.attention is not None:
+            h = self.attention(qkv)
+        else:
+            h = self.attention(*qkv.chunk(3, dim=1))
+            h = h.transpose(1, 2)
+
+        h = F.dropout(h, p=self.cfg.dropout_rate, training=self.training)
+
+        h = self.proj_out(h)
+        # Apply layer scaling before residual addition.
+        h = h * self.layer_scale.view(1, -1, 1)
+        out = (x_reshaped + h).reshape(b, c, *spatial)
+        return out
 
 
 class MullerResizer(nn.Module):
