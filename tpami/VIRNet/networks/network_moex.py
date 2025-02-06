@@ -205,30 +205,30 @@ class AttentionPool2d(nn.Module):
         return x.squeeze(0)
 
 
-# def normalization(num_channels: int, num_groups: int) -> GroupNorm32:
-#     return GroupNorm32(num_groups, num_channels)
+def normalization(num_channels: int, num_groups: int) -> GroupNorm32:
+    return GroupNorm32(num_groups, num_channels)
 
 
-def compute_valid_groups(
-    num_channels: int, desired_groups: int, min_channels_per_group: int = 16
-) -> int:
-    computed_groups = num_channels // min_channels_per_group
-    groups_candidate = min(desired_groups, computed_groups)
-    valid_groups = groups_candidate
-    while valid_groups > 0:
-        if num_channels % valid_groups == 0:
-            return valid_groups
-        valid_groups -= 1
-    return 1
+# def compute_valid_groups(
+#     num_channels: int, desired_groups: int, min_channels_per_group: int = 16
+# ) -> int:
+#     computed_groups = num_channels // min_channels_per_group
+#     groups_candidate = min(desired_groups, computed_groups)
+#     valid_groups = groups_candidate
+#     while valid_groups > 0:
+#         if num_channels % valid_groups == 0:
+#             return valid_groups
+#         valid_groups -= 1
+#     return 1
 
 
-def normalization(
-    num_channels: int, num_groups: int, min_channels_per_group: int = 16
-) -> GroupNorm32:
-    valid_groups = compute_valid_groups(
-        num_channels, num_groups, min_channels_per_group
-    )
-    return GroupNorm32(valid_groups, num_channels)
+# def normalization(
+#     num_channels: int, num_groups: int, min_channels_per_group: int = 16
+# ) -> GroupNorm32:
+#     valid_groups = compute_valid_groups(
+#         num_channels, num_groups, min_channels_per_group
+#     )
+#     return GroupNorm32(valid_groups, num_channels)
 
 
 def count_flops_attn(model, _x, y) -> None:
@@ -1069,11 +1069,10 @@ class MoE(Backbone[MoEConfig]):
         self.sharpening_factor = cfg.sharpening_factor
         self.kernel_type = cfg.kernel_type
         self.min_diag = 1e-6
-        self.min_denom = 1e-8
+        self.min_denom = 1e-6
 
-        # Learnable temperature for the Gumbel-Softmax
         self.temp = nn.Parameter(torch.tensor(0.5), requires_grad=True)
-        self.reg_lambda = nn.Parameter(torch.tensor(1e-8), requires_grad=True)
+        self.reg_lambda = nn.Parameter(torch.tensor(1e-6), requires_grad=True)
 
         # Spectral-normalized linear mappings for raw covariance parameters.
         # For the spatial parameters (expected input dim=3)
