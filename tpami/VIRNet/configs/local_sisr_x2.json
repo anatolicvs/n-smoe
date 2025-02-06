@@ -2,17 +2,16 @@
     # training settings
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
-    "hr_size": 128, 
-    "batch_size": 4, 
+    "hr_size": 96, 
+    "batch_size": 16, 
     "epochs": 120,
     "lr": 1e-4,
-    "lr_min": 1e-6, 
+    "lr_min": 5e-7, 
     "print_freq": 100,
-    "num_workers": 16, 
+    "num_workers": 8, 
     "prefetch_factor": 2, 
-    "db_length": 1000,
-    "save_dir": "", 
-     "resume": "", # "/mnt/d/virnet_smoe/models/model_20250205-212803_4c1f0e26.pth" , # "/mnt/d/virnet_smoe/models/model_20250202-182446_9daad8f2.pth"
+    "save_dir": "./train_save",
+    "resume": "",
 
 
     # network N-SMoE
@@ -52,15 +51,14 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/d/RGB/open-images/test",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
-    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
+    "train_hr_patchs": "/mnt/sfs-common/zsyue/database/Flickr2K/pch512_hr", 
+    "val_hr_path": "./test_data/Set14", # *.bmp,
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",
-    "chn":"rgb",  
 
     # degradation process
-    "sf": 4,
+    "sf": 2,
     "k_size": 21,
     "noise_level": [0.01, 15],
     "noise_jpeg": [0.01, 10],
@@ -71,8 +69,7 @@
     "var_window": 9,
     "kappa0": 50,
     "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
-    "clip_grad_R": 5e2,
+    "clip_grad_R": 1e2,
     "clip_grad_S": 1e2, 
-    "clip_grad_K": 5e2,
-    "clip_grad_Resizer": 1e2
+    "clip_grad_K": 1e2
 }

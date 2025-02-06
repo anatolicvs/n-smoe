@@ -33,7 +33,7 @@
     "kernel_chn": 3,
     "noise_avg": "True",
     "kernel": 25,
-    "kernel_type": "gaussian_cauchy",
+    "kernel_type": "gaussian",
     "phw": 16,
     "overlap": 8,
     "sharpening_factor": 1,
