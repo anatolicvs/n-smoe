@@ -1,8 +1,5 @@
-#!/usr/bin/env python
-# -*- coding:utf-8 -*-
-# Power by Zongsheng Yue 2019-03-20 19:48:14
-
 import torch
+import torch.nn as nn
 from math import pi, log, sqrt
 import torch.nn.functional as F
 import torch.distributions as tdist
@@ -179,3 +176,153 @@ def elbo_sisr(
     loss = lh + kl_rnet + kl_snet + kl_knet
 
     return loss, [lh, kl_rnet, kl_snet, kl_knet, kl_knet0, kl_knet1, kl_knet2, kernel]
+
+
+def elbo_sisr_weighted_(
+    mu,
+    sigma_est,
+    kinfo_est,
+    im_hr,
+    im_lr,
+    sigma_prior,
+    alpha0,
+    kinfo_gt,
+    kappa0,
+    r2,
+    eps2,
+    sf,
+    k_size,
+    penalty_K,
+    shift,
+    downsampler,
+    lambda_rec,
+    lambda_kl,
+):
+    """
+    Weighted ELBO loss for inverse problems.
+    The unweighted loss is computed as:
+      loss_unweighted = lh + kl_rnet + kl_snet + kl_knet
+    where:
+      lh       : reconstruction likelihood (negative log–likelihood)
+      kl_rnet  : KL divergence for the encoder (Gaussian term)
+      kl_snet  : KL divergence for the noise estimator (inverse–gamma term)
+      kl_knet  : KL divergence for the kernel estimator
+    The weighted loss is defined as:
+      loss_weighted = lambda_rec * lh + lambda_kl * (kl_rnet + kl_snet + kl_knet)
+    This formulation (with, e.g., base_rec=1e3 and lambda_kl=1e-2) is chosen so that
+    after a warmup period (lambda_rec linearly ramped from 0 to 1e3 over 5 epochs),
+    the reconstruction term dominates the gradient signal and drives improvements in PSNR and SSIM,
+    while the KL terms act as a regularizer.
+    """
+    _, loss_detail = elbo_sisr(
+        mu,
+        sigma_est,
+        kinfo_est,
+        im_hr,
+        im_lr,
+        sigma_prior,
+        alpha0,
+        kinfo_gt,
+        kappa0,
+        r2,
+        eps2,
+        sf,
+        k_size,
+        penalty_K,
+        shift,
+        downsampler,
+    )
+    lh = loss_detail[0]
+    kl_rnet = loss_detail[1]
+    kl_snet = loss_detail[2]
+    kl_knet = loss_detail[3]
+    extra = loss_detail[4:]
+    loss_weighted = lambda_rec * lh + lambda_kl * (kl_rnet + kl_snet + kl_knet)
+    return loss_weighted, lh, kl_rnet, kl_snet, kl_knet, extra
+
+
+class KLWeighting(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.kl_weights = nn.Parameter(torch.ones(3))
+
+    def forward(self, klr, kls, klk):
+        return (
+            self.kl_weights[0] * klr
+            + self.kl_weights[1] * kls
+            + self.kl_weights[2] * klk
+        )
+
+
+class LossWeighting(nn.Module):
+    def __init__(self, init_lambda_rec=1e3):
+        super().__init__()
+
+        self.lambda_rec = nn.Parameter(
+            torch.tensor(init_lambda_rec, dtype=torch.float32)
+        )
+        self.kl_weighting = KLWeighting()
+
+    def forward(self, lh, kl_rnet, kl_snet, kl_knet):
+        lam_rec = F.softplus(self.lambda_rec)
+        weighted_kl = self.kl_weighting(kl_rnet, kl_snet, kl_knet)
+        return lam_rec * lh + weighted_kl
+
+
+def elbo_sisr_weighted(
+    mu,
+    sigma_est,
+    kinfo_est,
+    im_hr,
+    im_lr,
+    sigma_prior,
+    alpha0,
+    kinfo_gt,
+    kappa0,
+    r2,
+    eps2,
+    sf,
+    k_size,
+    penalty_K,
+    shift,
+    downsampler,
+    loss_weighting_net,
+):
+    _, loss_detail = elbo_sisr(
+        mu,
+        sigma_est,
+        kinfo_est,
+        im_hr,
+        im_lr,
+        sigma_prior,
+        alpha0,
+        kinfo_gt,
+        kappa0,
+        r2,
+        eps2,
+        sf,
+        k_size,
+        penalty_K,
+        shift,
+        downsampler,
+    )
+    lh = loss_detail[0]
+    kl_rnet = loss_detail[1]
+    kl_snet = loss_detail[2]
+    kl_knet = loss_detail[3]
+    kl_knet0 = loss_detail[4]
+    kl_knet1 = loss_detail[5]
+    kl_knet2 = loss_detail[6]
+    kernel = loss_detail[7]
+    loss_weighted = loss_weighting_net(lh, kl_rnet, kl_snet, kl_knet)
+    return loss_weighted, [
+        lh,
+        kl_rnet,
+        kl_snet,
+        kl_knet,
+        kl_knet0,
+        kl_knet1,
+        kl_knet2,
+        kernel,
+    ]

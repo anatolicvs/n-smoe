@@ -3,25 +3,31 @@
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "hr_size": 96, 
-    "batch_size": 16, 
+    "batch_size": 4, 
     "epochs": 120,
-    "lr": 1e-4,
-    "lr_min": 5e-7, 
+    
+    "lr_E": 1e-4, 
+    "lr_D": 5e-4, 
+    "lr_S": 5e-4, 
+    "lr_K": 5e-4,
+    
+    "lr_min": 1e-6, 
     "print_freq": 100,
     "num_workers": 8, 
     "prefetch_factor": 2, 
-    "save_dir": "./train_save",
-    "resume": "",
+    "db_length": 10000,
+    "save_dir": "",
+    "resume": "/mnt/d/virnet_smoe/models/model_20250217-004752_9ee0dc7b.pth",  # "/mnt/d/virnet_smoe/models/model_20250210-113917_1472392d.pth",
 
 
     # network N-SMoE
     "kernel_chn": 3,
     "noise_avg": "True",
-    "model_channels": 32,
+    "model_channels": 64,
     "num_res_blocks": 3, 
-    "attention_resolutions": [16, 8],
-    "dropout": 0.1,
-    "channel_mult": [2, 4, 8],
+    "attention_resolutions": [32, 16, 8, 4],
+    "dropout": 0.5,
+    "channel_mult": [1, 2, 4, 8],
     "conv_resample":"False",
     "dims": 2,
     "use_checkpoint": "True",
@@ -35,8 +41,8 @@
     "resizer_avg_pool": "False",
     "activation": "LeakyReLU",
     "rope_theta": 10000.0,
-    "attention_type": "cross_attention",
-    "kernel": 8,
+    "attention_type": "attention",
+    "kernel": 25,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
     "overlap": 8,
@@ -51,11 +57,12 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/sfs-common/zsyue/database/Flickr2K/pch512_hr", 
-    "val_hr_path": "./test_data/Set14", # *.bmp,
+    "train_hr_patchs": "/mnt/e/dataset/Flickr2K/Flickr2K_HR", # "/mnt/d/RGB/open-images/test",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
+    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",
+    "chn":"rgb",  
 
     # degradation process
     "sf": 2,
@@ -68,8 +75,13 @@
     "r2": 1e-4,
     "var_window": 9,
     "kappa0": 50,
-    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    # "penalty_K": [0.02, 0.1],    # little influence, [0.02, 1] degenerates to the loss of paper
     "clip_grad_R": 1e2,
     "clip_grad_S": 1e2, 
-    "clip_grad_K": 1e2
+    "clip_grad_K": 1e2,
+    "penalty_K": [0.02, 1], # [0.02, 0.05],
+     # "clip_grad_R": 10.0,# 20.0,
+     # "clip_grad_S": 5.0, # 10.0,
+     # "clip_grad_K": 5.0, # 10.0,
+     # "clip_grad_M": 5
 }

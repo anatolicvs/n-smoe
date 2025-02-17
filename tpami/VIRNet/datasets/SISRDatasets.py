@@ -12,12 +12,12 @@ import numpy as np
 from pathlib import Path
 from skimage import img_as_float32
 import torch.utils.data as uData
-
+import threading
 from util import util_sisr, util_image
 from ResizeRight.resize_right import resize
 
 
-class GeneralTrainFloder(uData.Dataset):
+class GeneralTrainFloder_(uData.Dataset):
     def __init__(
         self,
         hr_dir,
@@ -102,8 +102,8 @@ class GeneralTrainFloder(uData.Dataset):
         im_hr = util_image.data_aug_np(im_hr, aug_flag)
 
         # blur kernel
-        lam1 = random.uniform(0.2, self.sf)
-        lam2 = random.uniform(lam1, self.sf) if random.random() < 0.7 else lam1
+        lam1 = random.uniform(1.2, self.sf)
+        lam2 = random.uniform(lam1, self.sf) if random.random() < 1.7 else lam1
         theta = random.uniform(0, np.pi)
         kernel, kernel_infos = util_sisr.shifted_anisotropic_Gaussian(
             k_size=self.k_size,
@@ -163,6 +163,134 @@ class GeneralTrainFloder(uData.Dataset):
         nlevel = (
             torch.tensor([std], dtype=torch.float32).unsqueeze(-1).unsqueeze(-1)
         )  # 1 x 1 x 1
+        return im_hr, im_lr, im_blur, kernel_infos, nlevel
+
+
+class GeneralTrainFloder(uData.Dataset):
+    def __init__(
+        self,
+        hr_dir,
+        length,
+        chn: Optional[str] = "rgb",
+        hr_size=192,
+        sf=2,
+        k_size=21,
+        kernel_shift=False,
+        downsampler="bicubic",
+        noise_level=[0.1, 15],
+        noise_jpeg=[0.1, 10],
+        add_jpeg=False,
+    ):
+        super(GeneralTrainFloder, self).__init__()
+        self.sf = sf
+        self.hr_size = hr_size
+        self.k_size = k_size
+        self.kernel_shift = kernel_shift
+        self.downsampler = downsampler
+        self.length = length
+        self.chn = chn
+        supported_extensions = [
+            ".png",
+            ".jpg",
+            ".jpeg",
+            ".bmp",
+            ".tiff",
+            ".tif",
+            ".gif",
+        ]
+        self.hr_path_list = sorted(
+            [
+                str(x)
+                for x in Path(hr_dir).iterdir()
+                if x.is_file() and x.suffix.lower() in supported_extensions
+            ]
+        )
+        self.num_images = len(self.hr_path_list)
+        self.lock = threading.Lock()
+        self.noise_types = ["Gaussian"]
+        if add_jpeg:
+            self.noise_types.append("JPEG")
+        assert noise_level[0] < noise_level[1]
+        self.noise_level = noise_level
+        assert noise_jpeg[0] < noise_jpeg[1]
+        self.noise_jpeg = noise_jpeg
+
+    def __len__(self):
+        return self.length
+
+    def random_qf(self):
+        start = list(range(30, 50, 5)) + [60, 70, 80]
+        end = list(range(35, 50, 5)) + [60, 70, 80, 95]
+        ind_range = random.randint(0, len(start) - 1)
+        return random.randint(start[ind_range], end[ind_range])
+
+    def reset_seed(self, epoch):
+        random.seed(epoch * 1000)
+        torch.manual_seed(epoch * 1000)
+
+    def __getitem__(self, index):
+        while True:
+            ind_im = random.randint(0, self.num_images - 1)
+            im_path = self.hr_path_list[ind_im]
+            try:
+                im_ori = util_image.imread(im_path, dtype="float32", chn=self.chn)
+                break
+            except Exception as e:
+                if "Corrupt JPEG data: bad Huffman code" in str(e):
+                    with self.lock:
+                        if im_path in self.hr_path_list:
+                            self.hr_path_list.remove(im_path)
+                            self.num_images = len(self.hr_path_list)
+                        if self.num_images == 0:
+                            raise RuntimeError("No valid images available")
+                else:
+                    raise e
+        im_hr = util_image.random_crop_patch(im_ori, self.hr_size)
+        aug_flag = random.randint(0, 7)
+        im_hr = util_image.data_aug_np(im_hr, aug_flag)
+        lam1 = random.uniform(1.2, self.sf)
+        lam2 = random.uniform(lam1, self.sf) if random.random() < 0.7 else lam1
+        theta = random.uniform(0, np.pi)
+        kernel, kernel_infos = util_sisr.shifted_anisotropic_Gaussian(
+            k_size=self.k_size,
+            sf=self.sf,
+            lambda_1=lam1**2,
+            lambda_2=lam2**2,
+            theta=theta,
+            shift=self.kernel_shift,
+        )
+        im_blur = util_sisr.imconv_np(
+            im_hr, kernel, padding_mode="reflect", correlate=False
+        )
+        im_blur = np.clip(im_blur, a_min=0.0, a_max=1.0)
+        if self.downsampler.lower() == "direct":
+            im_blur = im_blur[:: self.sf, :: self.sf]
+        elif self.downsampler.lower() == "bicubic":
+            im_blur = resize(im_blur, scale_factors=1 / self.sf).astype(np.float32)
+        else:
+            sys.exit("Please input corrected downsampler: Direct or Bicubic")
+        noise_type = random.sample(self.noise_types, k=1)[0]
+        if noise_type == "Gaussian":
+            std = random.uniform(self.noise_level[0], self.noise_level[1]) / 255.0
+            im_lr = (
+                im_blur + torch.randn(im_blur.shape, dtype=torch.float32).numpy() * std
+            )
+            im_lr = np.clip(im_lr, a_min=0, a_max=1.0)
+        elif noise_type == "JPEG":
+            qf = self.random_qf()
+            std = random.uniform(self.noise_jpeg[0], self.noise_jpeg[1]) / 255.0
+            im_noisy = (
+                im_blur + torch.randn(im_blur.shape, dtype=torch.float32).numpy() * std
+            )
+            im_noisy = np.clip(im_noisy, a_min=0.0, a_max=1.0)
+            im_lr = util_image.jpeg_compress(im_noisy, int(qf), chn_in="rgb")
+        else:
+            sys.exit("Please input corrected noise type: JPEG or Gaussian")
+        im_hr = torch.from_numpy(im_hr.transpose([2, 0, 1])).type(torch.float32)
+        im_lr = torch.from_numpy(im_lr.transpose([2, 0, 1])).type(torch.float32)
+        im_blur = torch.from_numpy(im_blur.transpose([2, 0, 1])).type(torch.float32)
+        kernel_infos = torch.from_numpy(kernel_infos).type(torch.float32)
+        nlevel = torch.tensor([std], dtype=torch.float32).unsqueeze(-1).unsqueeze(-1)
         return im_hr, im_lr, im_blur, kernel_infos, nlevel
 
 

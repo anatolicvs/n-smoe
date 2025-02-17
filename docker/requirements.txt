@@ -1,8 +1,94 @@
+# pip
+# pipenv
+# setuptools
+# wheel
+# requests
+# torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+# torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+# torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
+# # numpy
+# scipy
+# cython
+# numba
+# matplotlib
+# seaborn
+# opencv-python
+# pyyaml
+# rawpy
+# imageio
+# imageio-ffmpeg
+# scikit-image
+# beartype
+# colorama
+# moviepy
+# dacite
+# tabulate
+# svg.py
+# h5py
+# einops
+# plyfile
+# e3nn
+# lpips
+# colorspacious
+# tqdm
+# thop
+# pandas
+# wandb
+# scikit-learn
+# timm
+# lightning[extra]
+# tensorboard
+# monailabel
+# pytorch-metric-learning
+# pytorch-ignite
+# pytorchvideo
+# torchmetrics
+# pytorch-msssim
+# # torch_optimizer
+# # torchsampler
+# # torchgeometry
+# torchio
+# piq
+# torchdiffeq
+# hydra-core
+# fvcore
+# flax[all]
+# jaxtyping
+# tensorflow
+# nibabel
+# dicom2nifti
+# hdf5storage
+# pydicom
+# gsplat
+# segmentation-models-pytorch
+# ruamel.yaml
+# nerfview
+# viser
+# icecream
+# dahuffman
+# vector-quantize-pytorch
+# datashader
+# holoviews
+# hvplot
+# jupyterlab
+# mahotas
+# iopath
+# SimpleITK
+# monai
+# albumentations
+# --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+# jax[cuda12_local]
+# cupy-cuda12x
+# diffusers[torch]
+# connected-components-3d
+# commentjson
+# xformers --index-url https://download.pytorch.org/whl/cu124
+
 pip
 pipenv
 setuptools
 wheel
-requests==2.28.1
+requests
 torch --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchvision --pre --index-url https://download.pytorch.org/whl/nightly/cu124
 torchaudio --pre --index-url https://download.pytorch.org/whl/nightly/cu124
@@ -30,17 +116,19 @@ e3nn
 lpips
 colorspacious
 tqdm
+thop
 pandas
 wandb
 scikit-learn
 timm
 lightning[extra]
 tensorboard
+monailabel
+pytorch-metric-learning
+pytorch-ignite
 pytorchvideo
 torchmetrics
-torch_optimizer
-torchsampler
-torchgeometry
+pytorch-msssim
 torchio
 piq
 torchdiffeq
@@ -66,10 +154,22 @@ holoviews
 hvplot
 jupyterlab
 mahotas
-
+iopath
+SimpleITK
+monai
+albumentations
 --find-links https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 jax[cuda12_local]
 cupy-cuda12x
 diffusers[torch]
 connected-components-3d
 commentjson
+xformers --index-url https://download.pytorch.org/whl/cu124
+nltk
+transformers
+sentencepiece
+spacy
+torchtext
+torchdata
+portalocker>=2.0.0
+

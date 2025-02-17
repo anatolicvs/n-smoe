@@ -7,7 +7,7 @@ import math
 
 from pathlib import Path
 from collections import OrderedDict
-from loss.ELBO_simple import elbo_sisr
+from loss.ELBO_simple import elbo_sisr, elbo_sisr_weighted, LossWeighting
 
 # from networks.VIRNet import VIRAttResUNetSR
 from datasets.SISRDatasets import GeneralTrainFloder, GeneralTest
@@ -31,6 +31,13 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 
+from torch.optim.lr_scheduler import (
+    # CosineAnnealingWarmRestarts,
+    # CosineAnnealingLR,
+    # ConstantLR,
+    OneCycleLR,
+)
+
 # import torch._dynamo
 
 # torch._dynamo.config.cache_size_limit = 1024 * 1024
@@ -53,7 +60,6 @@ from networks.network_moex import (
 #     BackboneDinoCfg,
 #     KernelType,
 # )
-
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # Disable TensorFlow logging
 os.environ["XLA_FLAGS"] = "--xla_gpu_force_compilation_parallelism=1"
@@ -152,6 +158,7 @@ def main():
         kernel=args["kernel"],
         sharpening_factor=args.get("sharpening_factor", 1),
         kernel_type=KernelType(args["kernel_type"]),
+        # activation=args["activation"],
     )
 
     autoencoder_cfg = AutoencoderConfig(
@@ -166,6 +173,13 @@ def main():
 
     net = Autoencoder(cfg=autoencoder_cfg)
     net = net.cuda()
+    # net = torch.compile(net)
+
+    # loss_weighting_net = LossWeighting(init_lambda_rec=1e3).to(device)
+    # loss_weighting_net = torch.compile(loss_weighting_net)
+
+    # kl_weighting = KLWeighting().cuda()
+
     # net = torch.compile(net)
 
     # encoder_cfg = EncoderConfig(
@@ -267,14 +281,48 @@ def main():
         )
         print(net)
     if args["dist"]:
-        net = DDP(
-            net, device_ids=[rank], find_unused_parameters=True
-        )  # wrap the network
+        net = DDP(net, device_ids=[rank], find_unused_parameters=True)
+        loss_weighting_net = DDP(
+            loss_weighting_net, device_ids=[rank], find_unused_parameters=True
+        )
 
-    optimizer = optim.Adam(net.parameters(), lr=args["lr"])
+    # optimizer = optim.Adam(net.parameters(), lr=args["lr"])
+
+    # param_groups = [
+    #     {"params": net.encoder.parameters(), "lr": args["lr_E"], "name": "encoder"},
+    #     {
+    #         "params": net.decoder.parameters(),
+    #         "lr": args["lr_D"],
+    #         "name": "decoder",
+    #         "betas": (0.5, 0.999),
+    #     },
+    #     {"params": net.snet.parameters(), "lr": args["lr_S"], "name": "snet"},
+    #     {
+    #         "params": net.knet.parameters(),
+    #         "lr": args["lr_K"],
+    #         "name": "knet",
+    #         "weight_decay": 1e-4,
+    #     },
+    # ]
+    # optimizer = optim.AdamW(param_groups)
+
+    print(
+        f"lr_E: {args['lr_E']}, lr_D: {args['lr_D']}, lr_S: {args['lr_S']}, lr_K: {args['lr_K']}"
+    )
+    optimizer = optim.Adam(
+        [
+            {"params": net.encoder.parameters(), "lr": args["lr_E"]},
+            {"params": net.decoder.parameters(), "lr": args["lr_D"]},
+            {"params": net.snet.parameters(), "lr": args["lr_S"]},
+            {"params": net.knet.parameters(), "lr": args["lr_K"]},
+            # {"params": loss_weighting_net.parameters(), "lr": 1e-4},
+        ]
+    )
+
     scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=args["epochs"], eta_min=args["lr_min"]
     )
+
     if rank == 0:
         print("T_max = {:d}, eta_min={:.2e}".format(args["epochs"], args["lr_min"]))
         # util_net.test_scheduler(scheduler, optimizer, args['epochs'])
@@ -381,6 +429,32 @@ def main():
         for x in noise_types_list
     }
 
+    # schedulers = {
+    #     "encoder": CosineAnnealingWarmRestarts(
+    #         optimizer.param_groups[0], T_0=20, T_mult=2
+    #     ),
+    #     "decoder": CosineAnnealingLR(
+    #         optimizer.param_groups[1], T_max=args["epochs"], eta_min=args["lr_min"]
+    #     ),
+    #     "snet": ConstantLR(optimizer.param_groups[2], factor=0.1, total_iters=20),
+    #     "knet": OneCycleLR(
+    #         optimizer.param_groups[3],
+    #         max_lr=1e-4,
+    #         total_steps=args["epochs"] * len(train_dataloader),
+    #     ),
+    # }
+
+    # total_steps = args["epochs"] * len(train_dataloader)
+    # scheduler = OneCycleLR(
+    #     optimizer,
+    #     max_lr=1e-3,  # A higher peak LR than your current setup
+    #     total_steps=total_steps,
+    #     pct_start=0.3,  # Warm-up over the first 30% of training
+    #     anneal_strategy="cos",
+    #     div_factor=25,  # initial_lr = max_lr / 25
+    #     final_div_factor=1e4,  # final_lr = max_lr / 1e4
+    # )
+
     if rank == 0:
         num_iter_epoch = {
             "train": math.ceil(len(train_dataset) / args["batch_size"]),
@@ -403,7 +477,8 @@ def main():
     alpha0 = 0.5 * torch.tensor([args["var_window"] ** 2], dtype=torch.float32).cuda()
     kappa0 = torch.tensor([args["kappa0"]], dtype=torch.float32).cuda()
     param_rnet = [x for name, x in net.named_parameters() if "encoder" in name.lower()]
-    # param_rnet = [x for name, x in net.named_parameters() if "rnet " in name.lower()]
+    # # param_rnet = [x for name, x in net.named_parameters() if "rnet " in name.lower()]
+    # param_moe = [x for name, x in net.named_parameters() if "decoder" in name.lower()]
     param_snet = [x for name, x in net.named_parameters() if "snet" in name.lower()]
     param_knet = [x for name, x in net.named_parameters() if "knet" in name.lower()]
     for epoch in range(args["epoch_start"], args["epochs"]):
@@ -417,6 +492,9 @@ def main():
         phase = "train"
         net.train()
         lr = optimizer.param_groups[0]["lr"]
+
+        print(f"Epoch {epoch+1} Learning Rate: {lr}")
+
         phase = "train"
         for ii, data in enumerate(train_dataloader):
 
@@ -428,7 +506,6 @@ def main():
             else:
                 sigma_prior = nlevel  # N x 1 x 1 x1 for Gaussian noise
 
-            optimizer.zero_grad()
             # mu, kinfo_est, sigma_est = net(im_lr, args["sf"])
             mu, kinfo_est, sigma_est = net(im_lr)
             loss, loss_detail = elbo_sisr(
@@ -449,17 +526,70 @@ def main():
                 downsampler=args["downsampler"],
                 shift=util_opts.str2bool(args["kernel_shift"]),
             )
+
+            # loss, loss_detail = elbo_sisr_weighted(
+            #     mu,
+            #     sigma_est,
+            #     kinfo_est,
+            #     im_hr,
+            #     im_lr,
+            #     sigma_prior,
+            #     alpha0,
+            #     kinfo_gt,
+            #     kappa0,
+            #     args["r2"],
+            #     args["eps2"],
+            #     args["sf"],
+            #     args["k_size"],
+            #     args["penalty_K"],
+            #     util_opts.str2bool(args["kernel_shift"]),
+            #     args["downsampler"],
+            #     loss_weighting_net,
+            # )
+
+            # loss.backward()
+            # kl_loss = kl_weighting(
+            #     loss_detail[1].item(), loss_detail[2].item(), loss_detail[3].item()
+            # )
+
+            # total_loss = loss + kl_loss
+            # total_loss.backward()
+
+            # lambda_rec = 1e3  # e.g. 1000 times the reconstruction loss
+            # lambda_kl = 1e-2  # e.g. 0.01 times the KL losses
+
+            # loss_rec = loss_detail[0]  # "lh"
+            # loss_kl = loss_detail[1] + loss_detail[2] + loss_detail[3]
+            # loss_total = (lambda_rec * loss_rec + lambda_kl * loss_kl) + loss
+
+            # optimizer.zero_grad()
             loss.backward()
+
             # clip the gradnorm
             total_norm_R = nn.utils.clip_grad_norm_(param_rnet, args["clip_grad_R"])
             total_norm_S = nn.utils.clip_grad_norm_(param_snet, args["clip_grad_S"])
             total_norm_K = nn.utils.clip_grad_norm_(param_knet, args["clip_grad_K"])
-            # total_norm_resizer = nn.utils.clip_grad_norm_(
-            #     param_resizer, args["clip_grad_Resizer"]
+
+            # total_norm_M = nn.utils.clip_grad_norm_(param_moe, args["clip_grad_M"])
+
+            # total_norm_Rs = nn.utils.clip_grad_norm_(
+            #     param_resizer, args["clip_grad_Rs"]
             # )
+
             optimizer.step()
+            # scheduler.step()
+            # Update the OneCycleLR scheduler for knet per iteration
+            # schedulers["knet"].step()
 
             if rank == 0:
+                # loss_per_epoch["Loss"] += total_loss.item() / num_iter_epoch[phase]
+                # loss_per_epoch["lh"] += loss_detail[0].item() / num_iter_epoch[phase]
+                # loss_per_epoch["KLR"] += kl_loss[1].item() / num_iter_epoch[phase]
+                # loss_per_epoch["KLS"] += kl_loss[2].item() / num_iter_epoch[phase]
+                # loss_per_epoch["KLK"] += kl_loss[3].item() / num_iter_epoch[phase]
+
+                # loss_per_epoch["Loss"] += loss_total.item() / num_iter_epoch[phase]
+
                 loss_per_epoch["Loss"] += loss.item() / num_iter_epoch[phase]
                 loss_per_epoch["lh"] += loss_detail[0].item() / num_iter_epoch[phase]
                 loss_per_epoch["KLR"] += loss_detail[1].item() / num_iter_epoch[phase]
@@ -469,7 +599,7 @@ def main():
                 if ((ii + 1) % args["print_freq"] == 0 or ii == 0) and rank == 0:
                     log_str = (
                         "[Epoch:{:>3d}/{:<3d}] {:s}:{:0>5d}/{:0>5d}, lh:{:+>5.2f}, KL:{:+>7.2f}/{:+>6.2f}/{:+>6.2f}, "
-                        + "Grad:{:.1e}/{:.1e}/{:.1e}, lr={:.1e}"
+                        + "Grad:{:.1e}/{:.1e}/{:.1e}/{:.1e}, lr={:.1e}"
                     )
                     print(
                         log_str.format(
@@ -483,9 +613,9 @@ def main():
                             loss_detail[2].item(),
                             loss_detail[3].item(),
                             total_norm_R,
+                            0,  # total_norm_M,
                             total_norm_S,
                             total_norm_K,
-                            # total_norm_resizer,
                             lr,
                         )
                     )
@@ -541,6 +671,9 @@ def main():
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             unique_id = str(uuid.uuid4())[:8]
             save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
+            save_path_loss_weighting = str(
+                model_dir / f"model_{timestamp}_{unique_id}_loss_weighting.pth"
+            )
             with open(save_path_model, "wb") as f:
                 torch.save(
                     {
@@ -561,6 +694,26 @@ def main():
                     },
                     f,
                 )
+            # with open(save_path_loss_weighting, "wb") as f:
+            #     torch.save(
+            #         {
+            #             "metadata": {
+            #                 "time_created": datetime.datetime.now().isoformat(),
+            #                 "uuid_short": uuid.uuid4().hex[:8],
+            #             },
+            #             "epoch": epoch + 1,
+            #             "step": step + 1,
+            #             "step_img": {
+            #                 x: step_img[x]
+            #                 for x in [
+            #                     "train",
+            #                 ]
+            #                 + noise_types_list
+            #             },
+            #             "model_state_dict": loss_weighting_net.state_dict(),
+            #         },
+            #         f,
+            #     )
             toc = time.time()
             print("This epoch take time {:.2f}".format(toc - tic))
 
@@ -657,6 +810,18 @@ def main():
 
         scheduler.step()
 
+        # End of epoch: update epoch-based schedulers.
+        # For CosineAnnealingWarmRestarts, pass the current epoch.
+        # schedulers["encoder"].step(epoch)
+        # schedulers["decoder"].step()
+        # schedulers["snet"].step()
+
+        # current_lrs = {
+        #     key: group["lr"]
+        #     for key, group in zip(schedulers.keys(), optimizer.param_groups)
+        # }
+        # print(f"Epoch {epoch+1} Learning Rates: {current_lrs}")
+
     if rank == 0:
         writer.close()
     if num_gpus > 1:
@@ -671,7 +836,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x4.json",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x2.json",
         help="Path for the config file",
     )
     parser.add_argument(
