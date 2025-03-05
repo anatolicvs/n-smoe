@@ -671,9 +671,9 @@ def main():
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             unique_id = str(uuid.uuid4())[:8]
             save_path_model = str(model_dir / f"model_{timestamp}_{unique_id}.pth")
-            save_path_loss_weighting = str(
-                model_dir / f"model_{timestamp}_{unique_id}_loss_weighting.pth"
-            )
+            # save_path_loss_weighting = str(
+            #     model_dir / f"model_{timestamp}_{unique_id}_loss_weighting.pth"
+            # )
             with open(save_path_model, "wb") as f:
                 torch.save(
                     {
@@ -841,7 +841,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--save_dir",
-        default="/mnt/d/virnet_smoe",
+        default="/mnt/d/virnet_smoe_svd",
         type=str,
         metavar="PATH",
         help="Path to save the log file",
