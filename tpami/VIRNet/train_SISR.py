@@ -43,7 +43,7 @@ from torch.optim.lr_scheduler import (
 # torch._dynamo.config.cache_size_limit = 1024 * 1024
 # torch._dynamo.config.capture_scalar_outputs = True
 
-from networks.network_moex import (
+from tpami.VIRNet.networks.network_moex_v2 import (
     EncoderConfig,
     MoEConfig,
     AutoencoderConfig,
