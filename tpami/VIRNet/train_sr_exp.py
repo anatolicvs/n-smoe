@@ -31,19 +31,19 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 
-from torch.optim.lr_scheduler import (
-    # CosineAnnealingWarmRestarts,
-    # CosineAnnealingLR,
-    # ConstantLR,
-    OneCycleLR,
-)
+# from torch.optim.lr_scheduler import (
+#     # CosineAnnealingWarmRestarts,
+#     # CosineAnnealingLR,
+#     # ConstantLR,
+#     # OneCycleLR,
+# )
 
 # import torch._dynamo
 
 # torch._dynamo.config.cache_size_limit = 1024 * 1024
 # torch._dynamo.config.capture_scalar_outputs = True
 
-from tpami.VIRNet.networks.network_moex_v2 import (
+from tpami.VIRNet.networks.network_moex import (
     EncoderConfig,
     MoEConfig,
     AutoencoderConfig,

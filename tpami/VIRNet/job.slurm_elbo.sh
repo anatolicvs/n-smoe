@@ -198,11 +198,11 @@ if [ "$USE_APPTAINER" = true ]; then
       exit 1
   fi
   apptainer exec --nv --bind $HOME,$HPCWORK,$WORK,$WORKDIR $WORKDIR/cuda_v${BUILT_VERSION}.sif \
-    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
+    torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_sr.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
 else
   module load Python/3.10.4
   source $WORKDIR/env/bin/activate
-  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_SISR.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
+  torchrun --standalone --nnodes=1 --nproc-per-node=$GPUS $PWD/train_sr.py --config=$OPTION_PATH --save_dir=$SAVE_DIR
 fi
 
 echo "Job completed at: \$(date)"

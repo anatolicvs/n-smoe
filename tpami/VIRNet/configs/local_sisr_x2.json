@@ -6,12 +6,12 @@
     "batch_size": 4, 
     "epochs": 120,
     
-    "lr_E": 1e-4, 
+    "lr_E": 5e-4, 
     "lr_D": 5e-4, 
     "lr_S": 5e-4, 
     "lr_K": 5e-4,
     
-    "lr_min": 1e-6, 
+    "lr_min": 5e-5, 
     "print_freq": 100,
     "num_workers": 8, 
     "prefetch_factor": 2, 
@@ -41,7 +41,7 @@
     "resizer_avg_pool": "False",
     "activation": "LeakyReLU",
     "rope_theta": 10000.0,
-    "attention_type": "attention",
+    "attention_type": "cross_attention",
     "kernel": 25,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,
