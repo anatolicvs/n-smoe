@@ -3,7 +3,7 @@
     "im_chn": 3,    # Image channel
     "sigma_chn": 1, # Number of channel for the estimated noise varaince map
     "hr_size": 96, 
-    "batch_size": 4, 
+    "batch_size": 64, 
     "epochs": 120,
     
     "lr_E": 1e-4, 
@@ -15,7 +15,7 @@
     "print_freq": 100,
     "num_workers": 8, 
     "prefetch_factor": 2, 
-    "db_length": 10000,
+    "db_length": 80000,
     "save_dir": "",
     "resume": "", #/mnt/d/virnet_smoe/models/model_20250217-004752_9ee0dc7b.pth",  # "/mnt/d/virnet_smoe/models/model_20250210-113917_1472392d.pth",
 
@@ -27,7 +27,7 @@
     "num_res_blocks": 2, 
     "attention_resolutions": [16, 8, 4],
     "dropout": 0.1,
-    "channel_mult": [2, 4, 8],
+    "channel_mult": [2, 4, 8, 16],
     "conv_resample":"False",
     "dims": 2,
     "use_checkpoint": "True",
@@ -37,10 +37,14 @@
     "resblock_updown": "True",
     "num_groups": 32,
     "resample_2d": "False",
+    
     "resizer_num_layers": 3,
     "resizer_avg_pool": "False",
+
     "activation": "LeakyReLU",
+    
     "rope_theta": 10000.0,
+
     "attention_type": "attention",
     "kernel": 25,
     "kernel_type": "gaussian_cauchy",
@@ -57,15 +61,15 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/e/dataset/Flickr2K/Flickr2K_HR", # "/mnt/d/RGB/open-images/test",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
-    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
-    "add_jpeg": "False",
-    "kernel_shift": "False",
+    "train_hr_patchs": "/hpcwork/p0021791/dataset/rgb/train_0", 
+    "val_hr_path": "/home/pb035507/works/n-smoe/tpami/VIRNet/test_data/Set14",
+    "add_jpeg": "True",
+    "kernel_shift": "True",
     "downsampler": "Bicubic",
     "chn":"rgb",  
 
     # degradation process
-    "sf": 2,
+    "sf": 4,
     "k_size": 21,
     "noise_level": [0.01, 15],
     "noise_jpeg": [0.01, 10],

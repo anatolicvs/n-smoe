@@ -134,65 +134,6 @@ def main():
 
     net = Autoencoder(cfg=autoencoder_cfg)
     net = net.cuda()
-    # net = torch.compile(net)
-
-    # loss_weighting_net = LossWeighting(init_lambda_rec=1e3).to(device)
-    # loss_weighting_net = torch.compile(loss_weighting_net)
-
-    # kl_weighting = KLWeighting().cuda()
-
-    # net = torch.compile(net)
-
-    # encoder_cfg = EncoderConfig(
-    #     embed_dim=args["embed_dim"],
-    #     depth=args["depth"],
-    #     heads=args["heads"],
-    #     dim_head=args["dim_head"],
-    #     mlp_dim=args["mlp_dim"],
-    #     dropout=args["dropout"],
-    #     patch_size=args["patch_size"],
-    #     scale_factor=args["sf"],
-    #     resizer_num_layers=args["resizer_num_layers"],
-    #     resizer_avg_pool=util_opts.str2bool(args["resizer_avg_pool"]),
-    #     activation=args["activation"],
-    #     backbone_cfg=BackboneDinoCfg(
-    #         name="dino",
-    #         model=args[
-    #             "dino_model"
-    #         ],  # "dino_vits16", "dino_vits8", "dino_vitb16", "dino_vitb8",
-    #         backbone_cfg=BackboneResnetCfg(
-    #             name="resnet",
-    #             model=args["resnet_model"],  # "resnet18", "resnet50", "resnet101"
-    #             num_layers=args["resnet_num_layers"],
-    #             use_first_pool=util_opts.str2bool(args["resnet_use_first_pool"]),
-    #         ),
-    #     ),
-    #     kernel_chn=args["kernel_chn"],
-    #     sigma_chn=args["sigma_chn"],
-    #     noise_cond=util_opts.str2bool(args["noise_cond"]),
-    #     kernel_cond=util_opts.str2bool(args["kernel_cond"]),
-    #     noise_avg=util_opts.str2bool(args["noise_avg"]),
-    # )
-
-    # decoder_cfg = MoEConfig(
-    #     kernel=args["kernel"],
-    #     sharpening_factor=args["sharpening_factor"],
-    #     kernel_type=KernelType(args["kernel_type"]),
-    # )
-
-    # autoencoder_cfg = AutoencoderConfig(
-    #     EncoderConfig=encoder_cfg,
-    #     DecoderConfig=decoder_cfg,
-    #     d_in=args["im_chn"],
-    #     phw=args["phw"],
-    #     overlap=args["overlap"],
-    #     dep_S=args["dep_S"],
-    #     dep_K=args["dep_K"],
-    # )
-
-    # net = Autoencoder(cfg=autoencoder_cfg)
-    # net = net.cuda()
-    # net = torch.compile(net)
 
     if rank == 0:
         torch.set_float32_matmul_precision("high")
