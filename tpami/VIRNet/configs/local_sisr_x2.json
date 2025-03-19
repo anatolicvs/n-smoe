@@ -32,16 +32,19 @@
     "dims": 2,
     "use_checkpoint": "True",
     "use_fp16": "False",
-    "num_heads": 8,
+    "num_heads": 16,
     "num_head_channels": -1,
     "resblock_updown": "True",
     "num_groups": 32,
     "resample_2d": "False",
+    
     "resizer_num_layers": 3,
     "resizer_avg_pool": "False",
+    
     "activation": "LeakyReLU",
     "rope_theta": 10000.0,
     "attention_type": "attention",
+
     "kernel": 25,
     "kernel_type": "gaussian_cauchy",
     "phw": 16,

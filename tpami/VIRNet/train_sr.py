@@ -633,7 +633,7 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--save_dir",
-        default="/mnt/d/virnet_smoe_svd",
+        default="/mnt/d/virnet_smoe",
         type=str,
         metavar="PATH",
         help="Path to save the log file",
