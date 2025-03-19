@@ -1304,14 +1304,21 @@ class MoE(Backbone[MoEConfig]):
         G_sigma = torch.exp(e)
         return G_sigma
 
-    def cholesky_cov_inv(self, cov: torch.Tensor, reg_lambda: float) -> torch.Tensor:
+    def cholesky_cov_inv(
+        self, cov: torch.Tensor, reg_lambda: torch.Tensor
+    ) -> torch.Tensor:
         B, ch, k, d, _ = cov.shape
-        eigvals = torch.linalg.eigvalsh(cov)
-        min_eig = eigvals[..., 0]
-        jitter = torch.clamp(reg_lambda - min_eig, min=0.0)
-        jitter = jitter.unsqueeze(-1).unsqueeze(-1)
-        I = torch.eye(d, device=cov.device, dtype=cov.dtype).view(1, 1, 1, d, d)
-        cov_reg = cov + jitter * I
+        m = torch.linalg.eigvalsh(cov).min(dim=-1, keepdim=True).values  # [B, ch, k, 1]
+        m = m.unsqueeze(-1)  # [B, ch, k, 1, 1]
+        eps = (
+            torch.clamp(F.softplus(-m), min=reg_lambda.item()) + reg_lambda
+        )  # [B, ch, k, 1, 1]
+        I = (
+            torch.eye(d, device=cov.device, dtype=cov.dtype)
+            .view(1, 1, 1, d, d)
+            .expand(B, ch, k, d, d)
+        )
+        cov_reg = cov + eps * I  # [B, ch, k, d, d]
         L = torch.linalg.cholesky(cov_reg)
         return torch.cholesky_inverse(L)
 

@@ -27,7 +27,7 @@
     "num_res_blocks": 2, 
     "attention_resolutions": [16, 8, 4],
     "dropout": 0.1,
-    "channel_mult": [2, 4, 8, 16],
+    "channel_mult": [2, 4, 8],
     "conv_resample":"False",
     "dims": 2,
     "use_checkpoint": "True",
