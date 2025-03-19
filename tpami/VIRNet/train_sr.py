@@ -31,6 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.nn.parallel import DistributedDataParallel as DDP
 import datetime, uuid
 
+torch.set_float32_matmul_precision("high")
 
 from networks.network_moex import (
     EncoderConfig,
@@ -136,7 +137,6 @@ def main():
     net = net.cuda()
 
     if rank == 0:
-        torch.set_float32_matmul_precision("high")
         print(
             "Number of parameters in SNet: {:.2f}M".format(
                 util_net.calculate_parameters(net.snet) / (1000**2)

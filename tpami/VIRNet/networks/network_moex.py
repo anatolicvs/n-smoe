@@ -1036,12 +1036,12 @@ class MoEConfig:
     sharpening_factor: float = 1.0
     kernel_type: Optional[KernelType] = KernelType.GAUSSIAN_CAUCHY
     activation: str = "GELU"
-    min_diag: float = 1e-3
+    min_diag: float = 1e-4
     max_diag: float = 1e2
-    min_denom: float = 1e-8
+    min_denom: float = 1e-4
     initial_temp: float = 0.5
     tau_min: float = 0.1
-    reg_lambda: float = 1e-8
+    reg_lambda: float = 1e-4
     grid_cache: Optional[torch.Tensor] = None
 
 
