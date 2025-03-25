@@ -6,7 +6,7 @@
     "batch_size": 4, 
     "epochs": 120,
     
-    "lr_E": 1e-4, 
+    "lr_E": 5e-4, 
     "lr_D": 5e-4, 
     "lr_S": 5e-4, 
     "lr_K": 5e-4,
@@ -25,7 +25,7 @@
     "noise_avg": "True",
     "model_channels": 64,
     "num_res_blocks": 2, 
-    "attention_resolutions": [16, 8, 4],
+    "attention_resolutions": [32, 16, 8, 4],
     "dropout": 0.1,
     "channel_mult": [2, 4, 8],
     "conv_resample":"False",
@@ -41,7 +41,7 @@
     "resizer_num_layers": 3,
     "resizer_avg_pool": "False",
     
-    "activation": "ReLU",
+    "activation": "LeakyReLU",
     "rope_theta": 10000.0,
     "attention_type": "attention",
 
