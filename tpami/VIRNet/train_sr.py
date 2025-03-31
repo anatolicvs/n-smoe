@@ -120,7 +120,7 @@ def main():
         kernel=args["kernel"],
         sharpening_factor=args.get("sharpening_factor", 1),
         kernel_type=KernelType(args["kernel_type"]),
-        # activation=args["activation"],
+        activation=args["activation"],
     )
 
     autoencoder_cfg = AutoencoderConfig(
@@ -383,6 +383,8 @@ def main():
                 sigma_prior = nlevel  # N x 1 x 1 x1 for Gaussian noise
 
             # mu, kinfo_est, sigma_est = net(im_lr, args["sf"])
+            optimizer.zero_grad()
+
             mu, kinfo_est, sigma_est = net(im_lr)
             loss, loss_detail = elbo_sisr(
                 mu=mu,
@@ -403,14 +405,11 @@ def main():
                 shift=util_opts.str2bool(args["kernel_shift"]),
             )
 
-            optimizer.zero_grad()
             loss.backward()
 
-            # clip the gradnorm
             total_norm_R = nn.utils.clip_grad_norm_(param_rnet, args["clip_grad_R"])
             total_norm_S = nn.utils.clip_grad_norm_(param_snet, args["clip_grad_S"])
             total_norm_K = nn.utils.clip_grad_norm_(param_knet, args["clip_grad_K"])
-
             optimizer.step()
 
             if rank == 0:
@@ -491,7 +490,6 @@ def main():
             writer.add_scalar("Loss_epoch", loss_per_epoch["Loss"], epoch)
             print("-" * 105)
 
-        # save model
         if rank == 0:
             timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
             unique_id = str(uuid.uuid4())[:8]
@@ -521,7 +519,6 @@ def main():
             toc = time.time()
             print("This epoch take time {:.2f}".format(toc - tic))
 
-        # test stage
         if rank == 0:
             phase = "test"
             net.eval()

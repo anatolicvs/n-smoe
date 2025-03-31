@@ -1065,18 +1065,28 @@ class MoE(Backbone[MoEConfig]):
         self.max_diag = cfg.max_diag
         self.min_denom = cfg.min_denom
         self.tau_min = cfg.tau_min
-        self.reg_lambda_param = nn.Parameter(torch.tensor(1e-4))
+        self.reg_lambda_param = nn.Parameter(torch.tensor(cfg.reg_lambda))
         self.log_temp = nn.Parameter(
             torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True
         )
+        if hasattr(nn, cfg.activation):
+            self.activation = getattr(nn, cfg.activation)()
+        else:
+            self.activation = nn.GELU()
         self.spatial_mapper = nn.Sequential(
-            spectral_norm(nn.Linear(3, 32)), nn.ReLU(), spectral_norm(nn.Linear(32, 3))
+            spectral_norm(nn.Linear(3, 32)),
+            self.activation,
+            spectral_norm(nn.Linear(32, 3)),
         )
         self.color_mapper_1 = nn.Sequential(
-            spectral_norm(nn.Linear(1, 16)), nn.ReLU(), spectral_norm(nn.Linear(16, 1))
+            spectral_norm(nn.Linear(1, 16)),
+            self.activation,
+            spectral_norm(nn.Linear(16, 1)),
         )
         self.color_mapper_3 = nn.Sequential(
-            spectral_norm(nn.Linear(6, 32)), nn.ReLU(), spectral_norm(nn.Linear(32, 6))
+            spectral_norm(nn.Linear(6, 32)),
+            self.activation,
+            spectral_norm(nn.Linear(32, 6)),
         )
 
     def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
@@ -1102,15 +1112,17 @@ class MoE(Backbone[MoEConfig]):
 
     def construct_lower_triangular(self, params: torch.Tensor, s: int) -> torch.Tensor:
         eps = self.get_eps(params, factor=1e-6, min_eps=1e-6)
-        min_diag = self.min_diag
-        max_diag = getattr(self, "max_diag", 1e2)
+        B, ch, k, _ = params.shape
         if s == 2:
-            B, ch, k, _ = params.shape
             L11 = torch.clamp(
-                F.softplus(params[..., 0]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 0]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             L22 = torch.clamp(
-                F.softplus(params[..., 2]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 2]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             L21 = torch.sqrt(L11 * L22) * (2 * torch.sigmoid(params[..., 1]) - 1)
             L = torch.zeros(B, ch, k, 2, 2, device=params.device, dtype=params.dtype)
@@ -1119,22 +1131,28 @@ class MoE(Backbone[MoEConfig]):
             L[..., 1, 0] = L21.squeeze(-1)
             return L
         elif s == 1:
-            B, ch, k, _ = params.shape
             L = torch.zeros(B, ch, k, 1, 1, device=params.device, dtype=params.dtype)
             L[..., 0, 0] = torch.clamp(
-                F.softplus(params[..., 0]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 0]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             return L
         elif s == 3:
-            B, ch, k, _ = params.shape
             L11 = torch.clamp(
-                F.softplus(params[..., 0]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 0]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             L22 = torch.clamp(
-                F.softplus(params[..., 2]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 2]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             L33 = torch.clamp(
-                F.softplus(params[..., 5]) + min_diag + eps, min=min_diag, max=max_diag
+                F.softplus(params[..., 5]) + self.min_diag + eps,
+                min=self.min_diag,
+                max=self.max_diag,
             )
             L21 = torch.sqrt(L11 * L22) * (2 * torch.sigmoid(params[..., 1]) - 1)
             L31 = torch.sqrt(L11 * L33) * (2 * torch.sigmoid(params[..., 3]) - 1)
@@ -1179,13 +1197,9 @@ class MoE(Backbone[MoEConfig]):
             raise ValueError(f"Unsupported number of channels: {ch}")
         return C_full * self.sharpening_factor
 
-    def extract_parameters(self, p: torch.Tensor, k: int, ch: int) -> Tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        Optional[torch.Tensor],
-        Optional[torch.Tensor],
-    ]:
+    def extract_parameters(
+        self, p: torch.Tensor, k: int, ch: int
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         B, _, _ = p.shape
         p = p.view(B, ch, k, -1)
         p = torch.nan_to_num(p, nan=0.0, posinf=10.0, neginf=-10.0)
@@ -1203,11 +1217,11 @@ class MoE(Backbone[MoEConfig]):
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
             w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
             alpha = torch.clamp(
-                torch.sigmoid(p[..., 7].reshape(B, ch, k)), min=1e-4, max=0.9999
+                torch.sigmoid(p[..., 7].reshape(B, ch, k)) + 1e-6, min=1e-4, max=0.9999
             )
             c = torch.clamp(
-                F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag,
-                min=1e-4,
+                F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag + 1e-6,
+                min=1e-3,
                 max=1e4,
             )
             if ch == 1:
@@ -1224,8 +1238,9 @@ class MoE(Backbone[MoEConfig]):
                 color_mean = p[..., 15:18].reshape(B, ch, k, 3)
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
-            color_cov_size = 1 if ch == 1 else 3
-            L_color = self.construct_lower_triangular(L_color_params, s=color_cov_size)
+            L_color = self.construct_lower_triangular(
+                L_color_params, s=1 if ch == 1 else 3
+            )
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, alpha, c
@@ -1255,8 +1270,9 @@ class MoE(Backbone[MoEConfig]):
                 color_mean = p[..., 13:16].reshape(B, ch, k, 3)
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
-            color_cov_size = 1 if ch == 1 else 3
-            L_color = self.construct_lower_triangular(L_color_params, s=color_cov_size)
+            L_color = self.construct_lower_triangular(
+                L_color_params, s=1 if ch == 1 else 3
+            )
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, None, None
@@ -1270,8 +1286,8 @@ class MoE(Backbone[MoEConfig]):
         x: torch.Tensor,
         mu: torch.Tensor,
         Sigma_inv: torch.Tensor,
-        alpha: Optional[torch.Tensor],
-        c: Optional[torch.Tensor],
+        alpha: torch.Tensor,
+        c: torch.Tensor,
     ) -> torch.Tensor:
         d = x - mu
         e = -0.5 * torch.einsum("bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv, d)
@@ -1279,13 +1295,14 @@ class MoE(Backbone[MoEConfig]):
         e = e - mx
         G_sigma = torch.exp(e)
         norm_x = torch.linalg.norm(d[..., :2], dim=-1)
-        Sigma_inv_diag = Sigma_inv[..., 0, 0].unsqueeze(-1).unsqueeze(-1)
-        denom = c.unsqueeze(-1).unsqueeze(-1) * Sigma_inv_diag.clamp(min=self.min_diag)
+        Sigma_inv_diag = torch.diagonal(Sigma_inv, dim1=-2, dim2=-1)[..., 0]
+        Sigma_inv_diag = Sigma_inv_diag.unsqueeze(-1).unsqueeze(-1)
+        c_exp = c.unsqueeze(-1).unsqueeze(-1)
+        denom = c_exp * Sigma_inv_diag.clamp(min=self.min_diag)
         denom = denom.clamp(min=self.min_denom)
-        C_csigma = 1.0 / (1.0 + norm_x**2 / denom)
-        combined = (
-            alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma
-            + (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
+        C_csigma = 1.0 / (1.0 + (norm_x**2 / denom))
+        combined = (alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma) + (
+            (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
         )
         return combined
 
@@ -1296,8 +1313,7 @@ class MoE(Backbone[MoEConfig]):
         e = -0.5 * torch.einsum("bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv_spatial, d)
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
-        G_sigma = torch.exp(e)
-        return G_sigma
+        return torch.exp(e)
 
     def cholesky_cov_inv(
         self, cov: torch.Tensor, reg_lambda: torch.Tensor
@@ -1311,7 +1327,7 @@ class MoE(Backbone[MoEConfig]):
         eigvals = torch.where(
             torch.isnan(eigvals), torch.full_like(eigvals, tol_scalar), eigvals
         )
-        reg_lambda_val = torch.nn.functional.softplus(self.reg_lambda_param) + 1e-6
+        reg_lambda_val = F.softplus(self.reg_lambda_param) + 1e-6
         min_bound = torch.maximum(
             reg_lambda_val * torch.ones_like(eigvals),
             torch.full_like(eigvals, tol_scalar),
@@ -1328,7 +1344,9 @@ class MoE(Backbone[MoEConfig]):
         cov_reg_flat = A_sym + reg_lambda_val * I
         cov_reg = cov_reg_flat.reshape(B, ch, k, d, d)
         cov_reg = (cov_reg + cov_reg.transpose(-1, -2)) / 2
-        L = torch.linalg.cholesky(cov_reg)
+        L = torch.linalg.cholesky(
+            cov_reg + 1e-5 * torch.eye(d, device=cov.device, dtype=cov.dtype)
+        )
         return torch.cholesky_inverse(L)
 
     def svd_cov_inv(
@@ -1348,8 +1366,17 @@ class MoE(Backbone[MoEConfig]):
         return Vh.transpose(-2, -1) @ torch.diag_embed(S_inv) @ U.transpose(-2, -1)
 
     def forward_spatial(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
-        B, ch, _ = params.shape
-        k = self.kernel
+        B, ch, L = params.shape
+        param_count = (
+            12
+            if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
+            else (
+                18
+                if self.kernel_type == KernelType.GAUSSIAN_CAUCHY
+                else (10 if ch == 1 else 17)
+            )
+        )
+        k = L // param_count
         mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
         SI = self.cholesky_cov_inv(cov, self.reg_lambda_param)
         G = self.grid(h, w, params.device)
@@ -1371,7 +1398,7 @@ class MoE(Backbone[MoEConfig]):
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
             K_out = self.gaussian_cauchy_kernel(X, mu_full, SI, alp, cst)
         else:
-            mu_sp = mu[..., :2].reshape(B, ch, -1, 1, 1, 2)
+            mu_sp = mu[..., :2].reshape(B, ch, k, 1, 1, 2)
             SI_sp = SI[..., :2, :2]
             K_out = self.gaussian_kernel(G_exp, mu_sp, SI_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
@@ -1400,8 +1427,17 @@ class MoE(Backbone[MoEConfig]):
         self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
     ) -> torch.Tensor:
         B, ch, L = params.shape
-        p = L // (cnt.max().item() if cnt.numel() > 0 else 1)
-        x_dyn = self.extract_dynamic(params, cnt, p)
+        param_count = (
+            12
+            if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
+            else (
+                18
+                if self.kernel_type == KernelType.GAUSSIAN_CAUCHY
+                else (10 if ch == 1 else 17)
+            )
+        )
+        k = L // param_count
+        x_dyn = self.extract_dynamic(params, cnt, p=param_count)
         x_flat = x_dyn.view(B, ch, -1)
         mu, cov, wt, alp, cst = self.extract_parameters(x_flat, x_dyn.shape[2], ch)
         d = cov.shape[-1]
@@ -1455,11 +1491,11 @@ class MoE(Backbone[MoEConfig]):
 
     @property
     def d_out(self) -> int:
-        return self.latent
+        return self.kernel
 
     @property
     def scale_factor(self) -> int:
-        return self.cfg.scale_factor
+        return self.cfg.grid_cache.shape[0] if self.cfg.grid_cache is not None else 1
 
 
 @dataclass
