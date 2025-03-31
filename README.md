@@ -19,14 +19,7 @@ The proposed N-SMoE framework not only provides interpretability for the learned
 ## Requirements
 * Python 3.8, Pytorch 1.13.0
 * More detail (See [environment.yml](environment.yml))
-A suitable [conda](https://conda.io/) environment named `virnet` can be created and activated with:
 
-```
-conda create -n virnet python=3.8 -y
-conda install pytorch==1.13.0 torchvision==0.14.0 torchaudio==0.13.0 pytorch-cuda=11.6 -c pytorch -c nvidia
-pip install -r requirements.txt
-conda activate virnet
-```
 
 ## :snowflake: Testing Demo
 Befor testing, please first download the checkpoint from this [link](https://github.com/zsyOAOA/VIRNet/releases/tag/v1.0) and put them in the foloder "model_zoo".
@@ -94,14 +87,9 @@ Befor testing, please first download the checkpoint from this [link](https://git
 
 ### :dolphin: Citation
 ```
-    @article{yue2024variational,
-      title={Deep Variational Network Toward Blind Image Restoration},
-      author={Yue, Zongsheng and Yong, Hongwei and Zhao, Qian and Zhang, Lei and Meng, Deyu and Wong, Kwan-Yee K},
-      journal={IEEE Transactions on Pattern Analysis and Machine Intelligence},
-      year={2024}
-    }
+    Oezkan, Aytac and Sikora, Thomas, Neural Steered Mixture of Experts for Medical Image Denoising, and Super-Resolution. Available at SSRN: https://ssrn.com/abstract=5193694 or http://dx.doi.org/10.2139/ssrn.5193694 
 ```
 
 ### :envelope: Contact
-If you have any questions, please feel free to contact me via `zsyzam@gmail.com`.
+If you have any questions, please feel free to contact me via `aytac@linux.com`.
 
