@@ -20,7 +20,7 @@ We introduce the **Neural Steered Mixture of Experts (N-SMoE)** framework, a gen
 
 This architecture yields state-of-the-art (SOTA) performance across multiple medical imaging benchmarks, while maintaining interpretability and robustness across modalities.
 
-<img src="https://cvws.icloud-content.com/B/ASl90x_qG3llUNno3mPIMjzarS5dAcZfJsw6hfclA2EyTjtElwvEw1XM/N-SMoE.drawio.png?o=Ap0bRpcgn5yq_uIRXvU7p3e-zFdToe1Msc85sd-gAWbb&v=1&x=3&a=CAog4r35xLyD5qXcjMkWc7Rf1YUQbzVKhRTIGFcolOGYPv8SbxDT2bjy3jIY07aU9N4yIgEAUgTarS5dWgTEw1XMaidBAAr8Wip4MgZdFJs_E6mhGuUE7VApdlKIHVkpVI4pz4UEp-T3ImVyJyeyRNu_-cpTD_yByYaXxmVD7T8bFJcDqYi54d0Pwzx6OOJnJcRVRw&e=1743463455&fl=&r=107f7a65-6d70-4724-9bcc-b4fc71847aaa-1&k=Dsqwvj3HIH7cDWgXTAHi8Q&ckc=com.apple.clouddocs&ckz=com.apple.CloudDocs&p=127&s=H9kCwkjMqo0h9ZA2Ie6s2xjbym4&cd=i" width="800">
+<img src="./N-SMoE.drawio.png" width="800">
 
 ---
 
