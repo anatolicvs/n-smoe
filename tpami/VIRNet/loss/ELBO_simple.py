@@ -77,14 +77,6 @@ def reparameter_inv_gamma(alpha, beta):
     return out
 
 
-# def reparameter_inv_gamma(alpha, beta):
-#     safe_alpha = torch.nan_to_num(torch.nn.functional.softplus(alpha), nan=1e-6) + 1e-6
-#     safe_beta = torch.nan_to_num(torch.nn.functional.softplus(beta), nan=1e-6) + 1e-6
-#     dist_gamma = tdist.gamma.Gamma(safe_alpha, safe_beta)
-#     out = 1 / dist_gamma.rsample()
-#     return out
-
-
 def reparameter_cov_mat(kinfo_est, kappa0, rho_var):
     """
     Reparameterize kernelo.

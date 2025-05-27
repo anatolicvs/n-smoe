@@ -353,7 +353,7 @@ def main():
     alpha0 = 0.5 * torch.tensor([args["var_window"] ** 2], dtype=torch.float32).cuda()
     kappa0 = torch.tensor([args["kappa0"]], dtype=torch.float32).cuda()
     param_rnet = [x for name, x in net.named_parameters() if "encoder" in name.lower()]
-
+    param_moe = [x for name, x in net.named_parameters() if "decoder" in name.lower()]
     param_snet = [x for name, x in net.named_parameters() if "snet" in name.lower()]
     param_knet = [x for name, x in net.named_parameters() if "knet" in name.lower()]
 
@@ -410,6 +410,7 @@ def main():
             total_norm_R = nn.utils.clip_grad_norm_(param_rnet, args["clip_grad_R"])
             total_norm_S = nn.utils.clip_grad_norm_(param_snet, args["clip_grad_S"])
             total_norm_K = nn.utils.clip_grad_norm_(param_knet, args["clip_grad_K"])
+            total_norm_M = nn.utils.clip_grad_norm_(param_moe, args["clip_grad_M"])
             optimizer.step()
 
             if rank == 0:
@@ -437,7 +438,7 @@ def main():
                             loss_detail[2].item(),
                             loss_detail[3].item(),
                             total_norm_R,
-                            0,  # total_norm_M,
+                            total_norm_M,
                             total_norm_S,
                             total_norm_K,
                             lr,

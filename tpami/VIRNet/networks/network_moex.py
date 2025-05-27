@@ -1034,7 +1034,7 @@ class KernelType(Enum):
 class MoEConfig:
     kernel: int = 4
     sharpening_factor: float = 1.0
-    kernel_type: Optional[KernelType] = KernelType.GAUSSIAN_CAUCHY
+    kernel_type: Optional[Enum] = None
     activation: str = "GELU"
     min_diag: float = 1e-4
     max_diag: float = 1e2
@@ -1043,6 +1043,7 @@ class MoEConfig:
     tau_min: float = 0.1
     reg_lambda: float = 1e-4
     grid_cache: Optional[torch.Tensor] = None
+    scale_factor: int = 1
 
 
 @dataclass
@@ -1069,25 +1070,14 @@ class MoE(Backbone[MoEConfig]):
         self.log_temp = nn.Parameter(
             torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True
         )
+
         if hasattr(nn, cfg.activation):
             self.activation = getattr(nn, cfg.activation)()
         else:
             self.activation = nn.GELU()
-        self.spatial_mapper = nn.Sequential(
-            spectral_norm(nn.Linear(3, 32)),
-            self.activation,
-            spectral_norm(nn.Linear(32, 3)),
-        )
-        self.color_mapper_1 = nn.Sequential(
-            spectral_norm(nn.Linear(1, 16)),
-            self.activation,
-            spectral_norm(nn.Linear(16, 1)),
-        )
-        self.color_mapper_3 = nn.Sequential(
-            spectral_norm(nn.Linear(6, 32)),
-            self.activation,
-            spectral_norm(nn.Linear(32, 6)),
-        )
+        self.spatial_mapper = spectral_norm(nn.Linear(3, 3))
+        self.color_mapper_1 = spectral_norm(nn.Linear(1, 1))
+        self.color_mapper_3 = spectral_norm(nn.Linear(6, 6))
 
     def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
         if self.cfg.grid_cache is not None:
@@ -1495,7 +1485,11 @@ class MoE(Backbone[MoEConfig]):
 
     @property
     def scale_factor(self) -> int:
-        return self.cfg.grid_cache.shape[0] if self.cfg.grid_cache is not None else 1
+        return (
+            self.cfg.grid_cache.shape[0]
+            if self.cfg.grid_cache is not None
+            else self.cfg.kernel
+        )
 
 
 @dataclass
@@ -1621,10 +1615,15 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         if x_p.ndim == 5:
             x_p = x_p.reshape(-1, *x_p.shape[2:])
         chunks = self.det_split(x_p, self.cfg.num_chunks)
+
         res = [
             self.encoder(chunk, self.snet(chunk), self.knet(chunk)) for chunk in chunks
         ]
+
         gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
+
+        kinfo = torch.cat([F.softplus(kinfo[:, :2]), kinfo[:, 2:]], dim=1)
+
         B, L, C, H, W = dims
         sp = self.phw * self.encoder.scale_factor
         dec_chunks = self.det_split(gaussians, self.cfg.num_chunks)

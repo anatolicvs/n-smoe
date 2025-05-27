@@ -80,6 +80,7 @@
     "kappa0": 50,
     "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
     "clip_grad_R": 5e2,
+    "clip_grad_M": 1e2,
     "clip_grad_S": 1e2, 
     "clip_grad_K": 5e2
 }

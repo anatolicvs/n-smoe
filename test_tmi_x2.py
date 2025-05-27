@@ -811,13 +811,13 @@ def main(**kwargs):
                         },
                     }
 
-                    visualize_with_segmentation(
-                        images,
-                        mask_generator,
-                        cmap="gray",
-                        save_path=seg_figure_path,
-                        visualize=False,
-                    )
+                    # visualize_with_segmentation(
+                    #     images,
+                    #     mask_generator,
+                    #     cmap="gray",
+                    #     save_path=seg_figure_path,
+                    #     visualize=False,
+                    # )
 
                     visualize_with_error_map(
                         images,
