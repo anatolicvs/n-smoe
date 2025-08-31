@@ -24,24 +24,6 @@ backends = [SDPBackend.FLASH_ATTENTION, SDPBackend.MATH, SDPBackend.EFFICIENT_AT
 T = TypeVar("T")
 
 
-def detect_sdpa_backend(device: torch.device, dtype: torch.dtype, opt_out_flash: bool = False) -> list:
-    """Detect the best available SDPA backend for given device/dtype constraints."""
-    available_backends = []
-    
-    # FlashAttention requires GPU + fp16/bf16
-    if (not opt_out_flash and device.type == 'cuda' and 
-        dtype in [torch.float16, torch.bfloat16]):
-        available_backends.append(SDPBackend.FLASH_ATTENTION)
-    
-    # Efficient attention is generally available
-    available_backends.append(SDPBackend.EFFICIENT_ATTENTION)
-    
-    # Math backend is always available as fallback
-    available_backends.append(SDPBackend.MATH)
-    
-    return available_backends
-
-
 class Backbone(nn.Module, Generic[T]):
     def __init__(self, cfg: T) -> None:
         super().__init__()
@@ -167,13 +149,11 @@ class AttentionPool2d(nn.Module):
         output_dim: int = None,
         fourier_size: int = 128,
         fourier_scale: float = 1.0,
-        max_tokens: int = 4096,  # Add max_tokens guard
     ):
         super().__init__()
         self.embed_dim = embed_dim
         self.num_heads = num_heads
         self.output_dim = output_dim or embed_dim
-        self.max_tokens = max_tokens
         self.fourier_pos = FourierPosition(
             in_dim=2, mapping_size=fourier_size, scale=fourier_scale
         )
@@ -184,24 +164,6 @@ class AttentionPool2d(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.c_proj = nn.Linear(embed_dim, self.output_dim)
-        
-        # Cache for positional embeddings
-        self._pos_cache = {}
-        
-    def _get_positional_embeddings(self, H: int, W: int, device: torch.device) -> torch.Tensor:
-        """Get or compute positional embeddings with caching."""
-        cache_key = (H, W)
-        if cache_key not in self._pos_cache:
-            grid_y = torch.linspace(0, 1, H, device=device)
-            grid_x = torch.linspace(0, 1, W, device=device)
-            yy, xx = torch.meshgrid(grid_y, grid_x, indexing="ij")
-            coords = torch.stack([xx, yy], dim=-1).view(-1, 2)
-            fourier_features = self.fourier_pos(coords)
-            pos_spatial = self.linear_pos(fourier_features)
-            # Register as buffer for proper device movement
-            self.register_buffer(f'_pos_cache_{H}_{W}', pos_spatial, persistent=False)
-            self._pos_cache[cache_key] = pos_spatial
-        return self._pos_cache[cache_key].to(device)
 
     def forward(self, input_x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = input_x.shape
@@ -209,25 +171,18 @@ class AttentionPool2d(nn.Module):
             raise ValueError(
                 f"Input channel count {C} must equal embed_dim ({self.embed_dim})"
             )
-        
-        # Check if we need to pool to reduce tokens
-        tokens = H * W
-        pool_stride = 1
-        if tokens > self.max_tokens:
-            pool_stride = int(math.ceil(math.sqrt(tokens / self.max_tokens)))
-            input_x = F.avg_pool2d(input_x, kernel_size=pool_stride, stride=pool_stride)
-            H, W = input_x.shape[-2:]
-        
         x = input_x.flatten(start_dim=2).permute(2, 0, 1)
         global_token = x.mean(dim=0, keepdim=True)
         x = torch.cat([global_token, x], dim=0)
-        
-        # Use cached positional embeddings
-        pos_spatial = self._get_positional_embeddings(H, W, input_x.device)
+        grid_y = torch.linspace(0, 1, H, device=input_x.device)
+        grid_x = torch.linspace(0, 1, W, device=input_x.device)
+        yy, xx = torch.meshgrid(grid_y, grid_x, indexing="ij")
+        coords = torch.stack([xx, yy], dim=-1).view(-1, 2)
+        fourier_features = self.fourier_pos(coords)
+        pos_spatial = self.linear_pos(fourier_features)
         pos_global = self.global_pos.unsqueeze(0)
         pos_emb = torch.cat([pos_global, pos_spatial], dim=0)
         x = x + pos_emb.unsqueeze(1)
-        
         attn_output, _ = F.multi_head_attention_forward(
             query=x[:1],
             key=x,
@@ -287,10 +242,9 @@ class QKVAttentionLegacy(nn.Module):
 
 
 class QKVAttention(nn.Module):
-    def __init__(self, n_heads, dropout=0.0):
+    def __init__(self, n_heads):
         super().__init__()
         self.n_heads = n_heads
-        self.dropout_p = dropout
 
         self.scale_param = nn.Parameter(torch.tensor(1.0))
 
@@ -302,21 +256,17 @@ class QKVAttention(nn.Module):
 
         scale = self.scale_param / math.sqrt(ch)
 
-        # Reshape for SDPA
-        q = q.view(bs, self.n_heads, ch, length).transpose(-2, -1)  # [bs, n_heads, length, ch]
-        k = k.view(bs, self.n_heads, ch, length).transpose(-2, -1)  # [bs, n_heads, length, ch]
-        v = v.view(bs, self.n_heads, ch, length).transpose(-2, -1)  # [bs, n_heads, length, ch]
+        weight = torch.einsum(
+            "bct,bcs->bts",
+            (q * scale).view(bs * self.n_heads, ch, length),
+            (k * scale).view(bs * self.n_heads, ch, length),
+        )
 
-        dropout_p = self.dropout_p if self.training else 0.0
-
-        with sdpa_kernel(backends):
-            a = F.scaled_dot_product_attention(
-                q * scale, k * scale, v, dropout_p=dropout_p
-            )
-
-        # Reshape back to original format
-        a = a.transpose(-2, -1).contiguous().view(bs, -1, length)
-        return a
+        weight = torch.softmax(weight.float(), dim=-1).type(weight.dtype)
+        a = torch.einsum(
+            "bts,bcs->bct", weight, v.reshape(bs * self.n_heads, ch, length)
+        )
+        return a.reshape(bs, -1, length)
 
     @staticmethod
     def count_flops(model, _x, y):
@@ -394,7 +344,6 @@ class Attention(nn.Module):
         downsample_rate: int = 1,
         dropout: float = 0.0,
         kv_in_dim: Any = None,
-        opt_out_flash: bool = False,
     ) -> None:
         super().__init__()
         self.embedding_dim: int = embedding_dim
@@ -413,10 +362,6 @@ class Attention(nn.Module):
         self.out_proj = nn.Linear(self.internal_dim, embedding_dim)
 
         self.dropout_p: float = dropout
-        self.opt_out_flash = opt_out_flash
-        self._cached_backends = None
-        self._cached_device = None
-        self._cached_dtype = None
 
     def _separate_heads(self, x: torch.Tensor, num_heads: int) -> torch.Tensor:
         b, n, c = x.shape
@@ -427,16 +372,6 @@ class Attention(nn.Module):
         b, n_heads, n_tokens, c_per_head = x.shape
         x = x.transpose(1, 2)
         return x.reshape(b, n_tokens, n_heads * c_per_head)
-
-    def _get_sdpa_backends(self, device: torch.device, dtype: torch.dtype) -> list:
-        """Get cached SDPA backends for the given device/dtype."""
-        if (self._cached_backends is None or 
-            self._cached_device != device or 
-            self._cached_dtype != dtype):
-            self._cached_backends = detect_sdpa_backend(device, dtype, self.opt_out_flash)
-            self._cached_device = device
-            self._cached_dtype = dtype
-        return self._cached_backends
 
     def forward(
         self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
@@ -452,8 +387,6 @@ class Attention(nn.Module):
 
         dropout_p: float = self.dropout_p if self.training else 0.0
 
-        # Use cached backends
-        backends = self._get_sdpa_backends(q.device, q.dtype)
         with sdpa_kernel(backends):
             out: torch.Tensor = F.scaled_dot_product_attention(
                 q, k, v, dropout_p=dropout_p
@@ -466,12 +399,6 @@ class Attention(nn.Module):
 
 
 class RoPEAttention(Attention):
-    """
-    Rotary Position Embedding (RoPE) Attention.
-    
-    Note: Requires head_dim to be a multiple of 4 for axial RoPE to work correctly.
-    This is because 2D RoPE uses two pairs of sin/cos functions (one for each spatial dimension).
-    """
     def __init__(
         self,
         *args,
@@ -482,12 +409,8 @@ class RoPEAttention(Attention):
     ) -> None:
         super().__init__(*args, **kwargs)
 
-        # Enforce RoPE head dimension constraint
-        head_dim = self.internal_dim // self.num_heads
-        assert head_dim % 4 == 0, f"Axial RoPE requires head_dim % 4 == 0. Got head_dim={head_dim}"
-
         self.compute_cis = partial(
-            compute_axial_cis, dim=head_dim, theta=rope_theta
+            compute_axial_cis, dim=self.internal_dim // self.num_heads, theta=rope_theta
         )
         self.freqs_cis = None
         self.rope_k_repeat = rope_k_repeat
@@ -531,8 +454,6 @@ class RoPEAttention(Attention):
 
         dropout_p: float = self.dropout_p if self.training else 0.0
 
-        # Use cached backends  
-        backends = self._get_sdpa_backends(q.device, q.dtype)
         with sdpa_kernel(backends):
             out: torch.Tensor = F.scaled_dot_product_attention(
                 q, k, v, dropout_p=dropout_p
@@ -672,21 +593,20 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         )
 
         self.attention_map = {
-            "attention": QKVAttention(cfg.num_heads, dropout=cfg.dropout_rate),
+            "attention": QKVAttention(cfg.num_heads),
             "cross_attention": RoPEAttention(
                 embedding_dim=cfg.channels,
                 num_heads=cfg.num_heads,
                 rope_theta=cfg.rope_theta,
                 rope_k_repeat=True,
                 feat_sizes=(phw, phw),
-                dropout=cfg.dropout_rate,
             ),
         }
 
         self.attention = self.attention_map.get(self.attention_type, None)
 
         self.proj_out: nn.Conv1d | nn.Conv2d | nn.Conv3d = zero_module(
-            conv_nd(1, cfg.channels, cfg.channels, 1)  # Force dims=1 for flattened sequences
+            conv_nd(cfg.dims, cfg.channels, cfg.channels, 1)
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -1042,7 +962,9 @@ class Encoder(Backbone[EncoderConfig]):
         x: torch.Tensor,
         sigma_est: Optional[torch.Tensor] = None,
         kinfo_est: Optional[torch.Tensor] = None,
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    ) -> Tuple[
+        torch.Tensor, torch.Tensor, torch.Tensor, Optional[torch.Tensor] == None
+    ]:
 
         sigma = F.softplus(sigma_est) + self.get_eps(sigma_est)
 
@@ -1120,7 +1042,6 @@ class MoEConfig:
     initial_temp: float = 0.5
     tau_min: float = 0.1
     reg_lambda: float = 1e-4
-    balance_loss_coeff: float = 0.01  # Coefficient for load balancing loss
     grid_cache: Optional[torch.Tensor] = None
     scale_factor: int = 1
 
@@ -1145,7 +1066,6 @@ class MoE(Backbone[MoEConfig]):
         self.max_diag = cfg.max_diag
         self.min_denom = cfg.min_denom
         self.tau_min = cfg.tau_min
-        self.balance_loss_coeff = cfg.balance_loss_coeff
         self.reg_lambda_param = nn.Parameter(torch.tensor(cfg.reg_lambda))
         self.log_temp = nn.Parameter(
             torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True
@@ -1158,38 +1078,20 @@ class MoE(Backbone[MoEConfig]):
         self.spatial_mapper = spectral_norm(nn.Linear(3, 3))
         self.color_mapper_1 = spectral_norm(nn.Linear(1, 1))
         self.color_mapper_3 = spectral_norm(nn.Linear(6, 6))
-        
-        # For tracking balance loss
-        self._last_balance_loss = None
 
     def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
         if self.cfg.grid_cache is not None:
             return self.cfg.grid_cache.to(device)
-        yy = torch.linspace(0.0, 1.0, height, device=device)
         xx = torch.linspace(0.0, 1.0, width, device=device)
-        yy, xx = torch.meshgrid(yy, xx, indexing="ij")
-        return torch.stack((xx, yy), dim=-1).float()  # (H,W,2)
+        yy = torch.linspace(0.0, 1.0, height, device=device)
+        gx, gy = torch.meshgrid(xx, yy, indexing="ij")
+        return torch.stack((gx, gy), dim=-1).float()
 
     def ang_to_rot_mat(self, theta: torch.Tensor) -> torch.Tensor:
         ct = torch.cos(theta).unsqueeze(-1)
         st = torch.sin(theta).unsqueeze(-1)
         R = torch.cat([ct, -st, st, ct], dim=-1)
         return R.view(*theta.shape, 2, 2)
-
-    def compute_balance_loss(self, weights: torch.Tensor) -> torch.Tensor:
-        """Compute load balancing loss to encourage expert diversity."""
-        # weights shape: [B, ch, k]
-        # Average expert utilization across batch and spatial dimensions
-        avg_expert_usage = weights.mean(dim=[0, 1])  # [k]
-        
-        # Encourage uniform distribution: entropy loss
-        uniform_target = torch.ones_like(avg_expert_usage) / avg_expert_usage.shape[0]
-        balance_loss = F.kl_div(
-            (avg_expert_usage + 1e-8).log(), 
-            uniform_target, 
-            reduction='sum'
-        )
-        return balance_loss
 
     def get_eps(
         self, t: torch.Tensor, factor: float = 1e-5, min_eps: float = 1e-8
@@ -1343,7 +1245,7 @@ class MoE(Backbone[MoEConfig]):
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
-            w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
+            w = F.gumbel_softmax(logits, tau=tau, hard=True, dim=-1)
             if ch == 1:
                 raw_L_color = p[..., 7:8].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(
@@ -1373,27 +1275,20 @@ class MoE(Backbone[MoEConfig]):
         self,
         x: torch.Tensor,
         mu: torch.Tensor,
-        L_chol: torch.Tensor,
+        Sigma_inv: torch.Tensor,
         alpha: torch.Tensor,
         c: torch.Tensor,
     ) -> torch.Tensor:
         d = x - mu
-        # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        y = torch.linalg.solve_triangular(L_chol, d.unsqueeze(-1), upper=False).squeeze(-1)
-        e = -0.5 * (y * y).sum(dim=-1)
-        
+        e = -0.5 * torch.einsum("bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv, d)
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         G_sigma = torch.exp(e)
         norm_x = torch.linalg.norm(d[..., :2], dim=-1)
-        
-        # Get diagonal elements from Cholesky factor for Cauchy component
-        L_diag = torch.diagonal(L_chol, dim1=-2, dim2=-1)[..., 0]
-        L_diag_inv_sq = 1.0 / (L_diag.clamp(min=self.min_diag) ** 2)
-        L_diag_inv_sq = L_diag_inv_sq.unsqueeze(-1).unsqueeze(-1)
-        
+        Sigma_inv_diag = torch.diagonal(Sigma_inv, dim1=-2, dim2=-1)[..., 0]
+        Sigma_inv_diag = Sigma_inv_diag.unsqueeze(-1).unsqueeze(-1)
         c_exp = c.unsqueeze(-1).unsqueeze(-1)
-        denom = c_exp * L_diag_inv_sq
+        denom = c_exp * Sigma_inv_diag.clamp(min=self.min_diag)
         denom = denom.clamp(min=self.min_denom)
         C_csigma = 1.0 / (1.0 + (norm_x**2 / denom))
         combined = (alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma) + (
@@ -1402,51 +1297,35 @@ class MoE(Backbone[MoEConfig]):
         return combined
 
     def gaussian_kernel(
-        self, x: torch.Tensor, mu_spatial: torch.Tensor, L_chol_spatial: torch.Tensor
+        self, x: torch.Tensor, mu_spatial: torch.Tensor, Sigma_inv_spatial: torch.Tensor
     ) -> torch.Tensor:
         d = x - mu_spatial
-        # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        y = torch.linalg.solve_triangular(L_chol_spatial, d.unsqueeze(-1), upper=False).squeeze(-1)
-        e = -0.5 * (y * y).sum(dim=-1)
-        
+        e = -0.5 * torch.einsum("bckwhd,bckde,bckwhe->bckwh", d, Sigma_inv_spatial, d)
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         return torch.exp(e)
 
-    def cholesky_solve_quadratic(
+    def cholesky_cov_inv(
         self, cov: torch.Tensor, reg_lambda: torch.Tensor
     ) -> torch.Tensor:
-        """Compute Cholesky factorization for stable quadratic form computation.
-        
-        This avoids computing explicit matrix inverses, which are numerically unstable
-        and slower. Instead, we return the Cholesky factor L such that cov = L @ L^T.
-        For quadratic forms x^T Σ^{-1} x, we solve L y = x and compute ||y||^2.
-        
-        Returns the Cholesky factor L such that cov = L @ L^T.
-        """
         cov = (cov + cov.transpose(-1, -2)) / 2
         B, ch, k, d, _ = cov.shape
         cov_flat = cov.reshape(-1, d, d)
-        
-        # Eigenvalue regularization
         eigvals, eigvecs = torch.linalg.eigh(cov_flat)
         tol = torch.finfo(cov.dtype).eps * d * torch.amax(eigvals, dim=-1, keepdim=True)
         tol_scalar = tol.mean().item()
         eigvals = torch.where(
             torch.isnan(eigvals), torch.full_like(eigvals, tol_scalar), eigvals
         )
-        
         reg_lambda_val = F.softplus(self.reg_lambda_param) + 1e-6
         min_bound = torch.maximum(
             reg_lambda_val * torch.ones_like(eigvals),
             torch.full_like(eigvals, tol_scalar),
         )
         eigvals = torch.clamp(eigvals, min=min_bound)
-        
         H = eigvecs @ torch.diag_embed(eigvals) @ eigvecs.transpose(-1, -2)
         A_sym = (cov_flat + H) / 2
         A_sym = (A_sym + A_sym.transpose(-1, -2)) / 2
-        
         I = (
             torch.eye(d, device=cov.device, dtype=cov.dtype)
             .unsqueeze(0)
@@ -1455,12 +1334,10 @@ class MoE(Backbone[MoEConfig]):
         cov_reg_flat = A_sym + reg_lambda_val * I
         cov_reg = cov_reg_flat.reshape(B, ch, k, d, d)
         cov_reg = (cov_reg + cov_reg.transpose(-1, -2)) / 2
-        
-        # Return Cholesky factor instead of inverse
         L = torch.linalg.cholesky(
             cov_reg + 1e-5 * torch.eye(d, device=cov.device, dtype=cov.dtype)
         )
-        return L
+        return torch.cholesky_inverse(L)
 
     def svd_cov_inv(
         self, cov: torch.Tensor, reg_lambda: torch.Tensor, threshold: float = 1e-6
@@ -1491,12 +1368,8 @@ class MoE(Backbone[MoEConfig]):
         )
         k = L // param_count
         mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
-        L_chol = self.cholesky_solve_quadratic(cov, self.reg_lambda_param)
+        SI = self.cholesky_cov_inv(cov, self.reg_lambda_param)
         G = self.grid(h, w, params.device)
-        
-        # Assertion for grid correctness
-        assert G.shape == (h, w, 2), f"Expected grid shape ({h}, {w}, 2), got {G.shape}"
-        
         G_exp = G.unsqueeze(0).unsqueeze(0).unsqueeze(2).repeat(B, ch, k, 1, 1, 1)
         mu_full = mu.unsqueeze(3).unsqueeze(4)
         if ch == 1:
@@ -1513,25 +1386,17 @@ class MoE(Backbone[MoEConfig]):
         else:
             raise ValueError(f"Unsupported number of channels: {ch}")
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            K_out = self.gaussian_cauchy_kernel(X, mu_full, L_chol, alp, cst)
+            K_out = self.gaussian_cauchy_kernel(X, mu_full, SI, alp, cst)
         else:
             mu_sp = mu[..., :2].reshape(B, ch, k, 1, 1, 2)
-            L_chol_sp = L_chol[..., :2, :2]
-            K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
+            SI_sp = SI[..., :2, :2]
+            K_out = self.gaussian_kernel(G_exp, mu_sp, SI_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
-        
-        # Compute balance loss for load balancing
-        if self.training and self.balance_loss_coeff > 0:
-            self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
-        else:
-            self._last_balance_loss = None
-            
         KS = K_out.sum(dim=2, keepdim=True)
         eps_val = self.get_eps(KS)
         K_norm = K_out / (KS + eps_val)
         out = K_norm.sum(dim=2)
-        # Remove internal clamp - let the final output stage handle range control
-        return out
+        return torch.clamp(out, 0.0, 1.0)
 
     def extract_dynamic(
         self, x: torch.Tensor, cnt: torch.Tensor, p: int
@@ -1572,7 +1437,7 @@ class MoE(Backbone[MoEConfig]):
         eps = F.softplus(-m) + 1e-8
         cov_reg = cov + (1e-6 + eps) * I
         L_chol = torch.linalg.cholesky(cov_reg)
-        
+        SI = torch.cholesky_inverse(L_chol)
         G = self.grid(h, w, params.device)
         G_exp = (
             G.unsqueeze(0)
@@ -1595,28 +1460,16 @@ class MoE(Backbone[MoEConfig]):
         else:
             raise ValueError(f"Unsupported number of channels: {ch}")
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            K_out = self.gaussian_cauchy_kernel(X, mu_full, L_chol, alp, cst)
+            K_out = self.gaussian_cauchy_kernel(X, mu_full, SI, alp, cst)
         else:
             mu_sp = mu[..., :2].reshape(B, ch, x_dyn.shape[2], 1, 1, 2)
-            L_chol_sp = L_chol[..., :2, :2]
-            K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
+            SI_sp = SI[..., :2, :2]
+            K_out = self.gaussian_kernel(G_exp, mu_sp, SI_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
-        
-        # Compute balance loss for load balancing
-        if self.training and self.balance_loss_coeff > 0:
-            self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
-        else:
-            self._last_balance_loss = None
-            
         KS = K_out.sum(dim=2, keepdim=True)
         K_norm = K_out / (KS + 1e-8)
         out = K_norm.sum(dim=2)
-        # Remove internal clamp - let the final output stage handle range control
-        return out
-
-    def get_balance_loss(self) -> Optional[torch.Tensor]:
-        """Get the last computed balance loss for regularization."""
-        return self._last_balance_loss
+        return torch.clamp(out, 0.0, 1.0)
 
     def forward(
         self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None
@@ -1754,10 +1607,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         k_eff = min(x.shape[0], num_chunks)
         boundaries = [math.floor(i * x.shape[0] / k_eff) for i in range(k_eff + 1)]
         return [x[boundaries[i] : boundaries[i + 1]] for i in range(k_eff)]
-
-    def get_balance_loss(self) -> Optional[torch.Tensor]:
-        """Get the balance loss from the decoder for regularization."""
-        return self.decoder.get_balance_loss()
 
     def forward(
         self, x: torch.Tensor
