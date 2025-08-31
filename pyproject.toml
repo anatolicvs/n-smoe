@@ -1,0 +1,234 @@
+[project]
+name = "n-smoe-dev"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+description = "Pixi environment for N‑SMoE research stack (GPU & CPU)"
+
+[tool.pixi.project]
+channels = ["rapidsai", "conda-forge", "nvidia"]
+platforms = ["linux-64"]
+
+[tool.pixi.system-requirements]
+cuda = "12.9"
+
+[tool.pixi.dependencies]
+python = "*"
+pip = "*"
+python-build = "*"
+cmake = "*"
+ninja = "*"
+
+[tool.pixi.pypi-options]
+index-url = "https://pypi.org/simple"
+extra-index-urls = ["https://pypi.nvidia.com"]
+find-links = [{ url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }]
+index-strategy = "first-index"
+
+[tool.pixi.pypi-dependencies]
+torch = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+scipy = "*"
+cython = "*"
+numba = "*"
+matplotlib = "*"
+seaborn = "*"
+opencv-python = "*"
+pyyaml = "*"
+rawpy = "*"
+imageio = "*"
+imageio-ffmpeg = "*"
+scikit-image = "*"
+beartype = "*"
+colorama = "*"
+moviepy = "*"
+dacite = "*"
+tabulate = "*"
+svg.py = "*"
+h5py = "*"
+einops = "*"
+plyfile = "*"
+e3nn = "*"
+lpips = "*"
+colorspacious = "*"
+tqdm = "*"
+thop = "*"
+pandas = "*"
+wandb = "*"
+scikit-learn = "*"
+timm = "*"
+lightning = { version = "*", extras = ["extra"] }
+tensorboard = "*"
+monailabel = "*"
+pytorch-metric-learning = "*"
+pytorch-ignite = "*"
+pytorchvideo = "*"
+torchmetrics = "*"
+pytorch-msssim = "*"
+torchio = "*"
+piq = "*"
+torchdiffeq = "*"
+hydra-core = "*"
+fvcore = "*"
+flax = { version = "*", extras = ["all"] }
+jaxtyping = "*"
+jax = { version = "*", extras = ["cuda12_local"] }
+cupy-cuda12x = "*"
+diffusers = { version = "*", extras = ["torch"] }
+connected-components-3d = "*"
+commentjson = "*"
+nltk = "*"
+transformers = "*"
+sentencepiece = "*"
+spacy = "*"
+torchtext = "*"
+torchdata = "*"
+portalocker = ">=2.0.0"
+nibabel = "*"
+dicom2nifti = "*"
+hdf5storage = "*"
+pydicom = "*"
+SimpleITK = "*"
+monai = "*"
+gsplat = "*"
+segmentation-models-pytorch = "*"
+ruamel.yaml = "*"
+nerfview = "*"
+viser = "*"
+iopath = "*"
+mahotas = "*"
+datashader = "*"
+holoviews = "*"
+hvplot = "*"
+jupyterlab = "*"
+icecream = "*"
+dahuffman = "*"
+vector-quantize-pytorch = "*"
+
+[tool.pixi.feature.gpu]
+system-requirements = { cuda = "12.9" }
+
+[tool.pixi.feature.cpu]
+pypi-dependencies = { torch = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, torchvision = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, torchaudio = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, xformers = { version = "*", index = "https://download.pytorch.org/whl/cpu" } }
+
+[tool.pixi.feature.test.pypi-dependencies]
+pytest = "*"
+pytest-cov = "*"
+pytest-mock = "*"
+pytest-github-actions-annotate-failures = "*"
+coverage = "*"
+black = "*"
+ruff = "*"
+flake8 = "*"
+flake8-bugbear = "*"
+flake8-docstrings = "*"
+flake8-formatter-junit-xml = "*"
+flake8-pyproject = "*"
+pylint = "*"
+pylint-junit = "*"
+bandit = { version = "*", extras = ["toml"] }
+pre-commit = "*"
+matplotlib = "*"
+seaborn = "*"
+
+[tool.pixi.feature.test.tasks]
+test = "pytest -m 'not integration and not spark' --cov-report xml:coverage.xml --cov src --cov-fail-under 0"
+integration = "pytest -m integration"
+spark = "pytest -m spark"
+all = "pytest"
+format = "black src"
+flake8 = "flake8"
+pylint = "pylint src"
+precommit = "pre-commit run -a"
+
+[tool.pixi.environments]
+default = { features = ["gpu"] }
+cpu = { features = ["cpu"] }
+test = { features = ["gpu", "test"] }
+
+[tool.pixi.tasks]
+info = "python -c \"import torch, sys; print(torch.__version__); print('CUDA available:', torch.cuda.is_available());\""
+lab = { cmd = "jupyter lab" }
+
+[tool.pytest.ini_options]
+addopts = "--cov-report xml:coverage.xml --cov src --cov-fail-under 0 -m 'not integration'"
+pythonpath = ["src"]
+testpaths = "tests"
+junit_family = "xunit2"
+markers = [
+  "integration: marks as integration test",
+  "notebooks: marks as notebook test",
+  "gpu: marks as gpu test",
+  "spark: marks tests which need Spark",
+  "slow: marks tests as slow",
+  "unit: fast offline tests"
+]
+
+[tool.coverage.run]
+branch = false
+
+[tool.coverage.report]
+fail_under = 100
+
+[tool.black]
+line-length = 120
+fast = true
+
+[tool.flake8]
+max-line-length = 120
+select = "F,E,W,B,B901,B902,B903"
+exclude = [".eggs",".git",".tox","nssm","obj","out","packages","pywin32","tests","swagger_client"]
+ignore = ["E722","B001","W503","E203"]
+
+[tool.ruff.lint]
+select = ["E","F","B","I"]
+ignore = ["E501"]
+
+[tool.pylint]
+extension-pkg-whitelist = ["numpy","torch","cv2","pyodbc","pydantic","ciso8601","netcdf4","scipy"]
+ignore = "CVS"
+ignore-patterns = "test.*?py,conftest.py"
+init-hook = "import sys; sys.setrecursionlimit(8 * sys.getrecursionlimit())"
+jobs = 0
+limit-inference-results = 100
+persistent = "yes"
+suggestion-mode = "yes"
+unsafe-load-any-extension = "no"
+
+[tool.pylint."MESSAGES CONTROL"]
+enable = "c-extension-no-member"
+
+[tool.pylint."REPORTS"]
+evaluation = "10.0 - ((float(5 * error + warning + refactor + convention) / statement) * 10)"
+output-format = "text"
+reports = "no"
+score = "yes"
+
+[tool.pylint."FORMAT"]
+indent-after-paren = 4
+indent-string = "    "
+max-line-length = 120
+max-module-lines = 1000
+single-line-class-stmt = "no"
+single-line-if-stmt = "no"
+
+[tool.mypy]
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+strict_equality = true
+extra_checks = true
+check_untyped_defs = true
+disallow_subclassing_any = true
+disallow_any_generics = true
+disallow_untyped_decorators = true
+disallow_untyped_calls = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_reexport = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = "torchvision.*"
+ignore_missing_imports = true
