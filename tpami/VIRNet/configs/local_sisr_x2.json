@@ -45,8 +45,8 @@
     "rope_theta": 10000.0,
     "attention_type": "attention",
 
-    "kernel": 16,
-    "kernel_type": "gaussian_cauchy",
+    "kernel": 32,
+    "kernel_type": "gaussian",
     "phw": 16,
     "overlap": 8,
 

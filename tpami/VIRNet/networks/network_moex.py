@@ -1277,10 +1277,21 @@ class MoE(Backbone[MoEConfig]):
         return combined
 
     def gaussian_kernel(self, x: torch.Tensor, mu_spatial: torch.Tensor, L_chol_spatial: torch.Tensor) -> torch.Tensor:
-        d = x - mu_spatial
-        # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        y = torch.linalg.solve_triangular(L_chol_spatial, d.unsqueeze(-1), upper=False).squeeze(-1)
-        e = -0.5 * (y * y).sum(dim=-1)
+        d = x - mu_spatial  # [B, ch, k, h, w, 2]
+        B, ch, k, h, w, _ = d.shape
+
+        # Reshape for batch matrix operations
+        d_flat = d.reshape(B, ch, k, h * w, 2)  # [B, ch, k, h*w, 2]
+        d_flat_expanded = d_flat.unsqueeze(-1)  # [B, ch, k, h*w, 2, 1]
+
+        # Expand L_chol_spatial to match spatial dimensions
+        L_chol_expanded = L_chol_spatial.unsqueeze(3).expand(-1, -1, -1, h * w, -1, -1)  # [B, ch, k, h*w, 2, 2]
+
+        # Use Cholesky solve: ||L^{-1} d||^2
+        y_flat = torch.linalg.solve_triangular(L_chol_expanded, d_flat_expanded, upper=False).squeeze(-1)
+        y = y_flat.reshape(B, ch, k, h, w, 2)  # [B, ch, k, h, w, 2]
+
+        e = -0.5 * (y * y).sum(dim=-1)  # [B, ch, k, h, w]
 
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
