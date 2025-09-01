@@ -16,15 +16,20 @@ import torch.nn.functional as F
 from . import util_image
 from ResizeRight.resize_right import resize
 
+
 def modcrop(im, sf):
     h, w = im.shape[:2]
-    h -= (h % sf)
-    w -= (w % sf)
-    return im[:h, :w,]
+    h -= h % sf
+    w -= w % sf
+    return im[
+        :h,
+        :w,
+    ]
 
-#--------------------------------------------Kernel-----------------------------------------------
+
+# --------------------------------------------Kernel-----------------------------------------------
 def sigma2kernel(sigma, k_size=21, sf=3, shift=False):
-    '''
+    """
     Generate Gaussian kernel according to cholesky decomposion.
     Input:
         sigma: N x 1 x 2 x 2 torch tensor, covariance matrix
@@ -32,7 +37,7 @@ def sigma2kernel(sigma, k_size=21, sf=3, shift=False):
         sf: scale factor
     Output:
         kernel: N x 1 x k x k torch tensor
-    '''
+    """
     try:
         sigma_inv = torch.inverse(sigma)
     except:
@@ -41,81 +46,84 @@ def sigma2kernel(sigma, k_size=21, sf=3, shift=False):
 
     # Set expectation position (shifting kernel for aligned image)
     if shift:
-        center = k_size // 2 + 0.5 * (sf - k_size % 2)                         # + 0.5 * (sf - k_size % 2)
+        center = k_size // 2 + 0.5 * (sf - k_size % 2)  # + 0.5 * (sf - k_size % 2)
     else:
         center = k_size // 2
 
     # Create meshgrid for Gaussian
-    X, Y = torch.meshgrid(torch.arange(k_size), torch.arange(k_size))
-    Z = torch.stack((X, Y), dim=2).to(device=sigma.device, dtype=sigma.dtype).view(1, -1, 2, 1)      # 1 x k^2 x 2 x 1
+    X, Y = torch.meshgrid(torch.arange(k_size), torch.arange(k_size), indexing="ij")
+    Z = torch.stack((X, Y), dim=2).to(device=sigma.device, dtype=sigma.dtype).view(1, -1, 2, 1)  # 1 x k^2 x 2 x 1
 
     # Calcualte Gaussian for every pixel of the kernel
-    ZZ = Z - center                                                        # 1 x k^2 x 2 x 1
-    ZZ_t = ZZ.permute(0, 1, 3, 2)                                          # 1 x k^2 x 1 x 2
-    ZZZ = -0.5 * ZZ_t.matmul(sigma_inv).matmul(ZZ).squeeze(-1).squeeze(-1) # N x k^2
-    kernel = F.softmax(ZZZ, dim=1)                                         # N x k^2
+    ZZ = Z - center  # 1 x k^2 x 2 x 1
+    ZZ_t = ZZ.permute(0, 1, 3, 2)  # 1 x k^2 x 1 x 2
+    ZZZ = -0.5 * ZZ_t.matmul(sigma_inv).matmul(ZZ).squeeze(-1).squeeze(-1)  # N x k^2
+    kernel = F.softmax(ZZZ, dim=1)  # N x k^2
 
-    return kernel.view(-1, 1, k_size, k_size)                # N x 1 x k x k
+    return kernel.view(-1, 1, k_size, k_size)  # N x 1 x k x k
 
-def shifted_anisotropic_Gaussian(k_size=21, sf=4, lambda_1=1.2, lambda_2=5., theta=0, shift=True):
-    '''
+
+def shifted_anisotropic_Gaussian(k_size=21, sf=4, lambda_1=1.2, lambda_2=5.0, theta=0, shift=True):
+    """
     # modified version of https://github.com/cszn/USRNet/blob/master/utils/utils_sisr.py
-    '''
+    """
     # set covariance matrix
     Lam = np.diag([lambda_1, lambda_2])
-    U = np.array([[np.cos(theta), -np.sin(theta)],
-                    [np.sin(theta),  np.cos(theta)]])
-    sigma = U @ Lam @ U.T                                 # 2 x 2
-    inv_sigma = np.linalg.inv(sigma)[None, None, :, :]    # 1 x 1 x 2 x 2
+    U = np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+    sigma = U @ Lam @ U.T  # 2 x 2
+    inv_sigma = np.linalg.inv(sigma)[None, None, :, :]  # 1 x 1 x 2 x 2
 
     # set expectation position (shifting kernel for aligned image)
     if shift:
-        center = k_size // 2 + 0.5*(sf - k_size % 2)
+        center = k_size // 2 + 0.5 * (sf - k_size % 2)
     else:
         center = k_size // 2
 
     # Create meshgrid for Gaussian
     X, Y = np.meshgrid(range(k_size), range(k_size))
-    Z = np.stack([X, Y], 2).astype(np.float32)[:, :, :, None]                  # k x k x 2 x 1
+    Z = np.stack([X, Y], 2).astype(np.float32)[:, :, :, None]  # k x k x 2 x 1
 
     # Calcualte Gaussian for every pixel of the kernel
     ZZ = Z - center
-    ZZ_t = ZZ.transpose(0,1,3,2)
-    ZZZ = -0.5 * np.squeeze(ZZ_t @ inv_sigma  @ ZZ).reshape([1, -1])
-    kernel = softmax(ZZZ, axis=1).reshape([k_size, k_size]) # k x k
+    ZZ_t = ZZ.transpose(0, 1, 3, 2)
+    ZZZ = -0.5 * np.squeeze(ZZ_t @ inv_sigma @ ZZ).reshape([1, -1])
+    kernel = softmax(ZZZ, axis=1).reshape([k_size, k_size])  # k x k
 
     # The convariance of the marginal distributions along x and y axis
     s1, s2 = sigma[0, 0], sigma[1, 1]
     # Pearson corrleation coefficient
     rho = sigma[0, 1] / (math.sqrt(s1) * math.sqrt(s2))
-    kernel_infos = np.array([s1, s2, rho])   # (3,)
+    kernel_infos = np.array([s1, s2, rho])  # (3,)
 
     return kernel, kernel_infos
 
+
 def kinfo2sigma(kinfo, k_size=21, sf=3, shift=False):
-    '''
+    """
     Input:
         kinfo: N x 3
     Output:
         kernel: N x 1 x k x k
-    '''
-    k_var1, k_var2 = torch.chunk(kinfo[:, :2], 2, dim=1)    # variance along x and y axis
-    rho = kinfo[:, 2].unsqueeze(1)                          # correlation coffecient
-    direction = k_var1.sqrt() * k_var2.sqrt() * rho         # N x 1
-    sigma = torch.cat([k_var1, direction, direction, k_var2], dim=1).view(-1, 1, 2, 2) # N x 1 x 2 x 2
+    """
+    k_var1, k_var2 = torch.chunk(kinfo[:, :2], 2, dim=1)  # variance along x and y axis
+    rho = kinfo[:, 2].unsqueeze(1)  # correlation coffecient
+    direction = k_var1.sqrt() * k_var2.sqrt() * rho  # N x 1
+    sigma = torch.cat([k_var1, direction, direction, k_var2], dim=1).view(-1, 1, 2, 2)  # N x 1 x 2 x 2
     kernel = sigma2kernel(sigma, k_size, sf, shift=shift)
     return kernel
 
-#------------------------------------------Degradation-------------------------------------------
-def imconv_np(im, kernel, padding_mode='reflect', correlate=False):
-    '''
+
+# ------------------------------------------Degradation-------------------------------------------
+def imconv_np(im, kernel, padding_mode="reflect", correlate=False):
+    """
     Image convolution or correlation.
     Input:
         im: h x w x c numpy array
         kernel: k x k numpy array
         padding_mode: 'reflect', 'constant' or 'wrap'
-    '''
-    if kernel.ndim != im.ndim: kernel = kernel[:, :, np.newaxis]
+    """
+    if kernel.ndim != im.ndim:
+        kernel = kernel[:, :, np.newaxis]
 
     if correlate:
         out = snd.correlate(im, kernel, mode=padding_mode)
@@ -124,27 +132,29 @@ def imconv_np(im, kernel, padding_mode='reflect', correlate=False):
 
     return out
 
+
 def conv_multi_kernel_tensor(im_hr, kernel, sf, downsampler):
-    '''
+    """
     Degradation model by Pytorch.
     Input:
         im_hr: N x c x h x w
         kernel: N x 1 x k x k
         sf: scale factor
-    '''
-    im_hr_pad = F.pad(im_hr, (kernel.shape[-1] // 2,)*4, mode='reflect')
+    """
+    im_hr_pad = F.pad(im_hr, (kernel.shape[-1] // 2,) * 4, mode="reflect")
     im_blur = F.conv3d(im_hr_pad.unsqueeze(0), kernel.unsqueeze(1), groups=im_hr.shape[0])
-    if downsampler.lower() == 'direct':
-        im_blur = im_blur[0, :, :, ::sf, ::sf]      # N x c x ...
-    elif downsampler.lower() == 'bicubic':
-        im_blur = resize(im_blur, scale_factors=1/sf)
+    if downsampler.lower() == "direct":
+        im_blur = im_blur[0, :, :, ::sf, ::sf]  # N x c x ...
+    elif downsampler.lower() == "bicubic":
+        im_blur = resize(im_blur, scale_factors=1 / sf)
     else:
-        sys.exit('Please input the corrected downsampler: Direct or Bicubic!')
+        sys.exit("Please input the corrected downsampler: Direct or Bicubic!")
 
     return im_blur
 
-def degrade_virnet(im_hr, kernel, sf, nlevel=2.55, qf=None, seed=1234, downsampler='direct'):
-    '''
+
+def degrade_virnet(im_hr, kernel, sf, nlevel=2.55, qf=None, seed=1234, downsampler="direct"):
+    """
     Input:
         im_hr: h x w x 3 numpy array
         kernel: k x k numpy array
@@ -153,34 +163,38 @@ def degrade_virnet(im_hr, kernel, sf, nlevel=2.55, qf=None, seed=1234, downsampl
         qf: quality factor for JPEG compression, not implemented compression if None
         seed: random seed
         downsampler: direct or bicubic
-    '''
-    im_blur = imconv_np(im_hr, kernel, padding_mode='reflect', correlate=False)
+    """
+    im_blur = imconv_np(im_hr, kernel, padding_mode="reflect", correlate=False)
     im_blur = np.clip(im_blur, a_min=0.0, a_max=1.0)
 
     # downsampling
-    if downsampler.lower() == 'direct':
-        im_lr = im_blur[::sf, ::sf,]
-    elif downsampler.lower() == 'bicubic':
-        im_lr = resize(im_blur, scale_factors=1/sf)
+    if downsampler.lower() == "direct":
+        im_lr = im_blur[
+            ::sf,
+            ::sf,
+        ]
+    elif downsampler.lower() == "bicubic":
+        im_lr = resize(im_blur, scale_factors=1 / sf)
     else:
-        sys.exit('Please input corrected downsampler: direct or bicubic')
+        sys.exit("Please input corrected downsampler: direct or bicubic")
 
-    #adding noise
+    # adding noise
     rng = np.random.default_rng(seed)
-    im_lr += rng.standard_normal(size=im_lr.shape) * (nlevel/255.)
+    im_lr += rng.standard_normal(size=im_lr.shape) * (nlevel / 255.0)
     im_lr = np.clip(im_lr.astype(np.float32), 0.0, 1.0)
 
     # JPEG compression
     if qf is not None:
-        im_lr = util_image.jpeg_compress(im_lr, qf=int(qf), chn_in='rgb')
+        im_lr = util_image.jpeg_compress(im_lr, qf=int(qf), chn_in="rgb")
 
     return im_lr
 
+
 def tidy_kernel(kernel, expect_size=21):
-    '''
+    """
     Input:
         kernel: p x p numpy array
-    '''
+    """
     k_size = kernel.shape[-1]
     kernel_new = np.zeros([expect_size, expect_size], dtype=kernel.dtype)
     if expect_size >= k_size:
@@ -195,6 +209,7 @@ def tidy_kernel(kernel, expect_size=21):
 
     return kernel_new
 
+
 def shift_pixel(x, sf, upper_left=True):
     """shift pixel for super-resolution with different scale factors
     Args:
@@ -203,7 +218,7 @@ def shift_pixel(x, sf, upper_left=True):
         upper_left: shift direction
     """
     h, w = x.shape[:2]
-    shift = (sf-1)*0.5
+    shift = (sf - 1) * 0.5
     xv, yv = np.arange(0, w, 1.0), np.arange(0, h, 1.0)
     if upper_left:
         x1 = xv + shift
@@ -212,8 +227,8 @@ def shift_pixel(x, sf, upper_left=True):
         x1 = xv - shift
         y1 = yv - shift
 
-    x1 = np.clip(x1, 0, w-1)
-    y1 = np.clip(y1, 0, h-1)
+    x1 = np.clip(x1, 0, w - 1)
+    y1 = np.clip(y1, 0, h - 1)
 
     if x.ndim == 2:
         x = interp2d(xv, yv, x)(x1, y1)

@@ -60,8 +60,8 @@
     "kernel_cond": "True",
 
     # training and validation data path
-    "train_hr_patchs": "/mnt/e/dataset/Flickr2K/Flickr2K_HR", # "/mnt/d/RGB/open-images/test",     # /mnt/e/dataset/Flickr2K/Flickr2K_HR
-    "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", # *.bmp,
+    "train_hr_patchs": "/home/adminlms/src/n-smoe/tpami/VIRNet/test_data/CBSD68",
+    "val_hr_path": "/home/adminlms/src/n-smoe/tpami/VIRNet/test_data/Set14", 
     "add_jpeg": "False",
     "kernel_shift": "False",
     "downsampler": "Bicubic",

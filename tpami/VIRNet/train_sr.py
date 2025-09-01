@@ -138,9 +138,7 @@ def main():
 
     if rank == 0:
         print(
-            "Number of parameters in SNet: {:.2f}M".format(
-                util_net.calculate_parameters(net.snet) / (1000**2)
-            ),
+            "Number of parameters in SNet: {:.2f}M".format(util_net.calculate_parameters(net.snet) / (1000**2)),
             flush=True,
         )
 
@@ -151,9 +149,7 @@ def main():
         #     flush=True,
         # )
         print(
-            "Number of parameters in KNet: {:.2f}M".format(
-                util_net.calculate_parameters(net.knet) / (1000**2)
-            ),
+            "Number of parameters in KNet: {:.2f}M".format(util_net.calculate_parameters(net.knet) / (1000**2)),
             flush=True,
         )
         # print(
@@ -176,17 +172,13 @@ def main():
         #     flush=True,
         # )
         print(
-            "Number of parameters in Encoder: {:.2f}M".format(
-                util_net.calculate_parameters(net.encoder) / (1000**2)
-            ),
+            "Number of parameters in Encoder: {:.2f}M".format(util_net.calculate_parameters(net.encoder) / (1000**2)),
             flush=True,
         )
         print(net)
     if args["dist"]:
         net = DDP(net, device_ids=[rank], find_unused_parameters=True)
-        loss_weighting_net = DDP(
-            loss_weighting_net, device_ids=[rank], find_unused_parameters=True
-        )
+        loss_weighting_net = DDP(loss_weighting_net, device_ids=[rank], find_unused_parameters=True)
 
     # optimizer = optim.Adam(net.parameters(), lr=args["lr"])
 
@@ -208,9 +200,7 @@ def main():
     # ]
     # optimizer = optim.AdamW(param_groups)
 
-    print(
-        f"lr_E: {args['lr_E']}, lr_D: {args['lr_D']}, lr_S: {args['lr_S']}, lr_K: {args['lr_K']}"
-    )
+    print(f"lr_E: {args['lr_E']}, lr_D: {args['lr_D']}, lr_S: {args['lr_S']}, lr_K: {args['lr_K']}")
     optimizer = optim.Adam(
         [
             {"params": net.encoder.parameters(), "lr": args["lr_E"]},
@@ -221,9 +211,7 @@ def main():
         ]
     )
 
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer=optimizer, T_max=args["epochs"], eta_min=args["lr_min"]
-    )
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer=optimizer, T_max=args["epochs"], eta_min=args["lr_min"])
 
     if rank == 0:
         print("T_max = {:d}, eta_min={:.2e}".format(args["epochs"], args["lr_min"]))
@@ -241,12 +229,7 @@ def main():
                 net.load_state_dict(checkpoint["model_state_dict"])
             except:
                 net.load_state_dict(
-                    OrderedDict(
-                        {
-                            "module." + key: value
-                            for key, value in checkpoint["model_state_dict"].items()
-                        }
-                    )
+                    OrderedDict({"module." + key: value for key, value in checkpoint["model_state_dict"].items()})
                 )
             for _ in range(args["epoch_start"]):
                 scheduler.step()
@@ -254,9 +237,7 @@ def main():
                 args["step"] = checkpoint["step"]
                 args["step_img"] = checkpoint["step_img"]
                 print(
-                    "=> Loaded checkpoint {:s} (epoch {:d})".format(
-                        args["resume"], checkpoint["epoch"]
-                    ),
+                    "=> Loaded checkpoint {:s} (epoch {:d})".format(args["resume"], checkpoint["epoch"]),
                     flush=True,
                 )
         else:
@@ -283,16 +264,12 @@ def main():
     )
     if rank == 0:
         print(
-            "Number of Patches in training data set: {:d}".format(
-                train_dataset.num_images
-            ),
+            "Number of Patches in training data set: {:d}".format(train_dataset.num_images),
             flush=True,
         )
     if num_gpus > 1:
         shuffle_flag = False
-        train_sampler = udata.distributed.DistributedSampler(
-            train_dataset, num_replicas=num_gpus, rank=rank
-        )
+        train_sampler = udata.distributed.DistributedSampler(train_dataset, num_replicas=num_gpus, rank=rank)
     else:
         shuffle_flag = True
         train_sampler = None
@@ -376,9 +353,7 @@ def main():
 
             im_hr, im_lr, im_blur, kinfo_gt, nlevel = [x.cuda() for x in data]
             if util_opts.str2bool(args["add_jpeg"]):
-                sigma_prior = util_denoising.noise_estimate_fun(
-                    im_lr, im_blur, args["var_window"]
-                )
+                sigma_prior = util_denoising.noise_estimate_fun(im_lr, im_blur, args["var_window"])
             else:
                 sigma_prior = nlevel  # N x 1 x 1 x1 for Gaussian noise
 
@@ -451,28 +426,20 @@ def main():
                     writer.add_image(phase + " Recover Image", x1, step_img[phase])
                     x2 = vutils.make_grid(im_hr, normalize=True, scale_each=True)
                     writer.add_image(phase + " HR Image", x2, step_img[phase])
-                    kernel_blur = util_sisr.kinfo2sigma(
-                        kinfo_gt, k_size=args["k_size"], sf=args["sf"]
-                    )
+                    kernel_blur = util_sisr.kinfo2sigma(kinfo_gt, k_size=args["k_size"], sf=args["sf"])
                     x3 = vutils.make_grid(kernel_blur, normalize=True, scale_each=True)
                     writer.add_image(phase + " GT Blur Kernel", x3, step_img[phase])
                     x4 = vutils.make_grid(im_lr, normalize=True, scale_each=True)
                     writer.add_image(phase + " LR Image", x4, step_img[phase])
-                    x5 = vutils.make_grid(
-                        loss_detail[7].detach(), normalize=True, scale_each=True
-                    )
-                    writer.add_image(
-                        phase + " Est Blur Kernel Resample", x5, step_img[phase]
-                    )
+                    x5 = vutils.make_grid(loss_detail[7].detach(), normalize=True, scale_each=True)
+                    writer.add_image(phase + " Est Blur Kernel Resample", x5, step_img[phase])
                     kernel_blur_est = util_sisr.kinfo2sigma(
                         kinfo_est.detach(),
                         k_size=args["k_size"],
                         sf=args["sf"],
                         shift=util_opts.str2bool(args["kernel_shift"]),
                     )
-                    x6 = vutils.make_grid(
-                        kernel_blur_est, normalize=True, scale_each=True
-                    )
+                    x6 = vutils.make_grid(kernel_blur_est, normalize=True, scale_each=True)
                     writer.add_image(phase + " Est Blur Kernel", x6, step_img[phase])
                     step_img[phase] += 1
 
@@ -532,12 +499,8 @@ def main():
                         mu, kinfo_est, sigma_est = net(im_lr)
                         im_hr_est = mu[0] if isinstance(mu, list) else mu
 
-                    psnr_iter = util_image.batch_PSNR(
-                        im_hr_est, im_hr, args["sf"] ** 2, True
-                    )
-                    ssim_iter = util_image.batch_SSIM(
-                        im_hr_est, im_hr, args["sf"] ** 2, True
-                    )
+                    psnr_iter = util_image.batch_PSNR(im_hr_est, im_hr, args["sf"] ** 2, True)
+                    ssim_iter = util_image.batch_SSIM(im_hr_est, im_hr, args["sf"] ** 2, True)
                     psnr_per_epoch += psnr_iter
                     ssim_per_epoch += ssim_iter
                     # print statistics every log_interval mini_batches
@@ -556,31 +519,23 @@ def main():
                             )
                         )
                         # tensorboardX summary
-                        x1 = vutils.make_grid(
-                            im_hr_est, normalize=True, scale_each=True
-                        )
+                        x1 = vutils.make_grid(im_hr_est, normalize=True, scale_each=True)
                         writer.add_image(
                             "Test " + noise_type + " Recover images",
                             x1,
                             step_img[noise_type],
                         )
                         x2 = vutils.make_grid(im_hr, normalize=True, scale_each=True)
-                        writer.add_image(
-                            "Test " + noise_type + " HR Image", x2, step_img[noise_type]
-                        )
+                        writer.add_image("Test " + noise_type + " HR Image", x2, step_img[noise_type])
                         x3 = vutils.make_grid(im_lr, normalize=True, scale_each=True)
-                        writer.add_image(
-                            "Test " + noise_type + " LR Image", x3, step_img[noise_type]
-                        )
+                        writer.add_image("Test " + noise_type + " LR Image", x3, step_img[noise_type])
                         kernel_blur = util_sisr.kinfo2sigma(
                             kinfo_gt,
                             k_size=args["k_size"],
                             sf=args["sf"],
                             shift=util_opts.str2bool(args["kernel_shift"]),
                         )
-                        x4 = vutils.make_grid(
-                            kernel_blur, normalize=True, scale_each=True
-                        )
+                        x4 = vutils.make_grid(kernel_blur, normalize=True, scale_each=True)
                         writer.add_image(
                             "Test " + noise_type + " GT Blur Kernel",
                             x4,
@@ -592,9 +547,7 @@ def main():
                             sf=args["sf"],
                             shift=util_opts.str2bool(args["kernel_shift"]),
                         )
-                        x5 = vutils.make_grid(
-                            kernel_blur_est, normalize=True, scale_each=True
-                        )
+                        x5 = vutils.make_grid(kernel_blur_est, normalize=True, scale_each=True)
                         writer.add_image(
                             "Test " + noise_type + " Est Blur Kernel",
                             x5,
@@ -626,12 +579,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x2.json",
+        default="/home/adminlms/src/n-smoe/tpami/VIRNet/configs/local_sisr_x2.json",
         help="Path for the config file",
     )
     parser.add_argument(
         "--save_dir",
-        default="/mnt/d/virnet_smoe",
+        default="/home/adminlms/src/n-smoe/tpami/VIRNet/checkpoint",
         type=str,
         metavar="PATH",
         help="Path to save the log file",
