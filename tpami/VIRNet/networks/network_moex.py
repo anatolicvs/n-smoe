@@ -1192,7 +1192,8 @@ class MoE(Backbone[MoEConfig]):
             if ch == 1:
                 raw_L_color = p[..., 9:10].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                color_mean = torch.zeros_like(mu_x)
+                # Make color_mean learnable instead of hardcoded zeros
+                color_mean = p[..., 10:11].reshape(B, ch, k, 1)  # Extract grayscale intensity
             elif ch == 3:
                 raw_L_color = p[..., 9:15].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
@@ -1216,7 +1217,8 @@ class MoE(Backbone[MoEConfig]):
             if ch == 1:
                 raw_L_color = p[..., 7:8].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                color_mean = torch.zeros_like(mu_x)
+                # Make color_mean learnable instead of hardcoded zeros
+                color_mean = p[..., 8:9].reshape(B, ch, k, 1)  # Extract grayscale intensity
             elif ch == 3:
                 raw_L_color = p[..., 7:13].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
@@ -1330,9 +1332,9 @@ class MoE(Backbone[MoEConfig]):
     def forward_spatial(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
         B, ch, L = params.shape
         param_count = (
-            12
+            13
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (11 if ch == 1 else 17))
         )
         k = L // param_count
         mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
@@ -1364,10 +1366,41 @@ class MoE(Backbone[MoEConfig]):
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
 
-        KS = K_out.sum(dim=2, keepdim=True)
-        eps_val = self.get_eps(KS)
-        K_norm = K_out / (KS + eps_val)
-        out = K_norm.sum(dim=2)
+        # Extract color parameters for proper image formation
+        # Instead of normalizing to sum=1, implement I(x) = Σ w_j K_j(x) c_j / Σ w_j K_j(x)
+        if ch == 1:
+            # For grayscale: extract scalar color from mu (currently zeros, make learnable)
+            color_mean = mu[..., -1:]  # [B, ch, k, 1] - grayscale intensity
+        elif ch == 3:
+            # For RGB: extract color vector from mu
+            color_mean = mu[..., -3:]  # [B, ch, k, 3] - RGB values
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
+
+        # Compute color-weighted numerator and denominator
+        KS = K_out.sum(dim=2, keepdim=True)  # [B, ch, 1, h, w]
+        eps = 1e-6  # Use constant eps for stability
+
+        if ch == 1:
+            # Grayscale: C shape [B, ch, k, 1, 1]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 1, 1]
+            num = (K_out * C).sum(dim=2)  # [B, ch, h, w]
+            den = KS.squeeze(2) + eps  # [B, ch, h, w]
+            out = num / den  # [B, ch, h, w]
+        else:
+            # RGB: Need to compute per-color-channel rendering
+            # color_mean: [B, ch, k, 3], K_out: [B, ch, k, h, w]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 3, 1, 1]
+            K_out_expanded = K_out.unsqueeze(3)  # [B, ch, k, 1, h, w]
+
+            # Multiply kernels by colors and sum over kernels for each RGB channel
+            num = (K_out_expanded * C).sum(dim=2)  # [B, ch, 3, h, w]
+            den = KS.squeeze(2).unsqueeze(2) + eps  # [B, ch, 1, h, w]
+            out = num / den  # [B, ch, 3, h, w]
+
+            # Reshape to [B, 3, h, w] for RGB output
+            out = out.mean(dim=1)  # Average across input channels to get [B, 3, h, w]
+
         return out
 
     def extract_dynamic(self, x: torch.Tensor, cnt: torch.Tensor, p: int) -> torch.Tensor:
@@ -1386,9 +1419,9 @@ class MoE(Backbone[MoEConfig]):
     def forward_spatial_(self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor) -> torch.Tensor:
         B, ch, L = params.shape
         param_count = (
-            12
+            13
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (11 if ch == 1 else 17))
         )
         k = L // param_count
         x_dyn = self.extract_dynamic(params, cnt, p=param_count)
@@ -1421,9 +1454,41 @@ class MoE(Backbone[MoEConfig]):
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
 
-        KS = K_out.sum(dim=2, keepdim=True)
-        K_norm = K_out / (KS + 1e-8)
-        out = K_norm.sum(dim=2)
+        # Extract color parameters for proper image formation
+        # Same color-weighted rendering as forward_spatial
+        if ch == 1:
+            # For grayscale: extract scalar color from mu
+            color_mean = mu[..., -1:]  # [B, ch, k, 1] - grayscale intensity
+        elif ch == 3:
+            # For RGB: extract color vector from mu
+            color_mean = mu[..., -3:]  # [B, ch, k, 3] - RGB values
+        else:
+            raise ValueError(f"Unsupported number of channels: {ch}")
+
+        # Compute color-weighted numerator and denominator
+        KS = K_out.sum(dim=2, keepdim=True)  # [B, ch, 1, h, w]
+        eps = 1e-6  # Use constant eps for stability
+
+        if ch == 1:
+            # Grayscale: C shape [B, ch, k, 1, 1]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 1, 1]
+            num = (K_out * C).sum(dim=2)  # [B, ch, h, w]
+            den = KS.squeeze(2) + eps  # [B, ch, h, w]
+            out = num / den  # [B, ch, h, w]
+        else:
+            # RGB: Need to compute per-color-channel rendering
+            # color_mean: [B, ch, k, 3], K_out: [B, ch, k, h, w]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 3, 1, 1]
+            K_out_expanded = K_out.unsqueeze(3)  # [B, ch, k, 1, h, w]
+
+            # Multiply kernels by colors and sum over kernels for each RGB channel
+            num = (K_out_expanded * C).sum(dim=2)  # [B, ch, 3, h, w]
+            den = KS.squeeze(2).unsqueeze(2) + eps  # [B, ch, 1, h, w]
+            out = num / den  # [B, ch, 3, h, w]
+
+            # Reshape to [B, 3, h, w] for RGB output
+            out = out.mean(dim=1)  # Average across input channels to get [B, 3, h, w]
+
         # Remove internal clamp - let the final output stage handle range control
         return out
 
@@ -1483,9 +1548,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     @staticmethod
     def get_params_per_kernel(kernel_type: any, ch: int) -> int:
         if kernel_type == KernelType.GAUSSIAN:
-            return 10 if ch == 1 else 17
+            return 11 if ch == 1 else 17  # +1 for grayscale intensity parameter
         elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            return 12 if ch == 1 else 18
+            return 13 if ch == 1 else 18  # +1 for grayscale intensity parameter
         else:
             raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
 
@@ -1560,7 +1625,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         sp = self.phw * self.encoder.scale_factor
         dec_chunks = self.det_split(gaussians, self.cfg.num_chunks)
 
-       
         dec_results = []
         for bt in dec_chunks:
             chunk_result = self.decoder(sp, sp, bt)
