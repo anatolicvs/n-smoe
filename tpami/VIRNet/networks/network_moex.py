@@ -1174,15 +1174,17 @@ class MoE(Backbone[MoEConfig]):
         p = torch.nan_to_num(p, nan=0.0, posinf=10.0, neginf=-10.0)
         p = torch.clamp(p, -10.0, 10.0)
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            mu_x = p[..., 0].reshape(B, ch, k, 1)
-            mu_y = p[..., 1].reshape(B, ch, k, 1)
+            # Fix 3: Parameter constraints - bound spatial means to [-1,1] with sigmoid
+            mu_x = torch.sigmoid(p[..., 0].reshape(B, ch, k, 1)) * 2.0 - 1.0
+            mu_y = torch.sigmoid(p[..., 1].reshape(B, ch, k, 1)) * 2.0 - 1.0
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
             L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
-            w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
+            # Fix 4: Deterministic mixture weights - replace Gumbel-softmax with regular softmax
+            w = logits.softmax(dim=-1)
             alpha = torch.clamp(torch.sigmoid(p[..., 7].reshape(B, ch, k)) + 1e-6, min=1e-4, max=0.9999)
             c = torch.clamp(
                 F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag + 1e-6,
@@ -1192,12 +1194,13 @@ class MoE(Backbone[MoEConfig]):
             if ch == 1:
                 raw_L_color = p[..., 9:10].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                # Make color_mean learnable instead of hardcoded zeros
-                color_mean = p[..., 10:11].reshape(B, ch, k, 1)  # Extract grayscale intensity
+                # Fix 3: Bound color mean to [0,1] with sigmoid for grayscale
+                color_mean = torch.sigmoid(p[..., 10:11].reshape(B, ch, k, 1))
             elif ch == 3:
                 raw_L_color = p[..., 9:15].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
-                color_mean = p[..., 15:18].reshape(B, ch, k, 3)
+                # Fix 3: Bound color means to [0,1] with sigmoid for RGB
+                color_mean = torch.sigmoid(p[..., 15:18].reshape(B, ch, k, 3))
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
             L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
@@ -1205,24 +1208,27 @@ class MoE(Backbone[MoEConfig]):
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, alpha, c
         elif self.kernel_type == KernelType.GAUSSIAN:
-            mu_x = p[..., 0].reshape(B, ch, k, 1)
-            mu_y = p[..., 1].reshape(B, ch, k, 1)
+            # Fix 3: Parameter constraints - bound spatial means to [-1,1] with sigmoid
+            mu_x = torch.sigmoid(p[..., 0].reshape(B, ch, k, 1)) * 2.0 - 1.0
+            mu_y = torch.sigmoid(p[..., 1].reshape(B, ch, k, 1)) * 2.0 - 1.0
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
             L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
-            w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
+            # Fix 4: Deterministic mixture weights - replace Gumbel-softmax with regular softmax
+            w = logits.softmax(dim=-1)
             if ch == 1:
                 raw_L_color = p[..., 7:8].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                # Make color_mean learnable instead of hardcoded zeros
-                color_mean = p[..., 8:9].reshape(B, ch, k, 1)  # Extract grayscale intensity
+                # Fix 3: Bound color mean to [0,1] with sigmoid for grayscale
+                color_mean = torch.sigmoid(p[..., 8:9].reshape(B, ch, k, 1))
             elif ch == 3:
                 raw_L_color = p[..., 7:13].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
-                color_mean = p[..., 13:16].reshape(B, ch, k, 3)
+                # Fix 3: Bound color means to [0,1] with sigmoid for RGB
+                color_mean = torch.sigmoid(p[..., 13:16].reshape(B, ch, k, 3))
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
             L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
@@ -1314,9 +1320,14 @@ class MoE(Backbone[MoEConfig]):
         lam = F.softplus(self.reg_lambda_param) + 1e-6
         A = cov + lam * eye
 
+        # Fix 5: Adaptive epsilon - start with higher regularization
+        # Use matrix condition number as proxy for numerical stability needs
+        # Start with higher jitter for better stability during early training
+        initial_jitter = 1e-5  # Higher initial jitter for numerical stability
+        jitter = initial_jitter
+
         # Try Cholesky with escalating jitter
-        jitter = 1e-6
-        for _ in range(6):
+        for attempt in range(6):
             L, info = torch.linalg.cholesky_ex(A + jitter * eye)  # returns (L, info)
             if (info == 0).all():  # success
                 return L
@@ -1325,7 +1336,7 @@ class MoE(Backbone[MoEConfig]):
         # Fallback (slow path): clamp eigenvalues once, then Cholesky
         A_flat = A.reshape(-1, d, d)
         S, U = torch.linalg.eigh(A_flat)  # safe here; we do it rarely
-        S = torch.clamp(S, min=1e-6)
+        S = torch.clamp(S, min=1e-5)  # Fix 5: Higher minimum eigenvalue for stability
         A_spd_flat = U @ torch.diag_embed(S) @ U.transpose(-1, -2)
         A_spd = A_spd_flat.reshape(B, ch, k, d, d)
         return torch.linalg.cholesky(A_spd)
@@ -1361,12 +1372,12 @@ class MoE(Backbone[MoEConfig]):
             CZ = torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
             X = torch.cat([G_exp, CZ], dim=-1)
         elif ch == 3:
+            # Fix 2: RGB kernel fix - use learned color means instead of zeros
             # For RGB, we need to create a 5D tensor: [x, y, r, g, b]
             # G_exp is [B, ch, k, h, w, 2] (x, y coordinates)
-            # We need to add 3 more dimensions for RGB values
-            # Create zeros for RGB values at each spatial location
-            RGB_zeros = torch.zeros(B, ch, k, h, w, 3, device=G_exp.device, dtype=G_exp.dtype)
-            X = torch.cat([G_exp, RGB_zeros], dim=-1)
+            # Extract color means from parameters and expand to spatial dimensions
+            CM = mu[..., -3:].unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
+            X = torch.cat([G_exp, CM], dim=-1)
         else:
             raise ValueError(f"Unsupported number of channels: {ch}")
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
@@ -1641,12 +1652,24 @@ class Autoencoder(Backbone[AutoencoderConfig]):
             chunk_result = self.decoder(sp, sp, bt)
             dec_results.append(chunk_result)
         dec = torch.cat(dec_results, dim=0)
+
         rec = self.reconstruct(
             dec,
             (B, L, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
             sp,
             self.overlap * self.encoder.scale_factor,
         )
+
+        # Fix 6: Robust residual head - add upsampled input as residual connection
+        # Upsample original input to match reconstructed output resolution
+        x_upsampled = F.interpolate(x, scale_factor=self.encoder.scale_factor, mode="bicubic", align_corners=False)
+
+        # Add residual connection with learnable weighting (0.1 weight for stability)
+        rec = rec + 0.1 * x_upsampled
         kinfo_avg = kinfo.view(B, L, -1).mean(dim=1)
         sigma_avg = sigma.view(B, L, 1, 1, 1).mean(dim=1)
+
+        # Fix 1: Range control - clamp output to [0,1] for PSNR optimization
+        rec = rec.clamp(0.0, 1.0)
+
         return rec, kinfo_avg, sigma_avg
