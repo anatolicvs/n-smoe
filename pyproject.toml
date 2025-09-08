@@ -2,115 +2,51 @@
 name = "n-smoe-dev"
 version = "0.1.0"
 requires-python = ">=3.12,<3.13"
-description = "Pixi environment for N‑SMoE research stack (GPU & CPU)"
+description = "Pixi environment for N-SMoE research stack (GPU, tests, optional extras)"
 
 [tool.pixi.project]
-channels = ["rapidsai", "conda-forge", "nvidia"]
+channels = ["conda-forge", "nvidia"]
 platforms = ["linux-64"]
 
 [tool.pixi.system-requirements]
 cuda = "12.9"
 
 [tool.pixi.dependencies]
-python = "*"
+python = "3.12.*"
 pip = "*"
 python-build = "*"
 cmake = "*"
 ninja = "*"
+numpy = "*"
+pyyaml = "*"
+numba = "*"
+llvmlite = "*"
+cython = "*"
 
 [tool.pixi.pypi-options]
 index-url = "https://pypi.org/simple"
-extra-index-urls = ["https://pypi.nvidia.com"]
 find-links = [{ url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }]
 index-strategy = "first-index"
+["https://pypi.nvidia.com"]
+find-links = [{ url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }]
+index-strategy = "unsafe-best-match"
 
 [tool.pixi.pypi-dependencies]
-torch = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
-torchvision = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
-torchaudio = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
-xformers = { version = "*", index = "https://download.pytorch.org/whl/cu129" }
+# PyTorch CUDA wheels: use cu126 to satisfy monai>=1.5 torch range (>=2.4.1,<2.7.0)
+torch = { version = ">=2.6,<2.7", index = "https://download.pytorch.org/whl/cu124" }
+torchvision = { version = ">=0.21,<0.22", index = "https://download.pytorch.org/whl/cu124" }
+torchaudio = { version = ">=2.6,<2.7", index = "https://download.pytorch.org/whl/cu124" }
+xformers = { version = "*", index = "https://download.pytorch.org/whl/cu124" }
+
 scipy = "*"
-cython = "*"
-numba = "*"
-matplotlib = "*"
-seaborn = "*"
-opencv-python = "*"
-pyyaml = "*"
-rawpy = "*"
-imageio = "*"
-imageio-ffmpeg = "*"
-scikit-image = "*"
-beartype = "*"
-colorama = "*"
-moviepy = "*"
-dacite = "*"
-tabulate = "*"
-svg.py = "*"
-h5py = "*"
 einops = "*"
-plyfile = "*"
-e3nn = "*"
-lpips = "*"
-colorspacious = "*"
 tqdm = "*"
-thop = "*"
 pandas = "*"
-wandb = "*"
 scikit-learn = "*"
 timm = "*"
-lightning = { version = "*", extras = ["extra"] }
 tensorboard = "*"
-monailabel = "*"
-pytorch-metric-learning = "*"
-pytorch-ignite = "*"
-pytorchvideo = "*"
-torchmetrics = "*"
-pytorch-msssim = "*"
-torchio = "*"
-piq = "*"
-torchdiffeq = "*"
 hydra-core = "*"
-fvcore = "*"
-flax = { version = "*", extras = ["all"] }
-jaxtyping = "*"
-jax = { version = "*", extras = ["cuda12_local"] }
-cupy-cuda12x = "*"
-diffusers = { version = "*", extras = ["torch"] }
-connected-components-3d = "*"
-commentjson = "*"
-nltk = "*"
-transformers = "*"
-sentencepiece = "*"
-spacy = "*"
-torchtext = "*"
-torchdata = "*"
-portalocker = ">=2.0.0"
-nibabel = "*"
-dicom2nifti = "*"
-hdf5storage = "*"
-pydicom = "*"
-SimpleITK = "*"
-monai = "*"
-gsplat = "*"
-segmentation-models-pytorch = "*"
-ruamel.yaml = "*"
-nerfview = "*"
-viser = "*"
-iopath = "*"
-mahotas = "*"
-datashader = "*"
-holoviews = "*"
-hvplot = "*"
-jupyterlab = "*"
-icecream = "*"
-dahuffman = "*"
-vector-quantize-pytorch = "*"
-
-[tool.pixi.feature.gpu]
-system-requirements = { cuda = "12.9" }
-
-[tool.pixi.feature.cpu]
-pypi-dependencies = { torch = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, torchvision = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, torchaudio = { version = "*", index = "https://download.pytorch.org/whl/nightly/cpu" }, xformers = { version = "*", index = "https://download.pytorch.org/whl/cpu" } }
+"fvcore" = "*"
 
 [tool.pixi.feature.test.pypi-dependencies]
 pytest = "*"
@@ -129,8 +65,6 @@ pylint = "*"
 pylint-junit = "*"
 bandit = { version = "*", extras = ["toml"] }
 pre-commit = "*"
-matplotlib = "*"
-seaborn = "*"
 
 [tool.pixi.feature.test.tasks]
 test = "pytest -m 'not integration and not spark' --cov-report xml:coverage.xml --cov src --cov-fail-under 0"
@@ -142,10 +76,73 @@ flake8 = "flake8"
 pylint = "pylint src"
 precommit = "pre-commit run -a"
 
+[tool.pixi.feature.extras.pypi-dependencies]
+opencv-python = "*"
+rawpy = "*"
+imageio = "*"
+"imageio-ffmpeg" = "*"
+scikit-image = "*"
+beartype = "*"
+colorama = "*"
+moviepy = "*"
+dacite = "*"
+tabulate = "*"
+"svg.py" = "*"
+h5py = "*"
+plyfile = "*"
+e3nn = "*"
+lpips = "*"
+colorspacious = "*"
+thop = "*"
+wandb = "*"
+lightning = "*"
+"pytorch-metric-learning" = "*"
+"pytorch-ignite" = "*"
+"pytorchvideo" = "*"
+"torchmetrics" = "*"
+"pytorch-msssim" = "*"
+torchio = "*"
+piq = "*"
+"torchdiffeq" = "*"
+flax = "*"
+jaxtyping = "*"
+"jax" = { version = "*", extras = ["cuda12_local"] }
+"cupy-cuda12x" = "*"
+diffusers = { version = "*", extras = ["torch"] }
+"connected-components-3d" = "*"
+commentjson = "*"
+nltk = "*"
+transformers = "*"
+sentencepiece = "*"
+spacy = "*"
+torchtext = "*"
+torchdata = "*"
+portalocker = ">=2.0.0"
+nibabel = "*"
+"dicom2nifti" = "*"
+hdf5storage = "*"
+pydicom = "*"
+SimpleITK = "*"
+monai = ">=1.5,<1.6"
+"gsplat" = "*"
+"segmentation-models-pytorch" = "*"
+"ruamel.yaml" = "*"
+"nerfview" = "*"
+"viser" = "*"
+"iopath" = "*"
+"mahotas" = "*"
+"datashader" = "*"
+"holoviews" = "*"
+"hvplot" = "*"
+jupyterlab = "*"
+icecream = "*"
+"dahuffman" = "*"
+"vector-quantize-pytorch" = "*"
+
 [tool.pixi.environments]
-default = { features = ["gpu"] }
-cpu = { features = ["cpu"] }
-test = { features = ["gpu", "test"] }
+default = { features = [] }
+test = { features = ["test"] }
+extras = { features = ["extras"] }
 
 [tool.pixi.tasks]
 info = "python -c \"import torch, sys; print(torch.__version__); print('CUDA available:', torch.cuda.is_available());\""

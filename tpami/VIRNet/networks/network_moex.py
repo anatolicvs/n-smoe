@@ -27,18 +27,17 @@ T = TypeVar("T")
 def detect_sdpa_backend(device: torch.device, dtype: torch.dtype, opt_out_flash: bool = False) -> list:
     """Detect the best available SDPA backend for given device/dtype constraints."""
     available_backends = []
-    
+
     # FlashAttention requires GPU + fp16/bf16
-    if (not opt_out_flash and device.type == 'cuda' and 
-        dtype in [torch.float16, torch.bfloat16]):
+    if not opt_out_flash and device.type == "cuda" and dtype in [torch.float16, torch.bfloat16]:
         available_backends.append(SDPBackend.FLASH_ATTENTION)
-    
+
     # Efficient attention is generally available
     available_backends.append(SDPBackend.EFFICIENT_ATTENTION)
-    
+
     # Math backend is always available as fallback
     available_backends.append(SDPBackend.MATH)
-    
+
     return available_backends
 
 
@@ -69,9 +68,7 @@ class Upsample(nn.Module):
     def forward(self, x):
         assert x.shape[1] == self.channels
         if self.dims == 3 and self.resample_2d:
-            x = F.interpolate(
-                x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest"
-            )
+            x = F.interpolate(x, (x.shape[2], x.shape[3] * 2, x.shape[4] * 2), mode="nearest")
         else:
             x = F.interpolate(x, scale_factor=2, mode="nearest")
         if self.use_conv:
@@ -88,9 +85,7 @@ class Downsample(nn.Module):
         self.dims = dims
         stride = (1, 2, 2) if dims == 3 and resample_2d else 2
         if use_conv:
-            self.op = conv_nd(
-                dims, self.channels, self.out_channels, 3, stride=stride, padding=1
-            )
+            self.op = conv_nd(dims, self.channels, self.out_channels, 3, stride=stride, padding=1)
         else:
             assert self.channels == self.out_channels
             self.op = avg_pool_nd(dims, kernel_size=stride, stride=stride)
@@ -101,13 +96,9 @@ class Downsample(nn.Module):
 
 
 class AttentionPool2d_(nn.Module):
-    def __init__(
-        self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int
-    ):
+    def __init__(self, spacial_dim: int, embed_dim: int, num_heads: int, output_dim: int):
         super().__init__()
-        self.positional_embedding = nn.Parameter(
-            torch.randn(spacial_dim + 1, embed_dim) / embed_dim**0.5
-        )
+        self.positional_embedding = nn.Parameter(torch.randn(spacial_dim + 1, embed_dim) / embed_dim**0.5)
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.q_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
@@ -129,9 +120,7 @@ class AttentionPool2d_(nn.Module):
             k_proj_weight=self.k_proj.weight,
             v_proj_weight=self.v_proj.weight,
             in_proj_weight=None,
-            in_proj_bias=torch.cat(
-                [self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]
-            ),
+            in_proj_bias=torch.cat([self.q_proj.bias, self.k_proj.bias, self.v_proj.bias]),
             bias_k=None,
             bias_v=None,
             add_zero_attn=False,
@@ -174,9 +163,7 @@ class AttentionPool2d(nn.Module):
         self.num_heads = num_heads
         self.output_dim = output_dim or embed_dim
         self.max_tokens = max_tokens
-        self.fourier_pos = FourierPosition(
-            in_dim=2, mapping_size=fourier_size, scale=fourier_scale
-        )
+        self.fourier_pos = FourierPosition(in_dim=2, mapping_size=fourier_size, scale=fourier_scale)
         self.linear_pos = nn.Linear(fourier_size, embed_dim)
         self.global_pos = nn.Parameter(torch.empty(embed_dim))
         nn.init.xavier_uniform_(self.global_pos.unsqueeze(0))
@@ -184,10 +171,10 @@ class AttentionPool2d(nn.Module):
         self.k_proj = nn.Linear(embed_dim, embed_dim)
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.c_proj = nn.Linear(embed_dim, self.output_dim)
-        
+
         # Cache for positional embeddings
         self._pos_cache = {}
-        
+
     def _get_positional_embeddings(self, H: int, W: int, device: torch.device) -> torch.Tensor:
         """Get or compute positional embeddings with caching."""
         cache_key = (H, W)
@@ -199,17 +186,15 @@ class AttentionPool2d(nn.Module):
             fourier_features = self.fourier_pos(coords)
             pos_spatial = self.linear_pos(fourier_features)
             # Register as buffer for proper device movement
-            self.register_buffer(f'_pos_cache_{H}_{W}', pos_spatial, persistent=False)
+            self.register_buffer(f"_pos_cache_{H}_{W}", pos_spatial, persistent=False)
             self._pos_cache[cache_key] = pos_spatial
         return self._pos_cache[cache_key].to(device)
 
     def forward(self, input_x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = input_x.shape
         if C != self.embed_dim:
-            raise ValueError(
-                f"Input channel count {C} must equal embed_dim ({self.embed_dim})"
-            )
-        
+            raise ValueError(f"Input channel count {C} must equal embed_dim ({self.embed_dim})")
+
         # Check if we need to pool to reduce tokens
         tokens = H * W
         pool_stride = 1
@@ -217,17 +202,17 @@ class AttentionPool2d(nn.Module):
             pool_stride = int(math.ceil(math.sqrt(tokens / self.max_tokens)))
             input_x = F.avg_pool2d(input_x, kernel_size=pool_stride, stride=pool_stride)
             H, W = input_x.shape[-2:]
-        
+
         x = input_x.flatten(start_dim=2).permute(2, 0, 1)
         global_token = x.mean(dim=0, keepdim=True)
         x = torch.cat([global_token, x], dim=0)
-        
+
         # Use cached positional embeddings
         pos_spatial = self._get_positional_embeddings(H, W, input_x.device)
         pos_global = self.global_pos.unsqueeze(0)
         pos_emb = torch.cat([pos_global, pos_spatial], dim=0)
         x = x + pos_emb.unsqueeze(1)
-        
+
         attn_output, _ = F.multi_head_attention_forward(
             query=x[:1],
             key=x,
@@ -310,9 +295,7 @@ class QKVAttention(nn.Module):
         dropout_p = self.dropout_p if self.training else 0.0
 
         with sdpa_kernel(backends):
-            a = F.scaled_dot_product_attention(
-                q * scale, k * scale, v, dropout_p=dropout_p
-            )
+            a = F.scaled_dot_product_attention(q * scale, k * scale, v, dropout_p=dropout_p)
 
         # Reshape back to original format
         a = a.transpose(-2, -1).contiguous().view(bs, -1, length)
@@ -334,12 +317,8 @@ def init_t_xy(q_len: int) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
 
 def compute_axial_cis(dim: int, q_len: int, theta: float = 10000.0) -> torch.Tensor:
     t_x, t_y, end_x, end_y = init_t_xy(q_len)
-    freqs_x: torch.Tensor = 1.0 / (
-        theta ** (torch.arange(0, dim, 4)[: (dim // 4)].float() / dim)
-    )
-    freqs_y: torch.Tensor = 1.0 / (
-        theta ** (torch.arange(0, dim, 4)[: (dim // 4)].float() / dim)
-    )
+    freqs_x: torch.Tensor = 1.0 / (theta ** (torch.arange(0, dim, 4)[: (dim // 4)].float() / dim))
+    freqs_y: torch.Tensor = 1.0 / (theta ** (torch.arange(0, dim, 4)[: (dim // 4)].float() / dim))
     freqs_x = torch.outer(t_x, freqs_x)
     freqs_y = torch.outer(t_y, freqs_y)
     freqs_cis_x: torch.Tensor = torch.polar(torch.ones_like(freqs_x), freqs_x)
@@ -355,9 +334,7 @@ def apply_rotary_enc(
 ):
     xq_: torch.Tensor = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_: torch.Tensor | None = (
-        torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
-        if xk.shape[-2] != 0
-        else None
+        torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2)) if xk.shape[-2] != 0 else None
     )
 
     if freqs_cis.shape[0] != xq_.shape[-2]:
@@ -398,14 +375,10 @@ class Attention(nn.Module):
     ) -> None:
         super().__init__()
         self.embedding_dim: int = embedding_dim
-        self.kv_in_dim: Any | int = (
-            kv_in_dim if kv_in_dim is not None else embedding_dim
-        )
+        self.kv_in_dim: Any | int = kv_in_dim if kv_in_dim is not None else embedding_dim
         self.internal_dim: int = embedding_dim // downsample_rate
         self.num_heads: int = num_heads
-        assert (
-            self.internal_dim % num_heads == 0
-        ), "num_heads must divide embedding_dim."
+        assert self.internal_dim % num_heads == 0, "num_heads must divide embedding_dim."
 
         self.q_proj = nn.Linear(embedding_dim, self.internal_dim)
         self.k_proj = nn.Linear(self.kv_in_dim, self.internal_dim)
@@ -430,17 +403,13 @@ class Attention(nn.Module):
 
     def _get_sdpa_backends(self, device: torch.device, dtype: torch.dtype) -> list:
         """Get cached SDPA backends for the given device/dtype."""
-        if (self._cached_backends is None or 
-            self._cached_device != device or 
-            self._cached_dtype != dtype):
+        if self._cached_backends is None or self._cached_device != device or self._cached_dtype != dtype:
             self._cached_backends = detect_sdpa_backend(device, dtype, self.opt_out_flash)
             self._cached_device = device
             self._cached_dtype = dtype
         return self._cached_backends
 
-    def forward(
-        self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor
-    ) -> torch.Tensor:
+    def forward(self, q: torch.Tensor, k: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
 
         q = self.q_proj(q)
         k = self.k_proj(k)
@@ -455,9 +424,7 @@ class Attention(nn.Module):
         # Use cached backends
         backends = self._get_sdpa_backends(q.device, q.dtype)
         with sdpa_kernel(backends):
-            out: torch.Tensor = F.scaled_dot_product_attention(
-                q, k, v, dropout_p=dropout_p
-            )
+            out: torch.Tensor = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
 
         out = self._recombine_heads(out)
         out = self.out_proj(out)
@@ -468,10 +435,11 @@ class Attention(nn.Module):
 class RoPEAttention(Attention):
     """
     Rotary Position Embedding (RoPE) Attention.
-    
+
     Note: Requires head_dim to be a multiple of 4 for axial RoPE to work correctly.
     This is because 2D RoPE uses two pairs of sin/cos functions (one for each spatial dimension).
     """
+
     def __init__(
         self,
         *args,
@@ -486,9 +454,7 @@ class RoPEAttention(Attention):
         head_dim = self.internal_dim // self.num_heads
         assert head_dim % 4 == 0, f"Axial RoPE requires head_dim % 4 == 0. Got head_dim={head_dim}"
 
-        self.compute_cis = partial(
-            compute_axial_cis, dim=head_dim, theta=rope_theta
-        )
+        self.compute_cis = partial(compute_axial_cis, dim=head_dim, theta=rope_theta)
         self.freqs_cis = None
         self.rope_k_repeat = rope_k_repeat
 
@@ -531,12 +497,10 @@ class RoPEAttention(Attention):
 
         dropout_p: float = self.dropout_p if self.training else 0.0
 
-        # Use cached backends  
+        # Use cached backends
         backends = self._get_sdpa_backends(q.device, q.dtype)
         with sdpa_kernel(backends):
-            out: torch.Tensor = F.scaled_dot_product_attention(
-                q, k, v, dropout_p=dropout_p
-            )
+            out: torch.Tensor = F.scaled_dot_product_attention(q, k, v, dropout_p=dropout_p)
 
         out = self._recombine_heads(out)
         out = self.out_proj(out)
@@ -576,19 +540,11 @@ class ResBlock(Backbone[ResBlockConfig]):
         self.updown: bool = cfg.up or cfg.down
 
         if cfg.up:
-            self.h_upd = Upsample(
-                cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d
-            )
-            self.x_upd = Upsample(
-                cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d
-            )
+            self.h_upd = Upsample(cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d)
+            self.x_upd = Upsample(cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d)
         elif cfg.down:
-            self.h_upd = Downsample(
-                cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d
-            )
-            self.x_upd = Downsample(
-                cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d
-            )
+            self.h_upd = Downsample(cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d)
+            self.x_upd = Downsample(cfg.channels, False, cfg.dims, resample_2d=cfg.resample_2d)
         else:
             self.h_upd = self.x_upd = nn.Identity()
 
@@ -610,18 +566,14 @@ class ResBlock(Backbone[ResBlockConfig]):
         if cfg.out_channels == cfg.channels:
             self.skip_connection = nn.Identity()
         elif cfg.use_conv:
-            self.skip_connection = conv_nd(
-                cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1
-            )
+            self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 3, padding=1)
         else:
             self.skip_connection = conv_nd(cfg.dims, cfg.channels, cfg.out_channels, 1)
 
         self.res_scale = nn.Parameter(torch.tensor(1.0))
 
     def forward(self, x: torch.Tensor):
-        return checkpoint(
-            self._forward, (x,), list(self.parameters()), self.cfg.use_checkpoint
-        )
+        return checkpoint(self._forward, (x,), list(self.parameters()), self.cfg.use_checkpoint)
 
     def _forward(self, x):
         if self.updown:
@@ -663,13 +615,9 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         self.phw: int = phw
 
         self.norm: GroupNorm32 = normalization(C=cfg.channels, G_max=cfg.num_groups)
-        self.qkv: nn.Conv1d | nn.Conv2d | nn.Conv3d = conv_nd(
-            1, cfg.channels, cfg.channels * 3, 1
-        )
+        self.qkv: nn.Conv1d | nn.Conv2d | nn.Conv3d = conv_nd(1, cfg.channels, cfg.channels * 3, 1)
 
-        self.attention_type: str = (
-            cfg.attention_type if hasattr(cfg, "attention_type") else "attention"
-        )
+        self.attention_type: str = cfg.attention_type if hasattr(cfg, "attention_type") else "attention"
 
         self.attention_map = {
             "attention": QKVAttention(cfg.num_heads, dropout=cfg.dropout_rate),
@@ -690,9 +638,7 @@ class AttentionBlock(Backbone[AttentionBlockConfig]):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return checkpoint(
-            self._forward, (x,), list(self.parameters()), self.cfg.use_checkpoint
-        )
+        return checkpoint(self._forward, (x,), list(self.parameters()), self.cfg.use_checkpoint)
 
     def _forward(self, x: torch.Tensor) -> torch.Tensor:
         b, c, *spatial = x.shape
@@ -733,19 +679,13 @@ class MullerResizer(nn.Module):
             "nearest": "nearest",
             "bicubic": "bicubic",
         }
-        self.interpolation_method = interpolation_methods.get(
-            base_resize_method, "bilinear"
-        )
+        self.interpolation_method = interpolation_methods.get(base_resize_method, "bilinear")
         self.weights = nn.ParameterList()
         self.biases = nn.ParameterList()
         if init_weights is not None:
             for i in range(num_layers):
-                self.weights.append(
-                    nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype))
-                )
-                self.biases.append(
-                    nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype))
-                )
+                self.weights.append(nn.Parameter(torch.tensor(init_weights[2 * i], dtype=dtype)))
+                self.biases.append(nn.Parameter(torch.tensor(init_weights[2 * i + 1], dtype=dtype)))
         else:
             for _ in range(num_layers):
                 weight = nn.Parameter(torch.empty(1, dtype=dtype))
@@ -760,9 +700,7 @@ class MullerResizer(nn.Module):
         t = torch.arange(kernel_size, dtype=self.dtype) - (kernel_size - 1) / 2
         gaussian_kernel = torch.exp(-t.pow(2) / (2 * (stddev**2)))
         gaussian_kernel /= gaussian_kernel.sum()
-        gaussian_kernel = gaussian_kernel.view(
-            1, 1, kernel_size, 1
-        ) * gaussian_kernel.view(1, 1, 1, kernel_size)
+        gaussian_kernel = gaussian_kernel.view(1, 1, kernel_size, 1) * gaussian_kernel.view(1, 1, 1, kernel_size)
         gaussian_kernel = gaussian_kernel.repeat(self.d_in, 1, 1, 1)
         return gaussian_kernel
 
@@ -776,9 +714,7 @@ class MullerResizer(nn.Module):
         x = input_tensor.to(dtype=self.dtype)
         if self.avg_pool:
             x = F.avg_pool2d(x, kernel_size=2, stride=2)
-        net = F.interpolate(
-            x, size=target_size, mode=self.interpolation_method, align_corners=False
-        )
+        net = F.interpolate(x, size=target_size, mode=self.interpolation_method, align_corners=False)
         for weight, bias in zip(self.weights, self.biases):
             blurred = self._apply_gaussian_blur(x)
             residual = blurred - x
@@ -853,13 +789,7 @@ class Encoder(Backbone[EncoderConfig]):
         self.depth = len(cfg.channel_mult)
 
         self.input_blocks = nn.ModuleList(
-            [
-                nn.Sequential(
-                    conv_nd(
-                        cfg.dims, d_in + extra_chn, cfg.model_channels, 3, padding=1
-                    )
-                )
-            ]
+            [nn.Sequential(conv_nd(cfg.dims, d_in + extra_chn, cfg.model_channels, 3, padding=1))]
         )
 
         self._feature_size: int = cfg.model_channels
@@ -885,10 +815,7 @@ class Encoder(Backbone[EncoderConfig]):
                     )
                 ]
                 ch = mult * cfg.model_channels
-                if (
-                    cfg.attention_resolutions is not None
-                    and ds in cfg.attention_resolutions
-                ):
+                if cfg.attention_resolutions is not None and ds in cfg.attention_resolutions:
                     layers.append(
                         AttentionBlock(
                             AttentionBlockConfig(
@@ -926,9 +853,7 @@ class Encoder(Backbone[EncoderConfig]):
                             activation=self.activation,
                         )
                         if cfg.resblock_updown
-                        else Downsample(
-                            ch, cfg.conv_resample, dims=cfg.dims, out_channels=out_ch
-                        )
+                        else Downsample(ch, cfg.conv_resample, dims=cfg.dims, out_channels=out_ch)
                     )
                 )
                 ch = out_ch
@@ -1030,12 +955,8 @@ class Encoder(Backbone[EncoderConfig]):
     # def pad_x(self, x: torch.Tensor) -> torch.Tensor:
     #     return util_net.pad_input(x, 2 ** (self.depth - 1))
 
-    def get_eps(
-        self, t: torch.Tensor, factor: float = 1e-3, min_eps: float = 1e-8
-    ) -> torch.Tensor:
-        return torch.maximum(
-            torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean()
-        )
+    def get_eps(self, t: torch.Tensor, factor: float = 1e-3, min_eps: float = 1e-8) -> torch.Tensor:
+        return torch.maximum(torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean())
 
     def forward(
         self,
@@ -1064,11 +985,7 @@ class Encoder(Backbone[EncoderConfig]):
                 if self.noise_avg:
                     tmp_list.append(s_sqrt.repeat(1, 1, h_up, w_up))
                 else:
-                    tmp_list.append(
-                        F.interpolate(
-                            s_sqrt, scale_factor=self.scale_factor, mode="nearest"
-                        )
-                    )
+                    tmp_list.append(F.interpolate(s_sqrt, scale_factor=self.scale_factor, mode="nearest"))
             extra_maps = torch.cat(tmp_list, dim=1) if len(tmp_list) > 0 else None
 
         if extra_maps is not None:
@@ -1088,9 +1005,7 @@ class Encoder(Backbone[EncoderConfig]):
         h = h.to(dtype=x_input.dtype)
 
         gaussians = self.out(h)
-        gaussians = rearrange(
-            gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent
-        )
+        gaussians = rearrange(gaussians, "b (c latent) -> b c latent", c=self.d_in, latent=self.latent)
 
         return gaussians, kinfo_est.squeeze(-1).squeeze(-1), sigma
 
@@ -1145,11 +1060,9 @@ class MoE(Backbone[MoEConfig]):
         self.max_diag = cfg.max_diag
         self.min_denom = cfg.min_denom
         self.tau_min = cfg.tau_min
-        self.balance_loss_coeff = cfg.balance_loss_coeff
+        self.balance_loss_coeff = getattr(cfg, "balance_loss_coeff", 0.0)  # Safe access with default
         self.reg_lambda_param = nn.Parameter(torch.tensor(cfg.reg_lambda))
-        self.log_temp = nn.Parameter(
-            torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True
-        )
+        self.log_temp = nn.Parameter(torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True)
 
         if hasattr(nn, cfg.activation):
             self.activation = getattr(nn, cfg.activation)()
@@ -1158,7 +1071,7 @@ class MoE(Backbone[MoEConfig]):
         self.spatial_mapper = spectral_norm(nn.Linear(3, 3))
         self.color_mapper_1 = spectral_norm(nn.Linear(1, 1))
         self.color_mapper_3 = spectral_norm(nn.Linear(6, 6))
-        
+
         # For tracking balance loss
         self._last_balance_loss = None
 
@@ -1181,22 +1094,14 @@ class MoE(Backbone[MoEConfig]):
         # weights shape: [B, ch, k]
         # Average expert utilization across batch and spatial dimensions
         avg_expert_usage = weights.mean(dim=[0, 1])  # [k]
-        
+
         # Encourage uniform distribution: entropy loss
         uniform_target = torch.ones_like(avg_expert_usage) / avg_expert_usage.shape[0]
-        balance_loss = F.kl_div(
-            (avg_expert_usage + 1e-8).log(), 
-            uniform_target, 
-            reduction='sum'
-        )
+        balance_loss = F.kl_div((avg_expert_usage + 1e-8).log(), uniform_target, reduction="sum")
         return balance_loss
 
-    def get_eps(
-        self, t: torch.Tensor, factor: float = 1e-5, min_eps: float = 1e-8
-    ) -> torch.Tensor:
-        return torch.maximum(
-            torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean()
-        )
+    def get_eps(self, t: torch.Tensor, factor: float = 1e-5, min_eps: float = 1e-8) -> torch.Tensor:
+        return torch.maximum(torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean())
 
     def construct_lower_triangular(self, params: torch.Tensor, s: int) -> torch.Tensor:
         eps = self.get_eps(params, factor=1e-6, min_eps=1e-6)
@@ -1268,9 +1173,7 @@ class MoE(Backbone[MoEConfig]):
         C_xy = torch.matmul(C_xy, R.transpose(-2, -1))
         C_xy = (C_xy + C_xy.transpose(-1, -2)) / 2
         if ch == 1:
-            C_color = (
-                torch.matmul(L_color, L_color.transpose(-2, -1)).squeeze(-1).squeeze(-1)
-            )
+            C_color = torch.matmul(L_color, L_color.transpose(-2, -1)).squeeze(-1).squeeze(-1)
             B_, _, k_ = C_xy.shape[:3]
             C_full = torch.zeros(B_, ch, k_, 3, 3, device=C_xy.device, dtype=C_xy.dtype)
             C_full[..., :2, :2] = C_xy
@@ -1296,17 +1199,13 @@ class MoE(Backbone[MoEConfig]):
             mu_x = p[..., 0].reshape(B, ch, k, 1)
             mu_y = p[..., 1].reshape(B, ch, k, 1)
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
-            L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(
-                B, ch, k, 3
-            )
+            L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
             w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
-            alpha = torch.clamp(
-                torch.sigmoid(p[..., 7].reshape(B, ch, k)) + 1e-6, min=1e-4, max=0.9999
-            )
+            alpha = torch.clamp(torch.sigmoid(p[..., 7].reshape(B, ch, k)) + 1e-6, min=1e-4, max=0.9999)
             c = torch.clamp(
                 F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag + 1e-6,
                 min=1e-3,
@@ -1314,21 +1213,15 @@ class MoE(Backbone[MoEConfig]):
             )
             if ch == 1:
                 raw_L_color = p[..., 9:10].reshape(B, ch, k, 1)
-                L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(
-                    B, ch, k, 1
-                )
+                L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
                 color_mean = torch.zeros_like(mu_x)
             elif ch == 3:
                 raw_L_color = p[..., 9:15].reshape(B, ch, k, 6)
-                L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(
-                    B, ch, k, 6
-                )
+                L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
                 color_mean = p[..., 15:18].reshape(B, ch, k, 3)
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
-            L_color = self.construct_lower_triangular(
-                L_color_params, s=1 if ch == 1 else 3
-            )
+            L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, alpha, c
@@ -1336,9 +1229,7 @@ class MoE(Backbone[MoEConfig]):
             mu_x = p[..., 0].reshape(B, ch, k, 1)
             mu_y = p[..., 1].reshape(B, ch, k, 1)
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
-            L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(
-                B, ch, k, 3
-            )
+            L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
@@ -1346,28 +1237,20 @@ class MoE(Backbone[MoEConfig]):
             w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
             if ch == 1:
                 raw_L_color = p[..., 7:8].reshape(B, ch, k, 1)
-                L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(
-                    B, ch, k, 1
-                )
+                L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
                 color_mean = torch.zeros_like(mu_x)
             elif ch == 3:
                 raw_L_color = p[..., 7:13].reshape(B, ch, k, 6)
-                L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(
-                    B, ch, k, 6
-                )
+                L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
                 color_mean = p[..., 13:16].reshape(B, ch, k, 3)
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
-            L_color = self.construct_lower_triangular(
-                L_color_params, s=1 if ch == 1 else 3
-            )
+            L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
             mu_xy = torch.cat([mu_x, mu_y, color_mean], dim=-1)
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, None, None
         else:
-            raise NotImplementedError(
-                f"Kernel type {self.kernel_type} not implemented."
-            )
+            raise NotImplementedError(f"Kernel type {self.kernel_type} not implemented.")
 
     def gaussian_cauchy_kernel(
         self,
@@ -1379,100 +1262,104 @@ class MoE(Backbone[MoEConfig]):
     ) -> torch.Tensor:
         d = x - mu
         # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        y = torch.linalg.solve_triangular(L_chol, d.unsqueeze(-1), upper=False).squeeze(-1)
+        # Handle the solve properly by reshaping for batch operations
+        B, ch, k, h, w, dim = d.shape
+        d_flat = d.view(B * ch * k * h * w, dim, 1)
+        L_flat = (
+            L_chol.view(B * ch * k, dim, dim)
+            .unsqueeze(1)
+            .expand(-1, h * w, -1, -1)
+            .contiguous()
+            .view(B * ch * k * h * w, dim, dim)
+        )
+
+        y_flat = torch.linalg.solve_triangular(L_flat, d_flat, upper=False).squeeze(-1)
+        y = y_flat.view(B, ch, k, h, w, dim)
         e = -0.5 * (y * y).sum(dim=-1)
-        
+
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         G_sigma = torch.exp(e)
         norm_x = torch.linalg.norm(d[..., :2], dim=-1)
-        
+
         # Get diagonal elements from Cholesky factor for Cauchy component
         L_diag = torch.diagonal(L_chol, dim1=-2, dim2=-1)[..., 0]
         L_diag_inv_sq = 1.0 / (L_diag.clamp(min=self.min_diag) ** 2)
         L_diag_inv_sq = L_diag_inv_sq.unsqueeze(-1).unsqueeze(-1)
-        
+
         c_exp = c.unsqueeze(-1).unsqueeze(-1)
         denom = c_exp * L_diag_inv_sq
         denom = denom.clamp(min=self.min_denom)
         C_csigma = 1.0 / (1.0 + (norm_x**2 / denom))
-        combined = (alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma) + (
-            (1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma
-        )
+        combined = (alpha.unsqueeze(-1).unsqueeze(-1) * G_sigma) + ((1 - alpha.unsqueeze(-1).unsqueeze(-1)) * C_csigma)
         return combined
 
-    def gaussian_kernel(
-        self, x: torch.Tensor, mu_spatial: torch.Tensor, L_chol_spatial: torch.Tensor
-    ) -> torch.Tensor:
+    def gaussian_kernel(self, x: torch.Tensor, mu_spatial: torch.Tensor, L_chol_spatial: torch.Tensor) -> torch.Tensor:
         d = x - mu_spatial
         # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        y = torch.linalg.solve_triangular(L_chol_spatial, d.unsqueeze(-1), upper=False).squeeze(-1)
+        # Handle the solve properly by reshaping for batch operations
+        B, ch, k, h, w, dim = d.shape
+        d_flat = d.view(B * ch * k * h * w, dim, 1)
+        L_flat = (
+            L_chol_spatial.view(B * ch * k, dim, dim)
+            .unsqueeze(1)
+            .expand(-1, h * w, -1, -1)
+            .contiguous()
+            .view(B * ch * k * h * w, dim, dim)
+        )
+
+        y_flat = torch.linalg.solve_triangular(L_flat, d_flat, upper=False).squeeze(-1)
+        y = y_flat.view(B, ch, k, h, w, dim)
         e = -0.5 * (y * y).sum(dim=-1)
-        
+
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         return torch.exp(e)
 
-    def cholesky_solve_quadratic(
-        self, cov: torch.Tensor, reg_lambda: torch.Tensor
-    ) -> torch.Tensor:
+    def cholesky_solve_quadratic(self, cov: torch.Tensor, reg_lambda: torch.Tensor) -> torch.Tensor:
         """Compute Cholesky factorization for stable quadratic form computation.
-        
+
         This avoids computing explicit matrix inverses, which are numerically unstable
         and slower. Instead, we return the Cholesky factor L such that cov = L @ L^T.
         For quadratic forms x^T Σ^{-1} x, we solve L y = x and compute ||y||^2.
-        
+
         Returns the Cholesky factor L such that cov = L @ L^T.
         """
         cov = (cov + cov.transpose(-1, -2)) / 2
         B, ch, k, d, _ = cov.shape
         cov_flat = cov.reshape(-1, d, d)
-        
+
         # Eigenvalue regularization
         eigvals, eigvecs = torch.linalg.eigh(cov_flat)
         tol = torch.finfo(cov.dtype).eps * d * torch.amax(eigvals, dim=-1, keepdim=True)
         tol_scalar = tol.mean().item()
-        eigvals = torch.where(
-            torch.isnan(eigvals), torch.full_like(eigvals, tol_scalar), eigvals
-        )
-        
+        eigvals = torch.where(torch.isnan(eigvals), torch.full_like(eigvals, tol_scalar), eigvals)
+
         reg_lambda_val = F.softplus(self.reg_lambda_param) + 1e-6
         min_bound = torch.maximum(
             reg_lambda_val * torch.ones_like(eigvals),
             torch.full_like(eigvals, tol_scalar),
         )
         eigvals = torch.clamp(eigvals, min=min_bound)
-        
+
         H = eigvecs @ torch.diag_embed(eigvals) @ eigvecs.transpose(-1, -2)
         A_sym = (cov_flat + H) / 2
         A_sym = (A_sym + A_sym.transpose(-1, -2)) / 2
-        
-        I = (
-            torch.eye(d, device=cov.device, dtype=cov.dtype)
-            .unsqueeze(0)
-            .expand(cov_flat.shape[0], d, d)
-        )
+
+        I = torch.eye(d, device=cov.device, dtype=cov.dtype).unsqueeze(0).expand(cov_flat.shape[0], d, d)
         cov_reg_flat = A_sym + reg_lambda_val * I
         cov_reg = cov_reg_flat.reshape(B, ch, k, d, d)
         cov_reg = (cov_reg + cov_reg.transpose(-1, -2)) / 2
-        
+
         # Return Cholesky factor instead of inverse
-        L = torch.linalg.cholesky(
-            cov_reg + 1e-5 * torch.eye(d, device=cov.device, dtype=cov.dtype)
-        )
+        L = torch.linalg.cholesky(cov_reg + 1e-5 * torch.eye(d, device=cov.device, dtype=cov.dtype))
         return L
 
-    def svd_cov_inv(
-        self, cov: torch.Tensor, reg_lambda: torch.Tensor, threshold: float = 1e-6
-    ) -> torch.Tensor:
+    def svd_cov_inv(self, cov: torch.Tensor, reg_lambda: torch.Tensor, threshold: float = 1e-6) -> torch.Tensor:
         B, ch, k, d, _ = cov.shape
         m = torch.linalg.eigvalsh(cov).min(dim=-1, keepdim=True).values.unsqueeze(-1)
         eps = torch.clamp(F.softplus(-m), min=reg_lambda.item()) + reg_lambda
-        I = (
-            torch.eye(d, device=cov.device, dtype=cov.dtype)
-            .view(1, 1, 1, d, d)
-            .expand(B, ch, k, d, d)
-        )
+        I = torch.eye(d, device=cov.device, dtype=cov.dtype).view(1, 1, 1, d, d).expand(B, ch, k, d, d)
         cov_reg = cov + eps * I
         U, S, Vh = torch.linalg.svd(cov_reg)
         S_inv = torch.where(S > threshold, 1.0 / S, torch.zeros_like(S))
@@ -1483,29 +1370,20 @@ class MoE(Backbone[MoEConfig]):
         param_count = (
             12
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (
-                18
-                if self.kernel_type == KernelType.GAUSSIAN_CAUCHY
-                else (10 if ch == 1 else 17)
-            )
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
         )
         k = L // param_count
         mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
         L_chol = self.cholesky_solve_quadratic(cov, self.reg_lambda_param)
         G = self.grid(h, w, params.device)
-        
+
         # Assertion for grid correctness
         assert G.shape == (h, w, 2), f"Expected grid shape ({h}, {w}, 2), got {G.shape}"
-        
+
         G_exp = G.unsqueeze(0).unsqueeze(0).unsqueeze(2).repeat(B, ch, k, 1, 1, 1)
         mu_full = mu.unsqueeze(3).unsqueeze(4)
         if ch == 1:
-            CZ = (
-                torch.zeros_like(mu[..., -1:])
-                .unsqueeze(3)
-                .unsqueeze(4)
-                .expand(-1, -1, -1, h, w, -1)
-            )
+            CZ = torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
             X = torch.cat([G_exp, CZ], dim=-1)
         elif ch == 3:
             CM = mu[..., -3:].unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
@@ -1519,13 +1397,13 @@ class MoE(Backbone[MoEConfig]):
             L_chol_sp = L_chol[..., :2, :2]
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
-        
+
         # Compute balance loss for load balancing
         if self.training and self.balance_loss_coeff > 0:
             self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
         else:
             self._last_balance_loss = None
-            
+
         KS = K_out.sum(dim=2, keepdim=True)
         eps_val = self.get_eps(KS)
         K_norm = K_out / (KS + eps_val)
@@ -1533,9 +1411,7 @@ class MoE(Backbone[MoEConfig]):
         # Remove internal clamp - let the final output stage handle range control
         return out
 
-    def extract_dynamic(
-        self, x: torch.Tensor, cnt: torch.Tensor, p: int
-    ) -> torch.Tensor:
+    def extract_dynamic(self, x: torch.Tensor, cnt: torch.Tensor, p: int) -> torch.Tensor:
         B, C, _ = x.shape
         K = int(cnt.max().item())
         lst = []
@@ -1548,18 +1424,12 @@ class MoE(Backbone[MoEConfig]):
             lst.append(xi.unsqueeze(0))
         return torch.cat(lst, dim=0)
 
-    def forward_spatial_(
-        self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor
-    ) -> torch.Tensor:
+    def forward_spatial_(self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor) -> torch.Tensor:
         B, ch, L = params.shape
         param_count = (
             12
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (
-                18
-                if self.kernel_type == KernelType.GAUSSIAN_CAUCHY
-                else (10 if ch == 1 else 17)
-            )
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
         )
         k = L // param_count
         x_dyn = self.extract_dynamic(params, cnt, p=param_count)
@@ -1572,22 +1442,12 @@ class MoE(Backbone[MoEConfig]):
         eps = F.softplus(-m) + 1e-8
         cov_reg = cov + (1e-6 + eps) * I
         L_chol = torch.linalg.cholesky(cov_reg)
-        
+
         G = self.grid(h, w, params.device)
-        G_exp = (
-            G.unsqueeze(0)
-            .unsqueeze(0)
-            .unsqueeze(2)
-            .repeat(B, ch, x_dyn.shape[2], 1, 1, 1)
-        )
+        G_exp = G.unsqueeze(0).unsqueeze(0).unsqueeze(2).repeat(B, ch, x_dyn.shape[2], 1, 1, 1)
         mu_full = mu.unsqueeze(3).unsqueeze(4)
         if ch == 1:
-            CZ = (
-                torch.zeros_like(mu[..., -1:])
-                .unsqueeze(3)
-                .unsqueeze(4)
-                .expand(-1, -1, -1, h, w, -1)
-            )
+            CZ = torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
             X = torch.cat([G_exp, CZ], dim=-1)
         elif ch == 3:
             CM = mu[..., -3:].unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
@@ -1601,13 +1461,13 @@ class MoE(Backbone[MoEConfig]):
             L_chol_sp = L_chol[..., :2, :2]
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
-        
+
         # Compute balance loss for load balancing
         if self.training and self.balance_loss_coeff > 0:
             self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
         else:
             self._last_balance_loss = None
-            
+
         KS = K_out.sum(dim=2, keepdim=True)
         K_norm = K_out / (KS + 1e-8)
         out = K_norm.sum(dim=2)
@@ -1618,9 +1478,7 @@ class MoE(Backbone[MoEConfig]):
         """Get the last computed balance loss for regularization."""
         return self._last_balance_loss
 
-    def forward(
-        self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None
-    ) -> torch.Tensor:
+    def forward(self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None) -> torch.Tensor:
         if cnt is None:
             return self.forward_spatial(h, w, params)
         else:
@@ -1632,11 +1490,7 @@ class MoE(Backbone[MoEConfig]):
 
     @property
     def scale_factor(self) -> int:
-        return (
-            self.cfg.grid_cache.shape[0]
-            if self.cfg.grid_cache is not None
-            else self.cfg.kernel
-        )
+        return self.cfg.grid_cache.shape[0] if self.cfg.grid_cache is not None else self.cfg.kernel
 
 
 @dataclass
@@ -1657,28 +1511,20 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         super().__init__(cfg)
         self.phw: int = cfg.phw
         self.overlap: int = cfg.overlap
-        d_out, params_per_kernel = self.num_params(
-            cfg.DecoderConfig.kernel_type, cfg.d_in, cfg.DecoderConfig.kernel
-        )
+        d_out, params_per_kernel = self.num_params(cfg.DecoderConfig.kernel_type, cfg.d_in, cfg.DecoderConfig.kernel)
         self.snet = DnCNN(
             in_channels=cfg.d_in,
             out_channels=cfg.EncoderConfig.sigma_chn,
             dep=cfg.dep_S,
             noise_avg=cfg.EncoderConfig.noise_avg,
         )
-        self.knet = KernelNet(
-            in_nc=cfg.d_in, out_chn=cfg.EncoderConfig.kernel_chn, num_blocks=cfg.dep_K
-        )
+        self.knet = KernelNet(in_nc=cfg.d_in, out_chn=cfg.EncoderConfig.kernel_chn, num_blocks=cfg.dep_K)
         self.encoder = Encoder(cfg.EncoderConfig, cfg.phw, d_in=cfg.d_in, d_out=d_out)
         self.decoder = MoE(cfg.DecoderConfig)
         self.params_per_kernel = params_per_kernel
 
-    def get_eps(
-        self, t: torch.Tensor, factor: float = 1e-3, min_eps: float = 1e-8
-    ) -> torch.Tensor:
-        return torch.maximum(
-            torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean()
-        )
+    def get_eps(self, t: torch.Tensor, factor: float = 1e-3, min_eps: float = 1e-8) -> torch.Tensor:
+        return torch.maximum(torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean())
 
     def num_params(self, kernel_type: KernelType, ch: int, kernel: int) -> int:
         num_parms = self.get_params_per_kernel(kernel_type, ch)
@@ -1704,9 +1550,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         out_h = (xp.shape[2] - block_size) // step + 1
         out_w = (xp.shape[3] - block_size) // step + 1
         blocks = F.unfold(xp, kernel_size=block_size, stride=step)
-        blocks = blocks.transpose(1, 2).reshape(
-            B, out_h * out_w, C, block_size, block_size
-        )
+        blocks = blocks.transpose(1, 2).reshape(B, out_h * out_w, C, block_size, block_size)
         return blocks, (B, out_h * out_w, C, H, W)
 
     def reconstruct(
@@ -1725,9 +1569,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         window2d = window.unsqueeze(0) * window.unsqueeze(1)
         window2d = window2d.view(1, 1, block_size, block_size)
         blocks_weighted = blocks * window2d
-        blocks_reshaped = blocks_weighted.reshape(
-            B, -1, C * block_size * block_size
-        ).transpose(1, 2)
+        blocks_reshaped = blocks_weighted.reshape(B, -1, C * block_size * block_size).transpose(1, 2)
         recon_padded = F.fold(
             blocks_reshaped,
             output_size=(out_h, out_w),
@@ -1736,9 +1578,7 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         )
         ones = torch.ones_like(blocks)
         ones_weighted = ones * window2d
-        ones_reshaped = ones_weighted.reshape(
-            B, -1, C * block_size * block_size
-        ).transpose(1, 2)
+        ones_reshaped = ones_weighted.reshape(B, -1, C * block_size * block_size).transpose(1, 2)
         weight_sum = F.fold(
             ones_reshaped,
             output_size=(out_h, out_w),
@@ -1759,17 +1599,13 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         """Get the balance loss from the decoder for regularization."""
         return self.decoder.get_balance_loss()
 
-    def forward(
-        self, x: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
         if x_p.ndim == 5:
             x_p = x_p.reshape(-1, *x_p.shape[2:])
         chunks = self.det_split(x_p, self.cfg.num_chunks)
 
-        res = [
-            self.encoder(chunk, self.snet(chunk), self.knet(chunk)) for chunk in chunks
-        ]
+        res = [self.encoder(chunk, self.snet(chunk), self.knet(chunk)) for chunk in chunks]
 
         gaussians, kinfo, sigma = map(lambda arr: torch.cat(arr, dim=0), zip(*res))
 
