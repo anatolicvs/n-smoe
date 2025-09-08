@@ -39,7 +39,7 @@
     "attention_type": "cross_attention",
     "kernel": 16,
     "kernel_type": "gaussian_cauchy",
-    "phw": 16,
+    "phw": 32,
     "overlap": 8,
 
     # network architecture

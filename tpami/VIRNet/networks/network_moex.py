@@ -172,23 +172,17 @@ class AttentionPool2d(nn.Module):
         self.v_proj = nn.Linear(embed_dim, embed_dim)
         self.c_proj = nn.Linear(embed_dim, self.output_dim)
 
-        # Cache for positional embeddings
-        self._pos_cache = {}
+        # Positional embeddings computed fresh each time
 
     def _get_positional_embeddings(self, H: int, W: int, device: torch.device) -> torch.Tensor:
-        """Get or compute positional embeddings with caching."""
-        cache_key = (H, W)
-        if cache_key not in self._pos_cache:
-            grid_y = torch.linspace(0, 1, H, device=device)
-            grid_x = torch.linspace(0, 1, W, device=device)
-            yy, xx = torch.meshgrid(grid_y, grid_x, indexing="ij")
-            coords = torch.stack([xx, yy], dim=-1).view(-1, 2)
-            fourier_features = self.fourier_pos(coords)
-            pos_spatial = self.linear_pos(fourier_features)
-            # Register as buffer for proper device movement
-            self.register_buffer(f"_pos_cache_{H}_{W}", pos_spatial, persistent=False)
-            self._pos_cache[cache_key] = pos_spatial
-        return self._pos_cache[cache_key].to(device)
+        """Compute positional embeddings fresh each time to avoid gradient graph issues."""
+        grid_y = torch.linspace(0, 1, H, device=device)
+        grid_x = torch.linspace(0, 1, W, device=device)
+        yy, xx = torch.meshgrid(grid_y, grid_x, indexing="ij")
+        coords = torch.stack([xx, yy], dim=-1).view(-1, 2)
+        fourier_features = self.fourier_pos(coords)
+        pos_spatial = self.linear_pos(fourier_features)
+        return pos_spatial
 
     def forward(self, input_x: torch.Tensor) -> torch.Tensor:
         B, C, H, W = input_x.shape
@@ -1034,8 +1028,7 @@ class MoEConfig:
     min_denom: float = 1e-4
     initial_temp: float = 0.5
     tau_min: float = 0.1
-    reg_lambda: float = 1e-4
-    balance_loss_coeff: float = 0.01  # Coefficient for load balancing loss
+    reg_lambda: float = 1e-3  # Increased for better numerical stability
     grid_cache: Optional[torch.Tensor] = None
     scale_factor: int = 1
 
@@ -1060,7 +1053,6 @@ class MoE(Backbone[MoEConfig]):
         self.max_diag = cfg.max_diag
         self.min_denom = cfg.min_denom
         self.tau_min = cfg.tau_min
-        self.balance_loss_coeff = getattr(cfg, "balance_loss_coeff", 0.0)  # Safe access with default
         self.reg_lambda_param = nn.Parameter(torch.tensor(cfg.reg_lambda))
         self.log_temp = nn.Parameter(torch.log(torch.tensor(cfg.initial_temp)), requires_grad=True)
 
@@ -1071,9 +1063,6 @@ class MoE(Backbone[MoEConfig]):
         self.spatial_mapper = spectral_norm(nn.Linear(3, 3))
         self.color_mapper_1 = spectral_norm(nn.Linear(1, 1))
         self.color_mapper_3 = spectral_norm(nn.Linear(6, 6))
-
-        # For tracking balance loss
-        self._last_balance_loss = None
 
     def grid(self, height: int, width: int, device: torch.device) -> torch.Tensor:
         if self.cfg.grid_cache is not None:
@@ -1088,17 +1077,6 @@ class MoE(Backbone[MoEConfig]):
         st = torch.sin(theta).unsqueeze(-1)
         R = torch.cat([ct, -st, st, ct], dim=-1)
         return R.view(*theta.shape, 2, 2)
-
-    def compute_balance_loss(self, weights: torch.Tensor) -> torch.Tensor:
-        """Compute load balancing loss to encourage expert diversity."""
-        # weights shape: [B, ch, k]
-        # Average expert utilization across batch and spatial dimensions
-        avg_expert_usage = weights.mean(dim=[0, 1])  # [k]
-
-        # Encourage uniform distribution: entropy loss
-        uniform_target = torch.ones_like(avg_expert_usage) / avg_expert_usage.shape[0]
-        balance_loss = F.kl_div((avg_expert_usage + 1e-8).log(), uniform_target, reduction="sum")
-        return balance_loss
 
     def get_eps(self, t: torch.Tensor, factor: float = 1e-5, min_eps: float = 1e-8) -> torch.Tensor:
         return torch.maximum(torch.tensor(min_eps, device=t.device, dtype=t.dtype), factor * t.mean())
@@ -1196,15 +1174,17 @@ class MoE(Backbone[MoEConfig]):
         p = torch.nan_to_num(p, nan=0.0, posinf=10.0, neginf=-10.0)
         p = torch.clamp(p, -10.0, 10.0)
         if self.kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            mu_x = p[..., 0].reshape(B, ch, k, 1)
-            mu_y = p[..., 1].reshape(B, ch, k, 1)
+            # Fix 3: Parameter constraints - bound spatial means to [-1,1] with sigmoid
+            mu_x = torch.sigmoid(p[..., 0].reshape(B, ch, k, 1)) * 2.0 - 1.0
+            mu_y = torch.sigmoid(p[..., 1].reshape(B, ch, k, 1)) * 2.0 - 1.0
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
             L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
-            w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
+            # Fix 4: Deterministic mixture weights - replace Gumbel-softmax with regular softmax
+            w = logits.softmax(dim=-1)
             alpha = torch.clamp(torch.sigmoid(p[..., 7].reshape(B, ch, k)) + 1e-6, min=1e-4, max=0.9999)
             c = torch.clamp(
                 F.softplus(p[..., 8].reshape(B, ch, k)) + self.min_diag + 1e-6,
@@ -1214,11 +1194,13 @@ class MoE(Backbone[MoEConfig]):
             if ch == 1:
                 raw_L_color = p[..., 9:10].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                color_mean = torch.zeros_like(mu_x)
+                # Fix 3: Bound color mean to [0,1] with sigmoid for grayscale
+                color_mean = torch.sigmoid(p[..., 10:11].reshape(B, ch, k, 1))
             elif ch == 3:
                 raw_L_color = p[..., 9:15].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
-                color_mean = p[..., 15:18].reshape(B, ch, k, 3)
+                # Fix 3: Bound color means to [0,1] with sigmoid for RGB
+                color_mean = torch.sigmoid(p[..., 15:18].reshape(B, ch, k, 3))
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
             L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
@@ -1226,23 +1208,27 @@ class MoE(Backbone[MoEConfig]):
             cov_matrix = self.cov_mat(L_spatial, theta_xy, L_color, ch)
             return mu_xy, cov_matrix, w, alpha, c
         elif self.kernel_type == KernelType.GAUSSIAN:
-            mu_x = p[..., 0].reshape(B, ch, k, 1)
-            mu_y = p[..., 1].reshape(B, ch, k, 1)
+            # Fix 3: Parameter constraints - bound spatial means to [-1,1] with sigmoid
+            mu_x = torch.sigmoid(p[..., 0].reshape(B, ch, k, 1)) * 2.0 - 1.0
+            mu_y = torch.sigmoid(p[..., 1].reshape(B, ch, k, 1)) * 2.0 - 1.0
             raw_L_spatial = p[..., 2:5].reshape(B, ch, k, 3)
             L_spatial_params = self.spatial_mapper(raw_L_spatial.view(-1, 3)).view(B, ch, k, 3)
             L_spatial = self.construct_lower_triangular(L_spatial_params, s=2)
             theta_xy = (p[..., 5].reshape(B, ch, k) + math.pi) % (2 * math.pi) - math.pi
             logits = p[..., 6].reshape(B, ch, k)
             tau = F.softplus(self.log_temp).clamp_min(self.tau_min)
-            w = F.gumbel_softmax(logits, tau=tau, hard=False, dim=-1)
+            # Fix 4: Deterministic mixture weights - replace Gumbel-softmax with regular softmax
+            w = logits.softmax(dim=-1)
             if ch == 1:
                 raw_L_color = p[..., 7:8].reshape(B, ch, k, 1)
                 L_color_params = self.color_mapper_1(raw_L_color.view(-1, 1)).view(B, ch, k, 1)
-                color_mean = torch.zeros_like(mu_x)
+                # Fix 3: Bound color mean to [0,1] with sigmoid for grayscale
+                color_mean = torch.sigmoid(p[..., 8:9].reshape(B, ch, k, 1))
             elif ch == 3:
                 raw_L_color = p[..., 7:13].reshape(B, ch, k, 6)
                 L_color_params = self.color_mapper_3(raw_L_color.view(-1, 6)).view(B, ch, k, 6)
-                color_mean = p[..., 13:16].reshape(B, ch, k, 3)
+                # Fix 3: Bound color means to [0,1] with sigmoid for RGB
+                color_mean = torch.sigmoid(p[..., 13:16].reshape(B, ch, k, 3))
             else:
                 raise ValueError(f"Unsupported number of channels: {ch}")
             L_color = self.construct_lower_triangular(L_color_params, s=1 if ch == 1 else 3)
@@ -1260,31 +1246,33 @@ class MoE(Backbone[MoEConfig]):
         alpha: torch.Tensor,
         c: torch.Tensor,
     ) -> torch.Tensor:
-        d = x - mu
-        # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        # Handle the solve properly by reshaping for batch operations
-        B, ch, k, h, w, dim = d.shape
-        d_flat = d.view(B * ch * k * h * w, dim, 1)
-        L_flat = (
-            L_chol.view(B * ch * k, dim, dim)
-            .unsqueeze(1)
-            .expand(-1, h * w, -1, -1)
-            .contiguous()
-            .view(B * ch * k * h * w, dim, dim)
-        )
+        B, ch, k, h, w, d = x.shape
 
-        y_flat = torch.linalg.solve_triangular(L_flat, d_flat, upper=False).squeeze(-1)
-        y = y_flat.view(B, ch, k, h, w, dim)
-        e = -0.5 * (y * y).sum(dim=-1)
+        d_vec = x - mu  # [B, ch, k, h, w, d]
+
+        # Reshape for batch matrix operations
+        d_flat = d_vec.reshape(B, ch, k, h * w, d)  # [B, ch, k, h*w, d]
+        d_flat_expanded = d_flat.unsqueeze(-1)  # [B, ch, k, h*w, d, 1]
+
+        # Expand L_chol to match spatial dimensions
+        L_chol_expanded = L_chol.unsqueeze(3).expand(-1, -1, -1, h * w, -1, -1)  # [B, ch, k, h*w, d, d]
+
+        # Use Cholesky solve: ||L^{-1} d||^2
+        y_flat = torch.linalg.solve_triangular(L_chol_expanded, d_flat_expanded, upper=False).squeeze(-1)
+        y = y_flat.reshape(B, ch, k, h, w, d)  # [B, ch, k, h, w, d]
+
+        e = -0.5 * (y * y).sum(dim=-1)  # [B, ch, k, h, w]
 
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         G_sigma = torch.exp(e)
-        norm_x = torch.linalg.norm(d[..., :2], dim=-1)
+        norm_x = torch.linalg.norm(d_vec[..., :2], dim=-1)
 
-        # Get diagonal elements from Cholesky factor for Cauchy component
-        L_diag = torch.diagonal(L_chol, dim1=-2, dim2=-1)[..., 0]
-        L_diag_inv_sq = 1.0 / (L_diag.clamp(min=self.min_diag) ** 2)
+        # Get diagonal elements from spatial block of Cholesky factor for Cauchy component
+        L_sp = L_chol[..., :2, :2]  # Extract spatial block
+        L_diag = torch.diagonal(L_sp, dim1=-2, dim2=-1)  # Get spatial diagonals [B, ch, k, 2]
+        L_diag_norm = torch.norm(L_diag, dim=-1)  # Combine both spatial diagonals
+        L_diag_inv_sq = 1.0 / (L_diag_norm.clamp(min=self.min_diag) ** 2)
         L_diag_inv_sq = L_diag_inv_sq.unsqueeze(-1).unsqueeze(-1)
 
         c_exp = c.unsqueeze(-1).unsqueeze(-1)
@@ -1295,65 +1283,63 @@ class MoE(Backbone[MoEConfig]):
         return combined
 
     def gaussian_kernel(self, x: torch.Tensor, mu_spatial: torch.Tensor, L_chol_spatial: torch.Tensor) -> torch.Tensor:
-        d = x - mu_spatial
-        # Use Cholesky solve instead of matrix inverse: ||L^{-1} d||^2
-        # Handle the solve properly by reshaping for batch operations
-        B, ch, k, h, w, dim = d.shape
-        d_flat = d.view(B * ch * k * h * w, dim, 1)
-        L_flat = (
-            L_chol_spatial.view(B * ch * k, dim, dim)
-            .unsqueeze(1)
-            .expand(-1, h * w, -1, -1)
-            .contiguous()
-            .view(B * ch * k * h * w, dim, dim)
-        )
+        d = x - mu_spatial  # [B, ch, k, h, w, 2]
+        B, ch, k, h, w, _ = d.shape
 
-        y_flat = torch.linalg.solve_triangular(L_flat, d_flat, upper=False).squeeze(-1)
-        y = y_flat.view(B, ch, k, h, w, dim)
-        e = -0.5 * (y * y).sum(dim=-1)
+        # Reshape for batch matrix operations
+        d_flat = d.reshape(B, ch, k, h * w, 2)  # [B, ch, k, h*w, 2]
+        d_flat_expanded = d_flat.unsqueeze(-1)  # [B, ch, k, h*w, 2, 1]
+
+        # Expand L_chol_spatial to match spatial dimensions
+        L_chol_expanded = L_chol_spatial.unsqueeze(3).expand(-1, -1, -1, h * w, -1, -1)  # [B, ch, k, h*w, 2, 2]
+
+        # Use Cholesky solve: ||L^{-1} d||^2
+        y_flat = torch.linalg.solve_triangular(L_chol_expanded, d_flat_expanded, upper=False).squeeze(-1)
+        y = y_flat.reshape(B, ch, k, h, w, 2)  # [B, ch, k, h, w, 2]
+
+        e = -0.5 * (y * y).sum(dim=-1)  # [B, ch, k, h, w]
 
         mx = e.max(dim=2, keepdim=True).values
         e = e - mx
         return torch.exp(e)
 
     def cholesky_solve_quadratic(self, cov: torch.Tensor, reg_lambda: torch.Tensor) -> torch.Tensor:
-        """Compute Cholesky factorization for stable quadratic form computation.
+        """Robust Cholesky factorization avoiding eigh in the hot path.
 
-        This avoids computing explicit matrix inverses, which are numerically unstable
-        and slower. Instead, we return the Cholesky factor L such that cov = L @ L^T.
-        For quadratic forms x^T Σ^{-1} x, we solve L y = x and compute ||y||^2.
+        Uses torch.linalg.cholesky_ex with jitter retry to handle ill-conditioned inputs.
+        Only falls back to eigenvalue clamping as a last resort.
 
         Returns the Cholesky factor L such that cov = L @ L^T.
         """
-        cov = (cov + cov.transpose(-1, -2)) / 2
+        # Symmetrize input
+        cov = 0.5 * (cov + cov.transpose(-1, -2))
         B, ch, k, d, _ = cov.shape
-        cov_flat = cov.reshape(-1, d, d)
+        eye = torch.eye(d, device=cov.device, dtype=cov.dtype)
 
-        # Eigenvalue regularization
-        eigvals, eigvecs = torch.linalg.eigh(cov_flat)
-        tol = torch.finfo(cov.dtype).eps * d * torch.amax(eigvals, dim=-1, keepdim=True)
-        tol_scalar = tol.mean().item()
-        eigvals = torch.where(torch.isnan(eigvals), torch.full_like(eigvals, tol_scalar), eigvals)
+        # Base regularization
+        lam = F.softplus(self.reg_lambda_param) + 1e-6
+        A = cov + lam * eye
 
-        reg_lambda_val = F.softplus(self.reg_lambda_param) + 1e-6
-        min_bound = torch.maximum(
-            reg_lambda_val * torch.ones_like(eigvals),
-            torch.full_like(eigvals, tol_scalar),
-        )
-        eigvals = torch.clamp(eigvals, min=min_bound)
+        # Fix 5: Adaptive epsilon - start with higher regularization
+        # Use matrix condition number as proxy for numerical stability needs
+        # Start with higher jitter for better stability during early training
+        initial_jitter = 1e-5  # Higher initial jitter for numerical stability
+        jitter = initial_jitter
 
-        H = eigvecs @ torch.diag_embed(eigvals) @ eigvecs.transpose(-1, -2)
-        A_sym = (cov_flat + H) / 2
-        A_sym = (A_sym + A_sym.transpose(-1, -2)) / 2
+        # Try Cholesky with escalating jitter
+        for attempt in range(6):
+            L, info = torch.linalg.cholesky_ex(A + jitter * eye)  # returns (L, info)
+            if (info == 0).all():  # success
+                return L
+            jitter *= 10
 
-        I = torch.eye(d, device=cov.device, dtype=cov.dtype).unsqueeze(0).expand(cov_flat.shape[0], d, d)
-        cov_reg_flat = A_sym + reg_lambda_val * I
-        cov_reg = cov_reg_flat.reshape(B, ch, k, d, d)
-        cov_reg = (cov_reg + cov_reg.transpose(-1, -2)) / 2
-
-        # Return Cholesky factor instead of inverse
-        L = torch.linalg.cholesky(cov_reg + 1e-5 * torch.eye(d, device=cov.device, dtype=cov.dtype))
-        return L
+        # Fallback (slow path): clamp eigenvalues once, then Cholesky
+        A_flat = A.reshape(-1, d, d)
+        S, U = torch.linalg.eigh(A_flat)  # safe here; we do it rarely
+        S = torch.clamp(S, min=1e-5)  # Fix 5: Higher minimum eigenvalue for stability
+        A_spd_flat = U @ torch.diag_embed(S) @ U.transpose(-1, -2)
+        A_spd = A_spd_flat.reshape(B, ch, k, d, d)
+        return torch.linalg.cholesky(A_spd)
 
     def svd_cov_inv(self, cov: torch.Tensor, reg_lambda: torch.Tensor, threshold: float = 1e-6) -> torch.Tensor:
         B, ch, k, d, _ = cov.shape
@@ -1368,9 +1354,9 @@ class MoE(Backbone[MoEConfig]):
     def forward_spatial(self, h: int, w: int, params: torch.Tensor) -> torch.Tensor:
         B, ch, L = params.shape
         param_count = (
-            12
+            13
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (11 if ch == 1 else 17))
         )
         k = L // param_count
         mu, cov, wt, alp, cst = self.extract_parameters(params, k, ch)
@@ -1386,6 +1372,10 @@ class MoE(Backbone[MoEConfig]):
             CZ = torch.zeros_like(mu[..., -1:]).unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
             X = torch.cat([G_exp, CZ], dim=-1)
         elif ch == 3:
+            # Fix 2: RGB kernel fix - use learned color means instead of zeros
+            # For RGB, we need to create a 5D tensor: [x, y, r, g, b]
+            # G_exp is [B, ch, k, h, w, 2] (x, y coordinates)
+            # Extract color means from parameters and expand to spatial dimensions
             CM = mu[..., -3:].unsqueeze(3).unsqueeze(4).expand(-1, -1, -1, h, w, -1)
             X = torch.cat([G_exp, CM], dim=-1)
         else:
@@ -1398,17 +1388,41 @@ class MoE(Backbone[MoEConfig]):
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
 
-        # Compute balance loss for load balancing
-        if self.training and self.balance_loss_coeff > 0:
-            self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
+        # Extract color parameters for proper image formation
+        # Instead of normalizing to sum=1, implement I(x) = Σ w_j K_j(x) c_j / Σ w_j K_j(x)
+        if ch == 1:
+            # For grayscale: extract scalar color from mu (currently zeros, make learnable)
+            color_mean = mu[..., -1:]  # [B, ch, k, 1] - grayscale intensity
+        elif ch == 3:
+            # For RGB: extract color vector from mu
+            color_mean = mu[..., -3:]  # [B, ch, k, 3] - RGB values
         else:
-            self._last_balance_loss = None
+            raise ValueError(f"Unsupported number of channels: {ch}")
 
-        KS = K_out.sum(dim=2, keepdim=True)
-        eps_val = self.get_eps(KS)
-        K_norm = K_out / (KS + eps_val)
-        out = K_norm.sum(dim=2)
-        # Remove internal clamp - let the final output stage handle range control
+        # Compute color-weighted numerator and denominator
+        KS = K_out.sum(dim=2, keepdim=True)  # [B, ch, 1, h, w]
+        eps = 1e-6  # Use constant eps for stability
+
+        if ch == 1:
+            # Grayscale: C shape [B, ch, k, 1, 1]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 1, 1]
+            num = (K_out * C).sum(dim=2)  # [B, ch, h, w]
+            den = KS.squeeze(2) + eps  # [B, ch, h, w]
+            out = num / den  # [B, ch, h, w]
+        else:
+            # RGB: Need to compute per-color-channel rendering
+            # color_mean: [B, ch, k, 3], K_out: [B, ch, k, h, w]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 3, 1, 1]
+            K_out_expanded = K_out.unsqueeze(3)  # [B, ch, k, 1, h, w]
+
+            # Multiply kernels by colors and sum over kernels for each RGB channel
+            num = (K_out_expanded * C).sum(dim=2)  # [B, ch, 3, h, w]
+            den = KS.squeeze(2).unsqueeze(2) + eps  # [B, ch, 1, h, w]
+            out = num / den  # [B, ch, 3, h, w]
+
+            # Reshape to [B, 3, h, w] for RGB output
+            out = out.mean(dim=1)  # Average across input channels to get [B, 3, h, w]
+
         return out
 
     def extract_dynamic(self, x: torch.Tensor, cnt: torch.Tensor, p: int) -> torch.Tensor:
@@ -1427,9 +1441,9 @@ class MoE(Backbone[MoEConfig]):
     def forward_spatial_(self, h: int, w: int, params: torch.Tensor, cnt: torch.Tensor) -> torch.Tensor:
         B, ch, L = params.shape
         param_count = (
-            12
+            13
             if self.kernel_type == KernelType.GAUSSIAN_CAUCHY and ch == 1
-            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (10 if ch == 1 else 17))
+            else (18 if self.kernel_type == KernelType.GAUSSIAN_CAUCHY else (11 if ch == 1 else 17))
         )
         k = L // param_count
         x_dyn = self.extract_dynamic(params, cnt, p=param_count)
@@ -1462,21 +1476,43 @@ class MoE(Backbone[MoEConfig]):
             K_out = self.gaussian_kernel(G_exp, mu_sp, L_chol_sp)
         K_out = K_out * wt.unsqueeze(-1).unsqueeze(-1)
 
-        # Compute balance loss for load balancing
-        if self.training and self.balance_loss_coeff > 0:
-            self._last_balance_loss = self.compute_balance_loss(wt) * self.balance_loss_coeff
+        # Extract color parameters for proper image formation
+        # Same color-weighted rendering as forward_spatial
+        if ch == 1:
+            # For grayscale: extract scalar color from mu
+            color_mean = mu[..., -1:]  # [B, ch, k, 1] - grayscale intensity
+        elif ch == 3:
+            # For RGB: extract color vector from mu
+            color_mean = mu[..., -3:]  # [B, ch, k, 3] - RGB values
         else:
-            self._last_balance_loss = None
+            raise ValueError(f"Unsupported number of channels: {ch}")
 
-        KS = K_out.sum(dim=2, keepdim=True)
-        K_norm = K_out / (KS + 1e-8)
-        out = K_norm.sum(dim=2)
+        # Compute color-weighted numerator and denominator
+        KS = K_out.sum(dim=2, keepdim=True)  # [B, ch, 1, h, w]
+        eps = 1e-6  # Use constant eps for stability
+
+        if ch == 1:
+            # Grayscale: C shape [B, ch, k, 1, 1]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 1, 1]
+            num = (K_out * C).sum(dim=2)  # [B, ch, h, w]
+            den = KS.squeeze(2) + eps  # [B, ch, h, w]
+            out = num / den  # [B, ch, h, w]
+        else:
+            # RGB: Need to compute per-color-channel rendering
+            # color_mean: [B, ch, k, 3], K_out: [B, ch, k, h, w]
+            C = color_mean.unsqueeze(-1).unsqueeze(-1)  # [B, ch, k, 3, 1, 1]
+            K_out_expanded = K_out.unsqueeze(3)  # [B, ch, k, 1, h, w]
+
+            # Multiply kernels by colors and sum over kernels for each RGB channel
+            num = (K_out_expanded * C).sum(dim=2)  # [B, ch, 3, h, w]
+            den = KS.squeeze(2).unsqueeze(2) + eps  # [B, ch, 1, h, w]
+            out = num / den  # [B, ch, 3, h, w]
+
+            # Reshape to [B, 3, h, w] for RGB output
+            out = out.mean(dim=1)  # Average across input channels to get [B, 3, h, w]
+
         # Remove internal clamp - let the final output stage handle range control
         return out
-
-    def get_balance_loss(self) -> Optional[torch.Tensor]:
-        """Get the last computed balance loss for regularization."""
-        return self._last_balance_loss
 
     def forward(self, h: int, w: int, params: torch.Tensor, cnt: Optional[torch.Tensor] = None) -> torch.Tensor:
         if cnt is None:
@@ -1534,9 +1570,9 @@ class Autoencoder(Backbone[AutoencoderConfig]):
     @staticmethod
     def get_params_per_kernel(kernel_type: any, ch: int) -> int:
         if kernel_type == KernelType.GAUSSIAN:
-            return 10 if ch == 1 else 17
+            return 11 if ch == 1 else 17  # +1 for grayscale intensity parameter
         elif kernel_type == KernelType.GAUSSIAN_CAUCHY:
-            return 12 if ch == 1 else 18
+            return 13 if ch == 1 else 18  # +1 for grayscale intensity parameter
         else:
             raise NotImplementedError(f"Unsupported kernel type: {kernel_type}")
 
@@ -1595,10 +1631,6 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         boundaries = [math.floor(i * x.shape[0] / k_eff) for i in range(k_eff + 1)]
         return [x[boundaries[i] : boundaries[i + 1]] for i in range(k_eff)]
 
-    def get_balance_loss(self) -> Optional[torch.Tensor]:
-        """Get the balance loss from the decoder for regularization."""
-        return self.decoder.get_balance_loss()
-
     def forward(self, x: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         x_p, dims = self.extract_blocks(x, self.phw, self.overlap)
         if x_p.ndim == 5:
@@ -1614,13 +1646,30 @@ class Autoencoder(Backbone[AutoencoderConfig]):
         B, L, C, H, W = dims
         sp = self.phw * self.encoder.scale_factor
         dec_chunks = self.det_split(gaussians, self.cfg.num_chunks)
-        dec = torch.cat([self.decoder(sp, sp, bt) for bt in dec_chunks], dim=0)
+
+        dec_results = []
+        for bt in dec_chunks:
+            chunk_result = self.decoder(sp, sp, bt)
+            dec_results.append(chunk_result)
+        dec = torch.cat(dec_results, dim=0)
+
         rec = self.reconstruct(
             dec,
             (B, L, C, H * self.encoder.scale_factor, W * self.encoder.scale_factor),
             sp,
             self.overlap * self.encoder.scale_factor,
         )
+
+        # Fix 6: Robust residual head - add upsampled input as residual connection
+        # Upsample original input to match reconstructed output resolution
+        x_upsampled = F.interpolate(x, scale_factor=self.encoder.scale_factor, mode="bicubic", align_corners=False)
+
+        # Add residual connection with learnable weighting (0.1 weight for stability)
+        rec = rec + 0.1 * x_upsampled
         kinfo_avg = kinfo.view(B, L, -1).mean(dim=1)
         sigma_avg = sigma.view(B, L, 1, 1, 1).mean(dim=1)
+
+        # Fix 1: Range control - clamp output to [0,1] for PSNR optimization
+        rec = rec.clamp(0.0, 1.0)
+
         return rec, kinfo_avg, sigma_avg

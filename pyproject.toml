@@ -28,8 +28,6 @@ index-url = "https://pypi.org/simple"
 find-links = [{ url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }]
 index-strategy = "first-index"
 ["https://pypi.nvidia.com"]
-find-links = [{ url = "https://storage.googleapis.com/jax-releases/jax_cuda_releases.html" }]
-index-strategy = "unsafe-best-match"
 
 [tool.pixi.pypi-dependencies]
 # PyTorch CUDA wheels: use cu126 to satisfy monai>=1.5 torch range (>=2.4.1,<2.7.0)
@@ -78,6 +76,7 @@ precommit = "pre-commit run -a"
 
 [tool.pixi.feature.extras.pypi-dependencies]
 opencv-python = "*"
+matplotlib = "*"
 rawpy = "*"
 imageio = "*"
 "imageio-ffmpeg" = "*"
