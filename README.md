@@ -1,6 +1,6 @@
 # Neural Steered Mixture of Experts for Medical Image Denoising and Super-Resolution  
 
-**[Aytaç Özkan](https://www.linkedin.com/in/aytacozkan/), [Thomas Sikora](https://scholar.google.com/citations?user=2kr3tg0AAAAJ&hl=en)**  
+**[Aytaç Özkan](https://www.linkedin.com/in/aytacozkan/)**  
 📄 [Access the Paper](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=5193694#paper-references-widget)  
 ⭐ If this work supports your research, please star the repository.  
 
