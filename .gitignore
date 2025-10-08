@@ -9,7 +9,7 @@ cu/build_ops.egg-info
 cu/cuda_block_ops.egg-info
 cu/dist
 .checkpoints/
-
+*.md
 
 *.log
 tpami/VIRNet/torch_compile_debug/

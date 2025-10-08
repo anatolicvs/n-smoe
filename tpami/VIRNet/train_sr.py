@@ -118,6 +118,8 @@ def main():
 
     decoder_cfg = MoEConfig(
         kernel=args["kernel"],
+        use_sh_color=args["use_sh_color"],
+        sh_degree=args["sh_degree"],
         sharpening_factor=args.get("sharpening_factor", 1),
         kernel_type=KernelType(args["kernel_type"]),
         activation=args["activation"],
@@ -344,9 +346,13 @@ def main():
 
         phase = "train"
         net.train()
-        lr = optimizer.param_groups[0]["lr"]
+        # FIX: Display all learning rates correctly
+        lr_E = optimizer.param_groups[0]["lr"]
+        lr_D = optimizer.param_groups[1]["lr"]
+        lr_S = optimizer.param_groups[2]["lr"]
+        lr_K = optimizer.param_groups[3]["lr"]
 
-        print(f"Epoch {epoch+1} Learning Rate: {lr}")
+        print(f"Epoch {epoch+1} Learning Rates - E:{lr_E:.2e}, D:{lr_D:.2e}, S:{lr_S:.2e}, K:{lr_K:.2e}")
 
         phase = "train"
         for ii, data in enumerate(train_dataloader):
@@ -399,7 +405,7 @@ def main():
                 if ((ii + 1) % args["print_freq"] == 0 or ii == 0) and rank == 0:
                     log_str = (
                         "[Epoch:{:>3d}/{:<3d}] {:s}:{:0>5d}/{:0>5d}, lh:{:+>5.2f}, KL:{:+>7.2f}/{:+>6.2f}/{:+>6.2f}, "
-                        + "Grad:{:.1e}/{:.1e}/{:.1e}/{:.1e}, lr={:.1e}"
+                        + "Grad:{:.1e}/{:.1e}/{:.1e}/{:.1e}, lr_E={:.1e}"
                     )
                     print(
                         log_str.format(
@@ -416,7 +422,7 @@ def main():
                             total_norm_M,
                             total_norm_S,
                             total_norm_K,
-                            lr,
+                            lr_E,
                         )
                     )
                     writer.add_scalar("Train Loss Iter", loss.item(), step)

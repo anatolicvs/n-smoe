@@ -1,9 +1,8 @@
 {
-    # training settings
-    "im_chn": 3,    # Image channel
-    "sigma_chn": 1, # Number of channel for the estimated noise varaince map
+    "im_chn": 3,
+    "sigma_chn": 1,
     "hr_size": 96, 
-    "batch_size": 2, 
+    "batch_size": 1, 
     "epochs": 120,
     
     "lr_E": 1e-4, 
@@ -17,10 +16,8 @@
     "prefetch_factor": 2, 
     "db_length": 10000,
     "save_dir": "",
-    "resume": "", #/mnt/d/virnet_smoe/models/model_20250217-004752_9ee0dc7b.pth",  # "/mnt/d/virnet_smoe/models/model_20250210-113917_1472392d.pth",
+    "resume": "",
 
-
-    # network N-SMoE
     "kernel_chn": 3,
     "noise_avg": "True",
     "model_channels": 32,
@@ -45,15 +42,14 @@
     "rope_theta": 10000.0,
     "attention_type": "attention",
 
-    "kernel": 16,
+    "kernel": 12,
     "kernel_type": "gaussian",
-    "phw": 16,
-    "overlap": 8,
-    "sharpening_factor": 1.0,
+    "phw": 20,
+    "overlap": 15,
+    "sharpening_factor": 6.0,
     "use_sh_color": false,
     "sh_degree": 3,
 
-    # network architecture
     "dep_S": 5,
     "dep_K": 8,
     "n_feat": [96, 160, 224], 
@@ -62,7 +58,6 @@
     "noise_cond": "True",
     "kernel_cond": "True",
 
-    # training and validation data path
     "train_hr_patchs": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/CBSD68",
     "val_hr_path": "/home/ozkan/works/n-smoe/tpami/VIRNet/test_data/Set14", 
     "add_jpeg": "False",
@@ -70,18 +65,16 @@
     "downsampler": "Bicubic",
     "chn":"rgb",  
 
-    # degradation process
     "sf": 2,
     "k_size": 21,
     "noise_level": [0.01, 15],
     "noise_jpeg": [0.01, 10],
 
-    # hyper-parameters of our model
     "eps2": 1e-5,
     "r2": 1e-4,
     "var_window": 9,
     "kappa0": 50,
-    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    "penalty_K": [0.02, 2],
     "clip_grad_R": 5e2,
     "clip_grad_M": 1e2,
     "clip_grad_S": 1e2, 

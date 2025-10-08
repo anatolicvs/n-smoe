@@ -17,7 +17,7 @@
     "prefetch_factor": 2, 
     "db_length": 10000,
     "save_dir": "",
-    "resume": "", #/mnt/d/virnet_smoe/models/model_20250217-004752_9ee0dc7b.pth",  # "/mnt/d/virnet_smoe/models/model_20250210-113917_1472392d.pth",
+    "resume": "", 
 
 
     # network N-SMoE
@@ -45,12 +45,13 @@
     "rope_theta": 10000.0,
     "attention_type": "attention",
 
-    "kernel": 16,
+    # CRITICAL FIXES FOR OVER-SMOOTHING
+    "kernel": 16,                    # REDUCED from 32 (fewer kernels = less over-smoothing)
     "kernel_type": "gaussian",
     "phw": 16,
-    "overlap": 8,
-    "sharpening_factor": 1.0,
-    "use_sh_color": false,
+    "overlap": 12,                   # INCREASED from 8 (75% overlap for smooth blending)
+    "sharpening_factor": 4.0,        # INCREASED from 1.0 (critical for sharp edges)
+    "use_sh_color": true,            # ENABLED for view-dependent color (prevents bleeding)
     "sh_degree": 3,
 
     # network architecture
@@ -81,7 +82,7 @@
     "r2": 1e-4,
     "var_window": 9,
     "kappa0": 50,
-    "penalty_K": [0.02, 2],    # little influence, [0.02, 1] degenerates to the loss of paper
+    "penalty_K": [0.02, 2],
     "clip_grad_R": 5e2,
     "clip_grad_M": 1e2,
     "clip_grad_S": 1e2, 
