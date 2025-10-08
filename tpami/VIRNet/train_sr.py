@@ -579,12 +579,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--config",
         type=str,
-        default="/home/adminlms/src/n-smoe/tpami/VIRNet/configs/local_sisr_x2.json",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/configs/local_sisr_x2.json",
         help="Path for the config file",
     )
     parser.add_argument(
         "--save_dir",
-        default="/home/adminlms/src/n-smoe/tpami/VIRNet/checkpoint",
+        default="/home/ozkan/works/n-smoe/tpami/VIRNet/checkpoint",
         type=str,
         metavar="PATH",
         help="Path to save the log file",
